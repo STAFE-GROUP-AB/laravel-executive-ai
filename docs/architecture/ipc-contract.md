@@ -7,7 +7,7 @@
 **Implements:** Blueprint §2 ("localhost authenticated IPC / loopback HTTPS"), §6 (versioning, origin check, request signing, session-bound token in Keychain), §11 (no bypass of server-side policy), §1.1 (what the menu bar needs)
 **Binding inputs:** ADR-001 D3/D4, ADR-003 D1/D3/D4/D7/D8, ADR-005 D1.9/D3, ADR-006 D3/D6, [health-contract.md](health-contract.md) §6, [brief-schema.md](brief-schema.md) §4/§6
 
-Two parties implement opposite ends of this contract in Sprint 1 (S1-13): the SwiftUI menu-bar app
+Two parties implement opposite ends of this contract in Sprint 1 (S1-08): the SwiftUI menu-bar app
 (`apps/macos/LaravelExecutiveAI/IPC/`) and the Laravel core (`app/Support/Health/IpcController.php` + middleware
 under `app/Security/Authorization/`). It is specified once, here, so neither side improvises. Nothing
 in this document is drop-in code.
@@ -622,14 +622,14 @@ loopback traffic.
    OAuth exchange that the user initiated in the GUI, and the `TunnelProvider` state. Adding a mutating
    operation is a security-critical PR (two reviewers, §13.2) and a contract minor bump at least.
 
-## 12. Tests the implementation must ship (S1-13, §14 "IPC tests")
+## 12. Tests the implementation must ship (S1-08, §14 "IPC tests")
 
 | Test | Proves |
 |---|---|
 | `IpcFixtureConformanceTest` (PHP) and `IPCFixtureTests` (Swift) | every `packaging/fixtures/ipc/*.json` request signed with `K_test` is accepted/rejected exactly as recorded, and the recorded response signature verifies |
-| `IpcTokenTest` | missing, malformed, wrong-MAC, expired and wrong-`client` tokens → the recorded `401`/`403`, one test per case (S1-13 criterion) |
+| `IpcTokenTest` | missing, malformed, wrong-MAC, expired and wrong-`client` tokens → the recorded `401`/`403`, one test per case (S1-08 criterion) |
 | `IpcReplayTest` | same nonce twice → `nonce_replayed`; timestamp −31 s / +31 s → `timestamp_skew`; −29 s accepted |
-| `IpcOriginTest` | request with `Host: localhost`, with `X-Forwarded-For`, with `Origin`, with `Sec-Fetch-Mode` → `origin_rejected`; request from a non-loopback bind is impossible (`IpcBindTest` asserts the listener has no non-loopback socket, S1-13 "not reachable from another host") |
+| `IpcOriginTest` | request with `Host: localhost`, with `X-Forwarded-For`, with `Origin`, with `Sec-Fetch-Mode` → `origin_rejected`; request from a non-loopback bind is impossible (`IpcBindTest` asserts the listener has no non-loopback socket, S1-08 "not reachable from another host") |
 | `IpcVersionTest` | missing / `0` / `2` → `426` with `supported_versions: [1]` |
 | `IpcPolicyArchTest` | every `/ipc/*` route has a gate; no route under `/ipc/` resolves to an approval-mutating service |
 | `IpcRedactionTest` | corpus tokens (`lxai1.…`, `lxai1e.…`) in exception messages never reach logs; `oauth/callback` body never appears in any sink |
