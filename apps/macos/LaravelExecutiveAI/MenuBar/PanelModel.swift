@@ -190,9 +190,10 @@ final class PanelModel {
     }
 
     /// Health contract §7: `pending_approvals > 0` is the only badge driver. Stale, offline, error
-    /// and AI states never badge, and an unreachable core clears it.
+    /// and AI states never badge; an unreachable core or an IPC version refusal clears it, because
+    /// nothing can be acted on through either.
     var badgeCount: Int {
-        guard reachability != .unreachable, let health else {
+        guard reachability != .unreachable, ipcVersionRefused == nil, let health else {
             return 0
         }
 

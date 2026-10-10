@@ -133,23 +133,31 @@ final class IpcPanelIntegrationTests: XCTestCase {
     }
 
     func testAVersionRefusalBecomesUpdateRequiredAndNothingElseIsCalled() async throws {
+        installFixtureServer()
+        let (model, client) = makeModel()
+        await model.refresh()
+        XCTAssertEqual(model.state, .fresh)
+        XCTAssertEqual(model.badgeCount, 2)
+        let callsBefore = client.calls.count
+
         let refused = try IpcFixture.load("error-version-unsupported")
         let reply = try refused.recordedReply()
         IpcStubURLProtocol.install { _, _ in reply }
-        let (model, client) = makeModel()
 
         await model.refresh()
 
         XCTAssertEqual(model.state, .error(.updateRequired(found: "ipc/1")))
         XCTAssertEqual(model.state.title, MenuBarCopy.stateUpdateRequired)
-        XCTAssertEqual(model.badgeCount, 0)
-        XCTAssertEqual(client.calls, ["health"], "no brief, approvals or heartbeat after a version refusal")
+        XCTAssertEqual(model.badgeCount, 0, "nothing can be acted on through a refused version; the earlier count does not linger")
+        XCTAssertNotNil(model.brief, "the cached brief stays, nothing partial is fetched")
+        XCTAssertEqual(Array(client.calls.dropFirst(callsBefore)), ["health"], "no brief, approvals or heartbeat after a version refusal")
         XCTAssertEqual(IpcStubURLProtocol.requests.count, 1)
 
         // The refusal clears as soon as the core answers properly again.
         installFixtureServer()
         await model.refresh()
         XCTAssertEqual(model.state, .fresh)
+        XCTAssertEqual(model.badgeCount, 2)
         XCTAssertNil(model.ipcVersionRefused)
     }
 
