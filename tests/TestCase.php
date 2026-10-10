@@ -21,7 +21,7 @@ abstract class TestCase extends BaseTestCase
     /**
      * ADR-002 D10: the schema is built once per process with a plain, idempotent
      * `migrate` (pending migrations only, nothing is dropped). Tests that write
-     * use DatabaseTransactions; RefreshDatabase is forbidden in this repository.
+     * use DatabaseTransactions; the refresh-database trait is forbidden in this repository.
      */
     private function buildSchemaOnce(): void
     {

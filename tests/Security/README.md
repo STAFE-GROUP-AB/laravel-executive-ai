@@ -13,7 +13,7 @@ someone who is not implementing the defence. Tests consume it; they never invent
 |---|---|---|---|
 | Prompt-injection red-team corpus (§14) | `packaging/fixtures/security/prompt-injection/` | S0-19 | `injection.schema.json` |
 | Hostile MCP-server fixtures (§14) | `packaging/fixtures/security/hostile-mcp/` | S0-19 | `hostile-mcp.schema.json` |
-| Synthetic secrets (redaction) | `tests/Security/fixtures/secrets-corpus.json` | ADR-003 D7 (S1) | — |
+| Synthetic secrets (redaction) | `tests/Security/fixtures/secrets-corpus.json` | ADR-003 D7, S1-01 — every value carries a FAKE/TEST marker; `.gitleaks.toml` allowlists only marked values in this one file | — |
 | The world the payloads ride on | `packaging/fixtures/crm/`, `packaging/fixtures/briefs/` | S0-18 | `crm.schema.json`, `brief.schema.json` |
 
 The two adversarial corpora live under `packaging/fixtures/` rather than here because they are not
@@ -36,7 +36,7 @@ are checkable. Read `packaging/fixtures/README.md` → "Security corpora" for th
 | `tests/Security/HostileMcpServerTest.php` | every exchange in `hostile-mcp/*.json` | S1/S3, with the MCP client (ADR-005 D4). Threat model T-02, T-52 |
 | `tests/Security/LocalOnlyEgressTest.php` | the `policy_downgrade` cases plus the AI fixture suite | ADR-004 D4 requires it before that ADR can be Accepted |
 | cross-account / IDOR tests | the `cross_account_access` cases and the S0-18 accounts | S1 with the CRM |
-| redaction tests | `secrets-corpus.json` and the `secret_harvesting` cases | ADR-003 D7 |
+| `tests/Security/RedactorTest.php`, `LogRedactionTest.php`, `LoggingConfigTest.php`, `ExceptionRedactionTest.php`, `QueuePayloadTest.php`, `JobsCarryNoSecretValueTest.php`, `PackagedConfigTest.php` | `secrets-corpus.json` | **Live** (S1-01). ADR-003 D7 rows 1–3, threat model T-10 – T-12, T-75. The `secret_harvesting` cases join once an agent run exists |
 
 Which threat each case answers is recorded in
 [`docs/security/threat-model.md`](../../docs/security/threat-model.md) (S0-23), not here: name the
