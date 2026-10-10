@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	The one launchd job this product registers (ADR-001 D3): a user LaunchAgent that runs the
+	Supervisor, which in turn owns the three FrankenPHP children. Installed by the app build at
+	Contents/Library/LaunchAgents/ and registered with SMAppService.agent(plistName:) from the
+	installer's BOOT_SERVICES state. The file name, the Label and the bundle-id prefix are the
+	A12 placeholder `se.stafe.executive-ai` (apps/macos/Config/Shared.xcconfig LXAI_BUNDLE_PREFIX).
+
+	Nothing here is per machine: no absolute path, no user name, no port and no secret. The
+	Supervisor derives every path from its own bundle and the user's Library at run time, and
+	secrets never travel through launchd (ADR-003 D7 row 12).
+
+	Semantics under SMAppService (man 5 launchd.plist, ADR-001 V2):
+	  BundleProgram    app-bundle-relative executable; only valid for SMAppService-installed plists
+	  RunAtLoad        start as soon as the agent is bootstrapped (register() and every login)
+	  KeepAlive        relaunch whenever the Supervisor exits, for any reason; launchd throttles
+	                   a job that exits faster than ThrottleInterval
+	  ThrottleInterval the outer restart guarantee — at most one Supervisor launch per 10 s;
+	                   the bounded, health-driven inner restarts live in the Supervisor itself
+	  ProcessType      Background: resource limits that keep it from disrupting the user
+	  ExitTimeOut      seconds launchd waits after SIGTERM before SIGKILL; the Supervisor uses
+	                   that window to stop its children cleanly
+	  MachServices     the XPC control service the GUI connects to (ipc-contract §7); launchd
+	                   checks it in so NSXPCListener(machServiceName:) can serve it
+	  LimitLoadToSessionType  Aqua: a user GUI session, which is what a LaunchAgent is for
+	-->
+	<key>Label</key>
+	<string>se.stafe.executive-ai.supervisor</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/LaravelExecutiveAISupervisor</string>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>se.stafe.executive-ai.app</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ExitTimeOut</key>
+	<integer>30</integer>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+	<key>MachServices</key>
+	<dict>
+		<key>se.stafe.executive-ai.supervisor.control</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

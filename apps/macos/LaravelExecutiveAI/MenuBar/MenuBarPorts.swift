@@ -56,7 +56,8 @@ struct SettingsSceneOpener: SettingsPresenting {
     }
 }
 
-/// S1-07 replaces this with the XPC client. Until then every call fails closed.
+/// Fails closed. The live binding is `SupervisorServiceControl` (Services/) over the XPC client;
+/// this stays for tests and for a build without a control channel.
 struct UnavailableServiceControl: ServiceControlling {
     func restartServices() async throws {
         throw ServiceControlError.unavailable("Service control arrives with the Supervisor (S1-07).")
@@ -78,10 +79,15 @@ struct PanelPorts: Sendable {
     var settings: any SettingsPresenting
     var serviceControl: any ServiceControlling
 
+    /// Service control goes GUI → Supervisor over XPC (ipc-contract §6.8, §7.2; S1-07). The
+    /// client and the brief cache are built from the bundle identifier like everything else.
     static let live = PanelPorts(
         urlOpener: WorkspaceURLOpener(),
         terminator: ApplicationTerminator(),
         settings: SettingsSceneOpener(),
-        serviceControl: UnavailableServiceControl()
+        serviceControl: SupervisorServiceControl(
+            control: SupervisorControlClientFactory.live(),
+            cache: BriefCache.default(bundleIdentifier: Bundle.main.bundleIdentifier ?? "se.stafe.executive-ai.app")
+        )
     )
 }

@@ -46,6 +46,9 @@
         <env name="DB_DATABASE" value="database/testing.sqlite"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- ADR-003 D3.4: tests use the in-memory secret store; the Supervisor's broker
+             socket is exercised explicitly by tests/Feature/Secrets with a fake broker. -->
+        <env name="LEA_SECRETS_DRIVER" value="array"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

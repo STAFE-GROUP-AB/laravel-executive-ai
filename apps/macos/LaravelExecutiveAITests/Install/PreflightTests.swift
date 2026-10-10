@@ -219,9 +219,10 @@ final class PreflightTests: XCTestCase {
         XCTAssertNotEqual(probes.fileVaultState(), .unknown)
         _ = await probes.networkState()
 
-        // An unsigned/ad-hoc test host has no Team ID, so the self-check must fail closed.
+        // An unsigned/ad-hoc test host has no Team ID, so the self-check must fail closed for
+        // every bundled executable — the app and, since S1-07, the Supervisor.
         let signatures = probes.signedExecutables()
-        XCTAssertEqual(signatures.map(\.name), ["app"])
-        XCTAssertFalse(signatures[0].valid)
+        XCTAssertEqual(signatures.map(\.name), ["app", "supervisor"])
+        XCTAssertTrue(signatures.allSatisfy { !$0.valid })
     }
 }

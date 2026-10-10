@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ADR-003 D2/D5: the Supervisor is the only process in the shared secrets access group.
+	     `$(AppIdentifierPrefix)` becomes `<TEAMID>.` once A12 provides a signing identity; in an
+	     unsigned build (CI, local dev) the entitlement is never applied and the data-protection
+	     keychain is unreachable, so SecItemKeychainStore fails closed there. No App Sandbox:
+	     the Supervisor spawns non-sandboxed FrankenPHP children (ADR-003 D5). -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)se.stafe.executive-ai.secrets</string>
+	</array>
+</dict>
+</plist>
