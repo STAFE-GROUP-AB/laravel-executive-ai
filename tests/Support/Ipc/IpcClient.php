@@ -71,6 +71,22 @@ final class IpcClient
      */
     public static function send(string $method, string $pathAndQuery, ?array $body = null, array $options = []): TestResponse
     {
+        $prepared = self::prepare($method, $pathAndQuery, $body, $options);
+
+        return call($method, $prepared['url'], [], [], [], $prepared['server'], $prepared['content']);
+    }
+
+    /**
+     * The signed request as the pieces an HTTP kernel takes, so a test can
+     * send it to an application other than the suite's own (the E2E slice
+     * boots a second core on a throwaway data directory).
+     *
+     * @param  array<string, mixed>|null  $body
+     * @param  array<string, mixed>  $options
+     * @return array{url: string, server: array<string, string>, content: ?string}
+     */
+    public static function prepare(string $method, string $pathAndQuery, ?array $body = null, array $options = []): array
+    {
         $client = (string) ($options['client'] ?? 'menubar');
         $sessionId = (string) ($options['session_id'] ?? self::SESSION);
         $timestamp = (string) ($options['timestamp'] ?? CarbonImmutable::now('UTC')->getTimestamp());
@@ -117,7 +133,7 @@ final class IpcClient
 
         $host = (string) ($options['host'] ?? self::HOST);
 
-        return call($method, "http://{$host}{$pathAndQuery}", [], [], [], $server, $content === '' ? null : $content);
+        return ['url' => "http://{$host}{$pathAndQuery}", 'server' => $server, 'content' => $content === '' ? null : $content];
     }
 
     /** §4.5 as the client performs it: over the status, the request nonce and the body bytes received. */
