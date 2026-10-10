@@ -295,3 +295,11 @@ and scheduling are not engineering decisions. **Needs:** `ANDREAS`, before the S
 defined signatory, and §13.2's "2 reviewers for security-critical modules" has no second human.
 **Needs:** `ANDREAS` — a ruling on who approves Sprint 0 exit and what counts as a review for
 security-critical modules. Without it, Sprint 0 cannot formally close.
+**Proposed configuration (S0-27, 2026-10-10):** see `docs/contributing/branch-protection.md`.
+The coordinator reviews every agent PR as the "second team" (review comment); Andreas is DRI and
+posts `LGTM` on PRs that touch a security-critical path. Needs Andreas to (1) apply the `main`
+ruleset (`gh api --method POST repos/STAFE-GROUP-AB/laravel-executive-ai/rulesets --input
+docs/contributing/rulesets/main-now.json`) and (2) decide the second-account question: all agent
+work is pushed under his own GitHub identity, so GitHub cannot record a real approval and
+"require reviews" cannot be switched on; the recommendation is a second account for the
+coordinator, after which `main-target.json` (1 approval + Code Owner review) is applied.
