@@ -32,6 +32,11 @@ protocol SupervisorControlling: Sendable {
     /// Installer SELECT_AI hand-off: the key goes straight to the Keychain through the one
     /// writer, never through the GUI's own Keychain or a file.
     func storeProviderApiKey(provider: String, apiKey: TransientSecret) async throws
+    /// §7.2 (S1-13) — uninstall: deletes every `se.stafe.executive-ai.*` Keychain item through
+    /// the one writer (ADR-003 D2, D8) and drops every live session. Returns what was removed —
+    /// names, never values. Called before the LaunchAgent is unregistered, because only the
+    /// Supervisor holds the access group.
+    func removeAllSecrets() async throws -> [KeychainItemRef]
 }
 
 /// `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` behind a protocol.
@@ -202,6 +207,22 @@ actor SupervisorControlService: SupervisorControlling {
         } catch {
             throw SupervisorControlError.secrets("the API key could not be stored")
         }
+    }
+
+    func removeAllSecrets() async throws -> [KeychainItemRef] {
+        let removed: [KeychainItemRef]
+
+        do {
+            removed = try secrets.removeAll()
+        } catch {
+            throw SupervisorControlError.secrets("the Keychain items could not be removed")
+        }
+
+        // `K` is gone from the Keychain; nothing paired against it may elevate any more. The
+        // in-memory key stays only so this process can keep answering until it is unregistered.
+        sessions.removeAll()
+
+        return removed
     }
 
     static func isOperationSlug(_ value: String) -> Bool {

@@ -28,6 +28,23 @@ struct InstallCheckpoint: Codable, Equatable, Sendable {
         var activated: Bool
     }
 
+    /// Written by a data-preserving uninstall (S1-13, §12.2). The checkpoint that carries it has
+    /// no completed state, so the next run starts at PREFLIGHT and installs the runtime again,
+    /// while `owner_created` is carried over and CREATE_OWNER is skipped: the reinstall boots to
+    /// the previous owner and the previous briefs in the untouched `data/`.
+    struct UninstallMarker: Codable, Equatable, Sendable {
+        var at: Date
+        /// The app version that last wrote `data/`.
+        var productVersion: String
+        var ownerCreated: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case at
+            case productVersion = "product_version"
+            case ownerCreated = "owner_created"
+        }
+    }
+
     var schemaVersion: Int
     var runID: UUID
     /// The last core state whose work finished; nil when nothing has completed.
@@ -37,6 +54,7 @@ struct InstallCheckpoint: Codable, Equatable, Sendable {
     var runtime: RuntimeProgress?
     var ownerCreated: Bool
     var aiSelection: AiSelection?
+    var uninstalledPreservingData: UninstallMarker?
 
     init(runID: UUID = UUID(), updatedAt: Date) {
         schemaVersion = Self.currentSchemaVersion
@@ -47,6 +65,16 @@ struct InstallCheckpoint: Codable, Equatable, Sendable {
         runtime = nil
         ownerCreated = false
         aiSelection = nil
+        uninstalledPreservingData = nil
+    }
+
+    /// The checkpoint a data-preserving uninstall leaves behind (installer.md §3).
+    static func preservedData(ownerCreated: Bool, productVersion: String, at: Date) -> InstallCheckpoint {
+        var checkpoint = InstallCheckpoint(updatedAt: at)
+        checkpoint.ownerCreated = ownerCreated
+        checkpoint.uninstalledPreservingData = UninstallMarker(at: at, productVersion: productVersion, ownerCreated: ownerCreated)
+
+        return checkpoint
     }
 
     var isReady: Bool {
@@ -88,6 +116,7 @@ struct InstallCheckpoint: Codable, Equatable, Sendable {
         case runtime
         case ownerCreated = "owner_created"
         case aiSelection = "ai_selection"
+        case uninstalledPreservingData = "uninstalled_preserving_data"
     }
 }
 

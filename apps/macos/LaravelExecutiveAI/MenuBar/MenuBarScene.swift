@@ -3,7 +3,8 @@
 // `.window` style so the panel is a real SwiftUI view (lists, disclosures, buttons), not a menu.
 // The label is the state icon plus the approval count — the count is the only badge
 // (health contract §7). Settings is the standard `Settings` scene, so the app menu's "Settings…"
-// (⌘,) and the panel's "Settings" button open the same placeholder window.
+// (⌘,) and the panel's "Settings" button open the same window: the §1.1 sections still to come,
+// and Uninstall (S1-13).
 
 import SwiftUI
 
@@ -19,7 +20,7 @@ struct MenuBarScene: Scene {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsPlaceholderView()
+            SettingsView(model: model)
         }
     }
 }

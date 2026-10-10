@@ -131,7 +131,10 @@ final class ScriptedHealthProbing: HealthProbing, @unchecked Sendable {
     }
 }
 
-/// Records every control call; answers `services()` from a script.
+/// Records every control call; answers `services()` from a script. With `secrets:` set,
+/// `removeAllSecrets()` sweeps that in-memory inventory the way the real service does, so an
+/// uninstall test can assert on the Keychain double; `stopAllError`/`removeSecretsError` script
+/// an unreachable or refusing Supervisor.
 final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendable {
     enum Call: Equatable, Sendable {
         case pair(IpcClient)
@@ -142,18 +145,31 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
         case startAll
         case elevate(String)
         case storeProviderApiKey(String)
+        case removeAllSecrets
     }
 
     private let lock = NSLock()
     private var servicesAnswers: [Result<[ServiceStatus], SupervisorControlError>]
     private let storeError: SupervisorControlError?
+    private let stopAllError: SupervisorControlError?
+    private let removeSecretsError: SupervisorControlError?
+    private let secrets: SupervisorSecrets?
     private(set) var calls: [Call] = []
     private(set) var storedKeys: [String] = []
 
-    init(services: [Result<[ServiceStatus], SupervisorControlError>] = [.success([])], storeError: SupervisorControlError? = nil) {
+    init(
+        services: [Result<[ServiceStatus], SupervisorControlError>] = [.success([])],
+        storeError: SupervisorControlError? = nil,
+        stopAllError: SupervisorControlError? = nil,
+        removeSecretsError: SupervisorControlError? = nil,
+        secrets: SupervisorSecrets? = nil
+    ) {
         precondition(!services.isEmpty)
         servicesAnswers = services
         self.storeError = storeError
+        self.stopAllError = stopAllError
+        self.removeSecretsError = removeSecretsError
+        self.secrets = secrets
     }
 
     private func record(_ call: Call) {
@@ -177,8 +193,29 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
     }
 
     func restart(service: ServiceName) async throws { record(.restart(service)) }
-    func stopAll() async throws { record(.stopAll) }
     func startAll() async throws { record(.startAll) }
+
+    func stopAll() async throws {
+        record(.stopAll)
+
+        if let stopAllError {
+            throw stopAllError
+        }
+    }
+
+    func removeAllSecrets() async throws -> [KeychainItemRef] {
+        record(.removeAllSecrets)
+
+        if let removeSecretsError {
+            throw removeSecretsError
+        }
+
+        guard let secrets else {
+            return []
+        }
+
+        return try secrets.removeAll()
+    }
 
     func elevate(sessionId: String, operation: String, nonce: String) async throws -> Elevation {
         record(.elevate(operation))
@@ -193,5 +230,26 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
         }
 
         lock.withLock { storedKeys.append(apiKey.use { $0 }) }
+    }
+}
+
+/// Records the data choice handed to `uninstall(choice:)` and answers from a script.
+final class ScriptedUninstaller: Uninstalling, @unchecked Sendable {
+    private let lock = NSLock()
+    private let failure: UninstallError?
+    private(set) var choices: [UninstallDataChoice] = []
+
+    init(failingWith failure: UninstallError? = nil) {
+        self.failure = failure
+    }
+
+    func uninstall(choice: UninstallDataChoice) async throws -> UninstallReport {
+        lock.withLock { choices.append(choice) }
+
+        if let failure {
+            throw failure
+        }
+
+        return UninstallReport(dataChoice: choice, performed: UninstallStep.allCases, resumedFrom: [], secretsSweep: .removed(count: 2), preservedData: nil, appBundleTrashed: true)
     }
 }

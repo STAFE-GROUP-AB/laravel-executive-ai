@@ -523,7 +523,8 @@ private struct ShortcutButton: View {
     }
 }
 
-private struct SectionLabel: View {
+/// Shared with the Settings window (UninstallView.swift).
+struct SectionLabel: View {
     let text: String
 
     init(_ text: String) {
@@ -535,25 +536,5 @@ private struct SectionLabel: View {
             .font(Tokens.Typography.label)
             .tracking(Tokens.Typography.labelTracking)
             .foregroundStyle(Tokens.Colors.textMuted.dynamic)
-    }
-}
-
-// MARK: - Settings placeholder (§1.1 Settings: Services, Local Models, … arrive later)
-
-struct SettingsPlaceholderView: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
-            Text(MenuBarCopy.settingsPlaceholderTitle)
-                .font(Tokens.Typography.titleLarge)
-                .foregroundStyle(Tokens.Colors.textPrimary.dynamic)
-
-            Text(MenuBarCopy.settingsPlaceholderBody)
-                .font(Tokens.Typography.body)
-                .foregroundStyle(Tokens.Colors.textSecondary.dynamic)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(Tokens.Spacing.s6)
-        .frame(width: 480, alignment: .topLeading)
-        .background(Tokens.Colors.canvas.dynamic)
     }
 }

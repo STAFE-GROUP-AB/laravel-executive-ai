@@ -3,14 +3,16 @@
 //
 // "Restart services" is stop-all then start-all through the Supervisor, which re-runs the
 // boot-time runtime verification before spawning. "Reset security pairing" regenerates `K` in
-// the Supervisor and clears the brief cache (ipc-contract §6.2). Uninstall stays with S1-13,
-// which calls `LaunchAgentRegistering.unregister()` and `SupervisorSecrets.removeAll()`.
+// the Supervisor and clears the brief cache (ipc-contract §6.2). "Uninstall…" (S1-13) hands the
+// person's keep-or-delete choice to the `Uninstaller` (Install/Uninstaller.swift), which owns
+// the order: stop, sweep the Keychain through the Supervisor, unregister, remove, trash.
 
 import Foundation
 
 struct SupervisorServiceControl: ServiceControlling {
     let control: any SupervisorControlling
     let cache: BriefCache
+    let uninstaller: any Uninstalling
 
     func restartServices() async throws {
         do {
@@ -29,8 +31,12 @@ struct SupervisorServiceControl: ServiceControlling {
         }
     }
 
-    func uninstall() async throws {
-        throw ServiceControlError.unavailable("Uninstall arrives with S1-13.")
+    func uninstall(keepingData: Bool) async throws -> UninstallReport {
+        do {
+            return try await uninstaller.uninstall(choice: keepingData ? .keep : .delete)
+        } catch let error as UninstallError {
+            throw ServiceControlError.uninstallFailed(error.userFacingReason)
+        }
     }
 
     /// Settings → Diagnostics → "Reset security pairing" (ipc-contract §3.4, §7.1). Returns the

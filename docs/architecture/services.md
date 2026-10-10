@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented (S1-07, #35): `apps/macos/LaravelExecutiveAISupervisor/` (the headless tool, shared into the app module for tests), `apps/macos/LaravelExecutiveAI/Services/` (the GUI side: booter, XPC client, panel service control, uninstall order), `apps/macos/LaravelExecutiveAI/IPC/IpcSigning.swift` (token and signature arithmetic, shared with S1-08 part 2), `packaging/manifest/launchd/`, `app/Security/Secrets/` + `config/secrets.php` + `App\Security\Ipc\BrokerKeySource` (the PHP end of the broker). Real launchd, Keychain and XPC paths are exercised only on the S1-14 lab Mac; every test runs against recording doubles. |
+| **Status** | Implemented (S1-07, #35): `apps/macos/LaravelExecutiveAISupervisor/` (the headless tool, shared into the app module for tests), `apps/macos/LaravelExecutiveAI/Services/` (the GUI side: booter, XPC client, panel service control), `apps/macos/LaravelExecutiveAI/IPC/IpcSigning.swift` (token and signature arithmetic, shared with S1-08 part 2), `packaging/manifest/launchd/`, `app/Security/Secrets/` + `config/secrets.php` + `App\Security\Ipc\BrokerKeySource` (the PHP end of the broker). S1-13 (#41) added `removeAllSecrets()` to the control surface and the uninstall order in §8 (`apps/macos/LaravelExecutiveAI/Install/Uninstaller.swift`). Real launchd, Keychain and XPC paths are exercised only on the S1-14 lab Mac; every test runs against recording doubles. |
 | **Blueprint** | §2 (separate supervised processes; `php artisan serve` forbidden), §9 (automatic launch, crash restart, bounded retries, health probes, "tydligt om användarinloggning krävs"), §12.1 `BOOT_SERVICES`, §16 step 5 (kill/restart and uninstall verified on a clean Mac — S1-14) |
 | **Decisions** | ADR-001 D3 (one LaunchAgent, the Supervisor; verify on every boot; backoff and bound; **user login required**), D4 (no `.env`, non-secret config as environment); ADR-003 D1 (what lives in the Keychain), D2 (one writer), D3 (the broker), D7 row 12 (no secret in any child's environment), D8 (reset pairing, uninstall); [ipc-contract.md](ipc-contract.md) §3.1–3.3 (`K`, pairing grant, tokens), §6.8/§7 (service control is XPC); [health-contract.md](health-contract.md) §1, §6 |
 | **Tests** | `apps/macos/LaravelExecutiveAITests/Services/` (`ServiceSupervisorTests`, `SupervisorSpawnTests`, `LaunchAgentServiceBooterTests`, `SupervisorSecretsTests`, `SecretsBrokerTests`, `SupervisorControlServiceTests`, `SupervisorRuntimeTests`, `IPCSigningFixtureTests`, `SupervisorBundleTests`), `tests/Feature/Secrets/`, `packaging/manifest/launchd/test/supervisor-plist.test.mjs` |
@@ -194,6 +194,7 @@ signature, 10 s per call.
 | `restart(service:)`, `stopAll()`, `startAll()` | process control with the §4 budget; `startAll` re-verifies the runtime first | `stopAll` leaves launchd `KeepAlive` in place: the Supervisor keeps running, PHP stops |
 | `elevate(sessionId:operation:nonce:) -> Elevation` | `LAContext.evaluatePolicy(.deviceOwnerAuthentication)`, then a one-shot §7.3 token (60 s) | live `menubar` session, slug and 22-char nonce validated |
 | `storeProviderApiKey(provider:apiKey:)` | SELECT_AI's own key → Keychain `ai-provider/<provider id>` through the one writer | provider must be a known adapter id |
+| `removeAllSecrets() -> [KeychainItemRef]` (S1-13, ipc-contract §7.2 addition) | uninstall: `SupervisorSecrets.removeAll()` — every account of every inventory service deleted through the one writer; every live session dropped; returns service/account names, never a value | called by the uninstaller **before** `unregister()`, because only this process holds the access group (ADR-003 D2) |
 
 Who calls what:
 
@@ -203,27 +204,48 @@ Who calls what:
   `PendingSecretHandoff` by `SupervisorAiSelectionApplier`, returns `.started`. A failed hand-off
   keeps the key in memory for Retry; it never touches disk.
 - **Menu bar** — `SupervisorServiceControl` is the live `ServiceControlling` in `PanelPorts.live`:
-  "Restart services" = `stopAll` + `startAll`; "Stop services" = `stopAll`; uninstall is S1-13.
+  "Restart services" = `stopAll` + `startAll`; "Stop services" = `stopAll`; Settings →
+  "Uninstall…" = `uninstall(keepingData:)` → the `Uninstaller` (§8).
 - **S1-08 part 2** builds the loopback IPC client on `IPC/IpcSigning.swift` (`IpcSigning`,
   `PairingGrant`, `ULID`, `SecureRandom`) and gets its grant from `pair(client: .menubar)`; the
   installer's `HealthProbe` can be `LoopbackHealthProbe` with that grant (the Supervisor already
   uses it with its own `supervisor` grant).
 
-## 8. Uninstall (S1-13 calls this, in this order)
+## 8. Uninstall (S1-13: `Install/Uninstaller.swift`, in this order)
 
 ```swift
-try await ServicesUninstaller(registrar: SMAppServiceRegistrar(plistName:), secrets: SupervisorSecrets(store:)).remove()
-// 1. registrar.unregister()        — SMAppService.unregister(): the agent cannot respawn a Supervisor
-// 2. secrets.removeAll()           — every se.stafe.executive-ai.* item (ADR-003 D8, T-41)
-// then S1-13: RuntimeUninstaller.remove(preservingData:in:), BriefCache.clear()
+try await Uninstaller(dependencies: .live(control: SupervisorControlClientFactory.live())).uninstall(choice: .keep | .delete)
+// 1. control.stopAll()                 — the three PHP children stop (XPC)
+// 2. control.removeAllSecrets()        — every se.stafe.executive-ai.* item, through the Supervisor (XPC; ADR-003 D2, D8, T-41)
+// 3. registrar.unregister()            — SMAppService.unregister(): the agent cannot respawn a Supervisor that would recreate them
+// 4. RuntimeUninstaller.remove(preservingData:includingInstallDirectory: false)  — runtime/, run/, Caches, Logs; data/ unless kept
+// 5. BriefCache.clear()
+// 6. install/                          — keep: the reinstall marker checkpoint; delete: the directory + the empty Application Support directory
+// 7. AppBundleRemoving.moveToTrash()   — NSWorkspace.recycle, last; the app keeps running from the Trash until Quit
 ```
+
+**Decided here: the Keychain sweep runs through the Supervisor over XPC, before it is
+unregistered.** The alternative — a `keychain-access-groups` entitlement on the app so the
+uninstaller could delete the items itself — would have made a second process a Keychain writer
+and contradicted ADR-003 D2 for one feature. So `removeAllSecrets()` is a §7 operation, the
+Supervisor must be alive for steps 1–2, and the order is stop → sweep → unregister. When the
+agent is not `enabled` (never registered, never approved in Login Items, disabled there later)
+no Supervisor can be running and nothing holds the access group; the uninstaller then skips
+steps 1–2, records the sweep as `skipped`, and the Settings sheet says so in plain words instead
+of claiming a clean Keychain (uninstall.md §6). An `enabled` agent whose Supervisor does not
+answer stops the uninstall before anything is touched.
+
+Each step is idempotent; steps 1–3 are journaled in `install/uninstall.json` before the next
+starts, so a crash mid-way resumes without a second sweep or a second unregister
+(`UninstallerTests.testAnInterruptedUninstallResumesWithoutRepeatingAStep`). What is removed, what
+"keep my data" leaves, the reinstall path and the S1-14 lab checklist are in
+[`docs/operations/uninstall.md`](../operations/uninstall.md).
 
 `LaunchAgentRegistering` is the whole launchd API surface: `register()`, `unregister()`,
 `status() -> notRegistered | enabled | requiresApproval | notFound`, `openLoginItemsSettings()`.
-`SMAppServiceRegistrar` is the real one; `RecordingRegistrar` is what every test uses. Keychain
-deletion from the GUI process needs the shared access group only the Supervisor holds (ADR-003
-D2); S1-13 decides whether the sweep runs through the Supervisor before step 1 or through the
-uninstaller's own entitlement — the order above holds either way.
+`SMAppServiceRegistrar` is the real one; `RecordingRegistrar` is what every test uses.
+`AppBundleRemoving` is the whole Trash surface: `WorkspaceAppBundleRemover` is the real one;
+`RecordingAppBundleRemover` is what every test uses — the test host *is* the app bundle.
 
 ## 9. Logs
 
@@ -242,7 +264,8 @@ uninstaller's own entitlement — the order above holds either way.
 3. `kill -9` of the Supervisor → launchd relaunches it within 10 s; children are re-adopted by
    respawn (the old ones receive SIGHUP/SIGTERM from the dying parent's pipes closing — verify).
 4. Uninstall → `launchctl print gui/$(id -u)/<prefix>.supervisor` reports nothing; Keychain Access
-   shows no `Laravel Executive AI` items.
+   shows no `Laravel Executive AI` items (the full checklist, both data choices and the
+   interrupted run, is uninstall.md §9).
 5. The 05:00 locked-screen Keychain read (RR-04) and the data-protection keychain from a
    Developer-ID helper (ADR-003 R5).
 6. The broker's code-signature peer check against the signed FrankenPHP (T-36) — in CI only the

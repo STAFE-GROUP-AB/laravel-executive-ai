@@ -124,35 +124,17 @@ final class LaunchAgentServiceBooterTests: XCTestCase {
         }
     }
 
-    func testUninstallUnregistersBeforeDeletingSecrets() async throws {
-        let registrar = RecordingRegistrar(statuses: [.enabled])
-        let keychain = InMemoryKeychainStore()
-        let secrets = SupervisorSecrets(store: keychain)
-        try secrets.ensureAppKey()
-        _ = try secrets.ensureIpcKey()
-
-        let report = try await ServicesUninstaller(registrar: registrar, secrets: secrets).remove()
-
-        XCTAssertTrue(report.agentUnregistered)
-        XCTAssertEqual(registrar.calls, [.status, .unregister])
-        XCTAssertEqual(Set(report.secretsRemoved.map(\.service)), [SecretService.appKey, SecretService.ipcMenubar])
-        XCTAssertTrue(keychain.snapshot.isEmpty)
-        XCTAssertEqual(registrar.status(), .notRegistered)
-
-        // Idempotent: a second run unregisters nothing and removes nothing.
-        let again = try await ServicesUninstaller(registrar: registrar, secrets: secrets).remove()
-        XCTAssertFalse(again.agentUnregistered)
-        XCTAssertEqual(again.secretsRemoved, [])
-    }
-
+    // The uninstall order itself (stop → sweep through the Supervisor → unregister → remove →
+    // trash) is `Install/UninstallerTests`; here only the panel's port is checked.
     func testPanelServiceControlGoesThroughTheSupervisor() async throws {
         let control = ScriptedSupervisorControl()
         let cacheDirectory = FileManager.default.temporaryDirectory.appending(path: "lxai-cache-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: cacheDirectory) }
         let cache = BriefCache(directory: cacheDirectory)
         try cache.store(document: .object(["id": .string("x")]), etag: "\"x:1\"")
+        let uninstaller = ScriptedUninstaller()
 
-        let serviceControl = SupervisorServiceControl(control: control, cache: cache)
+        let serviceControl = SupervisorServiceControl(control: control, cache: cache, uninstaller: uninstaller)
 
         try await serviceControl.restartServices()
         try await serviceControl.stopServices()
@@ -161,11 +143,32 @@ final class LaunchAgentServiceBooterTests: XCTestCase {
         XCTAssertEqual(control.calls, [.stopAll, .startAll, .stopAll, .resetPairing, .pair(.menubar)])
         XCTAssertNil(cache.load(), "reset security pairing clears the brief cache (ipc-contract §6.2)")
 
+        let kept = try await serviceControl.uninstall(keepingData: true)
+        let deleted = try await serviceControl.uninstall(keepingData: false)
+
+        XCTAssertEqual(uninstaller.choices, [.keep, .delete], "the person's data choice reaches the uninstaller unchanged")
+        XCTAssertEqual(kept.dataChoice, .keep)
+        XCTAssertEqual(deleted.dataChoice, .delete)
+        XCTAssertEqual(control.calls.count, 5, "uninstall goes through the Uninstaller, which owns the Supervisor calls; the panel port adds none of its own")
+    }
+
+    func testPanelUninstallFailureCarriesTheRetrySafeReasonAndNoPath() async throws {
+        let serviceControl = SupervisorServiceControl(
+            control: ScriptedSupervisorControl(),
+            cache: BriefCache(directory: FileManager.default.temporaryDirectory.appending(path: "lxai-cache-\(UUID().uuidString)")),
+            uninstaller: ScriptedUninstaller(failingWith: .supervisorUnreachable("timeout"))
+        )
+
         do {
-            try await serviceControl.uninstall()
-            XCTFail("uninstall is S1-13")
+            _ = try await serviceControl.uninstall(keepingData: true)
+            XCTFail("expected failure")
         } catch let error as ServiceControlError {
-            XCTAssertEqual(error, .unavailable("Uninstall arrives with S1-13."))
+            XCTAssertEqual(error, .uninstallFailed(UninstallError.supervisorUnreachable("timeout").userFacingReason))
+
+            if case .uninstallFailed(let reason) = error {
+                XCTAssertFalse(reason.contains("/"), "no path reaches the Settings window")
+                XCTAssertTrue(reason.contains("nothing has been removed yet"))
+            }
         }
     }
 }

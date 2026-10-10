@@ -21,14 +21,18 @@ protocol SettingsPresenting: Sendable {
 
 /// GUI ↔ Supervisor service control (ipc-contract §6.8, §7.2). Stop and uninstall are destructive
 /// and elevated; the panel's only caller is "Restart services" in the unreachable/not-ready states.
+/// Uninstall is reached from Settings only (S1-13), behind a confirmation that carries the
+/// keep-or-delete data choice (§12.2).
 protocol ServiceControlling: Sendable {
     func restartServices() async throws
     func stopServices() async throws
-    func uninstall() async throws
+    func uninstall(keepingData: Bool) async throws -> UninstallReport
 }
 
 enum ServiceControlError: Error, Equatable, Sendable {
     case unavailable(String)
+    /// The uninstall stopped; the reason is `UninstallError.userFacingReason`, retry-safe.
+    case uninstallFailed(String)
 }
 
 struct WorkspaceURLOpener: URLOpening {
@@ -67,7 +71,7 @@ struct UnavailableServiceControl: ServiceControlling {
         throw ServiceControlError.unavailable("Service control arrives with the Supervisor (S1-07).")
     }
 
-    func uninstall() async throws {
+    func uninstall(keepingData: Bool) async throws -> UninstallReport {
         throw ServiceControlError.unavailable("Service control arrives with the Supervisor (S1-07).")
     }
 }
@@ -80,14 +84,21 @@ struct PanelPorts: Sendable {
     var serviceControl: any ServiceControlling
 
     /// Service control goes GUI → Supervisor over XPC (ipc-contract §6.8, §7.2; S1-07). The
-    /// client and the brief cache are built from the bundle identifier like everything else.
-    static let live = PanelPorts(
-        urlOpener: WorkspaceURLOpener(),
-        terminator: ApplicationTerminator(),
-        settings: SettingsSceneOpener(),
-        serviceControl: SupervisorServiceControl(
-            control: SupervisorControlClientFactory.live(),
-            cache: BriefCache.default(bundleIdentifier: Bundle.main.bundleIdentifier ?? "se.stafe.executive-ai.app")
+    /// client, the brief cache and the uninstaller (S1-13) are built from the bundle identifier
+    /// like everything else. Building them has no side effect; nothing runs until a person acts.
+    static let live: PanelPorts = {
+        let bundle = Bundle.main
+        let control = SupervisorControlClientFactory.live(bundle: bundle)
+
+        return PanelPorts(
+            urlOpener: WorkspaceURLOpener(),
+            terminator: ApplicationTerminator(),
+            settings: SettingsSceneOpener(),
+            serviceControl: SupervisorServiceControl(
+                control: control,
+                cache: BriefCache.default(bundleIdentifier: bundle.bundleIdentifier ?? "se.stafe.executive-ai.app"),
+                uninstaller: Uninstaller(dependencies: .live(bundle: bundle, control: control))
+            )
         )
-    )
+    }()
 }
