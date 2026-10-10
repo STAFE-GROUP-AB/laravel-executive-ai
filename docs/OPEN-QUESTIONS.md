@@ -90,12 +90,14 @@ ADR-004 as a gap, with the local workaround named.
   LM Studio / MLX-style local endpoints, and runtime-built providers via `Ai::build([...])` — which
   is how user-supplied keys avoid `.env`. This satisfies the §4 provider list without a custom
   driver, **provided** `LOCAL_ONLY` enforcement wraps the adapter (the SDK itself has no such mode).
-- `laravel/mcp` (`composer require laravel/mcp`) builds MCP **servers** (tools, resources, prompts,
-  OAuth 2.1 via Sanctum, stdio and HTTP/SSE). It is **not an MCP client**. §7's MCP Manager
-  (Discover → Assess → … → Connect → Grant) therefore needs a separate client implementation or
-  library for registry discovery and for connecting to third-party servers. **ADR-005 must decide
-  the client side explicitly** — `laravel/mcp` covers only the §7 "expose own limited Laravel MCP
-  tools" half.
+- `laravel/mcp` (`composer require laravel/mcp`, v1.0.1 2026-09-24) builds MCP **servers** (tools,
+  resources, prompts, OAuth 2.1 via Sanctum, stdio and HTTP/SSE) **and ships an MCP client**:
+  `src/Client/` (`ClientManager`, `Transport`, `OAuth`, `Protocol`, `NegotiatedConnection`) plus
+  `Client.php`/`WebClient.php`. *Correction 2026-10-10:* an earlier version of this note, based on
+  the https://laravel.com/ai/mcp overview page alone, said the package was server-only; the source
+  tree disproves that. ADR-005 therefore uses `laravel/mcp` for both directions, wrapped in an own
+  connection factory for HTTPS-only, host allowlist, SSRF/DNS pinning and no-redirects, which the
+  library does not enforce.
 
 **ADR-004 drafted 2026-10-10** (`docs/adrs/004-provider-neutral-ai.md`): pins `laravel/ai` **1.2.0**
 exactly (released 2026-10-07). Re-verification against the 1.2.0 source added four facts the note
