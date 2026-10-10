@@ -12,7 +12,7 @@
 ```
 ~/Library/Application Support/<bundle id>/
   runtime/
-    <version>/              immutable: chmod -R a-w after the re-hash, before activation
+    <version>/              immutable: chmod -R a-w after the rename, before `current` is flipped
       frankenphp            the signed FrankenPHP binary (ADR-001 D2)
       Caddyfile             static, loopback only; port and root come from the environment (§3)
       php.ini               static: opcache on, opcache.jit=disable, pcre.jit=1, validate_timestamps=0
@@ -39,9 +39,11 @@ changes when A12 is decided, nothing else does.
 
 Rules the installer enforces (`RuntimeInstaller`, tested):
 
-- **Nothing in `runtime/<version>/` is written after install.** Every file and directory loses its
-  write bits (`chmod -R a-w`) while still in `runtime/.staging-<version>/`; only then is the
-  directory renamed into place and `current` flipped. `PackageVerifier.verify(runtimeDirectory:)`
+- **Nothing in `runtime/<version>/` is written after install.** The re-hashed staging directory is
+  renamed to `runtime/<version>/` with `rename(2)`, every file and directory then loses its write
+  bits in place (`chmod -R a-w`), and only after that is `current` flipped — so no writable tree
+  is ever the active runtime. (The order matters: macOS 15's `FileManager` refuses to move a
+  directory that is already read-only; macOS 26 does not.) `PackageVerifier.verify(runtimeDirectory:)`
   accepts the installed directory unchanged — that is the check the Supervisor runs on every boot
   (ADR-001 D3), with no special case.
 - **Nothing per-machine is inside the runtime.** The Caddyfile reads `{$LEA_HTTP_PORT}` and

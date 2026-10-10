@@ -4,10 +4,11 @@
 // What the state machine needs from the runtime installer: real checkpoints it can show (§12.1
 // "progress must reflect real checkpoints"), cancellation between files, and a rollback that
 // leaves no partial runtime behind. `RuntimeInstaller` copies a *verified* package into
-// `runtime/.staging-<version>/`, re-hashes what it copied, makes the staged tree read-only,
-// activates it by renaming the staging directory to `runtime/<version>/` and flipping the
-// `current`/`previous` symlinks atomically, garbage-collects versions older than `previous`,
-// then prepares `data/`, the Logs and Caches directories and the Time Machine exclusion.
+// `runtime/.staging-<version>/`, re-hashes what it copied, renames the staging directory to
+// `runtime/<version>/`, makes that tree read-only in place, then flips the `current`/`previous`
+// symlinks atomically (so nothing writable is ever visible as the active runtime),
+// garbage-collects versions older than `previous`, and prepares `data/`, the Logs and Caches
+// directories and the Time Machine exclusion.
 //
 // Nothing in the runtime directory is generated per machine. The Caddyfile and php.ini read the
 // port and the paths from the process environment the Supervisor passes (runtime-layout.md), so
@@ -248,15 +249,6 @@ struct RuntimeInstaller: RuntimeInstalling {
         }
 
         try Task.checkCancellation()
-
-        // Immutable before it becomes visible as `runtime/<version>/` (ADR-001 D4: chmod -R a-w).
-        do {
-            try Self.makeReadOnly(staging)
-        } catch {
-            throw RuntimeInstallError.permissionsFailed("permissions could not be set")
-        }
-
-        try Task.checkCancellation()
         progress(.activatingRuntime)
         let installed = try activate(staging: staging, version: version, paths: paths)
         collectGarbage(in: paths)
@@ -341,10 +333,20 @@ struct RuntimeInstaller: RuntimeInstalling {
             }
         }
 
-        do {
-            try fileManager.moveItem(at: staging, to: destination)
-        } catch {
+        // rename(2) directly: atomic within `runtime/`, and no Foundation fallback to
+        // copy-and-delete. The tree is still writable at this point on purpose — macOS 15's
+        // FileManager refuses to move a directory it cannot write (seen on the CI runner; macOS 26
+        // allows it) — and becomes read-only in place right after, before `current` can point at it.
+        guard rename(staging.path, destination.path) == 0 else {
             throw RuntimeInstallError.activationFailed("the staged runtime could not be moved into place")
+        }
+
+        // ADR-001 D4: chmod -R a-w. On failure the directory is left un-activated (`current` still
+        // points elsewhere), which is exactly what `rollback(_:in:)` removes.
+        do {
+            try Self.makeReadOnly(destination)
+        } catch {
+            throw RuntimeInstallError.permissionsFailed("permissions could not be set")
         }
 
         let previousTarget = paths.currentRuntimeVersion()
