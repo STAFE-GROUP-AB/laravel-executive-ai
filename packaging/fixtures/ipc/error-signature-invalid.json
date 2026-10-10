@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "briefs.latest",
+  "description": "A request whose signature does not verify (here: all zeros): 401 signature_invalid. The token was valid, so the response IS signed and the client can tell this apart from a hijacked port (§4.4, §4.5).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/briefs/latest",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "ZXJyb3Itc2lnbmF0dXJlLQ",
+      "X-Lxai-Signature": "v1=0000000000000000000000000000000000000000000000000000000000000000",
+      "X-Lxai-Request-Id": "01M4G0B4BKK6EN4EZ6NEA4323Y"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 401,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0B4BKK6EN4EZ6NEA4323Y",
+      "X-Lxai-Signature": "v1=4012b9e526179236f9a4ed9a2154283f150fd3887c67b7b161eda6057cf23177",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": false,
+      "request_id": "01M4G0B4BKK6EN4EZ6NEA4323Y",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "error": {
+        "code": "signature_invalid",
+        "message": "Request signature did not verify.",
+        "hint": "Re-pair the menu bar with the core (Settings → Diagnostics → Reset security pairing).",
+        "retry_after_seconds": null,
+        "supported_versions": null,
+        "details": null
+      }
+    }
+  }
+}

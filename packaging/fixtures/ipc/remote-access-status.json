@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "remote-access.status",
+  "description": "GET /ipc/v1/remote-access: TunnelProvider::inspect() in the Ready state on a Standalone Tailscale with HTTPS enabled (ADR-006 D2, §6.7).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/remote-access",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "cmVtb3RlLWFjY2Vzcy1zdA",
+      "X-Lxai-Signature": "v1=ed4c67bc1d292861f35c62a81e00e951691a9682eecac78893648cd67e8b31ea",
+      "X-Lxai-Request-Id": "01M4G03JTZ69XZ86K7JYKQMDHE"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G03JTZ69XZ86K7JYKQMDHE",
+      "X-Lxai-Signature": "v1=d33e9f47d4bf28289dc1145da4afb3a7007a318609f72e72583209de8eb6e7d8",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G03JTZ69XZ86K7JYKQMDHE",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "state": "Ready",
+        "origin": "https://my-mac.example-tailnet.ts.net",
+        "tailscale": {
+          "variant": "standalone",
+          "version": "1.98.9"
+        },
+        "detail": "Tailscale running; HTTPS certificates enabled; no serve config",
+        "checked_at": "2026-10-10T18:00:05+02:00"
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "oauth.callback",
+  "description": "POST /ipc/v1/oauth/callback forwarding exactly code and state from ASWebAuthenticationSession (ADR-003 D4); PHP performed the exchange synchronously (§6.6). Values are synthetic.",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/oauth/callback",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "b2F1dGgtY2FsbGJhY2suLg",
+      "X-Lxai-Signature": "v1=c059c71ce5ad6d50f7d17e90aa39fdc9b244169ad17327fe39908b7b3ff192aa",
+      "X-Lxai-Request-Id": "01M4G037B713VGE3D453MDZX6R",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "state": "st_01M4G0S7X2K9P4R6T8V1W3Y5Z7",
+      "code": "synthetic-authorization-code-not-a-secret"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G037B713VGE3D453MDZX6R",
+      "X-Lxai-Signature": "v1=a557c5045dc43fb7fc68e9a79aea9cdbecd0551807f15ff26292a861f147d3e7",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G037B713VGE3D453MDZX6R",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "status": "connected",
+        "connection_id": "01M4G0T1P8X3M2K7Q9R5V4W6YB",
+        "provider": "google",
+        "open_url": "http://127.0.0.1:8787/integrations/01M4G0T1P8X3M2K7Q9R5V4W6YB",
+        "error_reason": null
+      }
+    }
+  }
+}

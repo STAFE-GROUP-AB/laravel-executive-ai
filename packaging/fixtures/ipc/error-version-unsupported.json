@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "health",
+  "description": "A client sending wire major 3 to a core that supports 1: 426 with the repair hint; no response signature because the server never derived a signing key (§5.1, §4.5).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/health",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "3",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "ZXJyb3ItdmVyc2lvbi11bg",
+      "X-Lxai-Signature": "v1=c80c3f3f754127faf859ff5a75859b43d86dddf0362b2b1386d3e5d7d843fa34",
+      "X-Lxai-Request-Id": "01M4G0WE8JPSDKYGHMTZY2QTFW"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 426,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0WE8JPSDKYGHMTZY2QTFW",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": false,
+      "request_id": "01M4G0WE8JPSDKYGHMTZY2QTFW",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "error": {
+        "code": "version_unsupported",
+        "message": "This IPC version is not supported by the installed core.",
+        "hint": "Update or repair Laravel Executive AI (Settings → Updates → Repair).",
+        "retry_after_seconds": null,
+        "supported_versions": [
+          1
+        ],
+        "details": null
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
   "name": "@laravel-executive-ai/fixture-validation",
   "version": "1.0.0",
   "private": true,
-  "description": "Validates the frozen Executive Brief and health contract schemas and every committed fixture against them (S0-13, S0-14).",
+  "description": "Validates the frozen Executive Brief, health contract and IPC contract schemas and every committed fixture against them (S0-13, S0-14, S0-15).",
   "license": "MIT",
   "type": "module",
   "engines": {

@@ -1,0 +1,226 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "briefs.latest",
+  "description": "GET /ipc/v1/briefs/latest with a stale cache: the full canonical brief (brief.schema.json) and the ETag \"<id>:<version>\" the client will revalidate with (§6.2).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/briefs/latest",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "YnJpZWZzLWxhdGVzdC4uLg",
+      "X-Lxai-Signature": "v1=27e2ea621c6f70dddfc08dd146074b576f6e598fd06942d69bcc080ed32f8754",
+      "X-Lxai-Request-Id": "01M4G0ZJB2Q4XMJ0GJ46HG86E5",
+      "If-None-Match": "\"01M4FJ7GY0PZH6YA3D9574XN5K:0\""
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0ZJB2Q4XMJ0GJ46HG86E5",
+      "X-Lxai-Signature": "v1=a7e3ea112b604dc91f8c258023d6dcbefaf423178c4de04ea23b95858d10141d",
+      "X-Lxai-Origin": "127.0.0.1:8787",
+      "ETag": "\"01M4FJ7GY0PZH6YA3D9574XN5K:1\""
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0ZJB2Q4XMJ0GJ46HG86E5",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "schema_version": "1.0.0",
+        "id": "01M4FJ7GY0PZH6YA3D9574XN5K",
+        "version": 1,
+        "generated_at": "2026-10-09T05:30:00+02:00",
+        "period_start": "2026-10-08T05:30:00+02:00",
+        "period_end": "2026-10-09T05:30:00+02:00",
+        "language": "sv",
+        "subject": "Executive Brief torsdag 9 oktober: offert till Nordlund Bygg, CI röd på main, leverans till Milano",
+        "summary": "Två saker kräver beslut i dag: offerten till Nordlund Bygg AB väntar på svar sedan tisdag, och CI på main har varit röd i tre dagar vilket blockerar releasen. Du har lovat Officina Ferrari leveransbesked senast fredag. Herr Weber på Weber Logistik GmbH vill ha ett återsamtal. En möjlig förskjutning av Q4-releasen är noterad men obekräftad.",
+        "items": [
+          {
+            "id": "01M4FJ7HX8XJJ556PHW82CAXMN",
+            "kind": "action",
+            "title": "Svara Nordlund Bygg AB om offert 2026-114",
+            "body": "Karin Nordlund påminde i går om offerten på 184 000 kr för ombyggnaden av lagerlokalen i Mölndal: \"Vi behöver ert svar senast fredag 10 oktober för att kunna boka entreprenören.\" Offerten skickades tisdag 7 oktober och ingen bekräftelse har gått ut. Förslag: skicka bekräftelse och boka uppstartsmöte.",
+            "priority": "critical",
+            "due_at": "2026-10-10T17:00:00+02:00",
+            "source_refs": [
+              "01M4FJ7PSGHQK9584ZERF9GYGM",
+              "01M4FJ7QRR3GBK8K31HFTES3EC"
+            ],
+            "action_ids": [
+              "01M4FJ7WN0BRGSZJGNGZ5FSVT5"
+            ],
+            "dedupe_key": "crm:customer:nordlund-bygg:offer:2026-114"
+          },
+          {
+            "id": "01M4FJ7JWGMA4PKRFNA5HQEPTW",
+            "kind": "risk",
+            "title": "CI på main har varit röd i tre dagar",
+            "body": "Arbetsflödet \"ci\" i STAFE-GROUP-AB/laravel-executive-ai har misslyckats på de senaste sju körningarna sedan måndag 6 oktober. Senaste felmeddelande: \"Tests: 3 failed, 212 passed — BriefDeliveryTest::it_never_sends_twice_on_retry\". Releasen 1.4.0 är planerad till måndag och kan inte taggas från en röd main.",
+            "priority": "high",
+            "source_refs": [
+              "01M4FJ7RR0HQKC2YNNGA3JW3TZ"
+            ],
+            "dedupe_key": "github:STAFE-GROUP-AB/laravel-executive-ai:workflow:ci:main"
+          },
+          {
+            "id": "01M4FJ7KVR644NVGHTFEGR4VEY",
+            "kind": "commitment",
+            "title": "Du har lovat Officina Ferrari leveransbesked senast fredag",
+            "body": "I ditt svar till Giulia Ferrari i går skrev du: \"Vi confermo la data di consegna entro venerdì 10 ottobre.\" Giulia svarade: \"Perfetto, grazie Andreas. Aspettiamo la conferma per organizzare il ritiro a Milano.\" Inget leveransbesked är skickat ännu.",
+            "priority": "high",
+            "due_at": "2026-10-10T23:59:59+02:00",
+            "source_refs": [
+              "01M4FJ7SQ88YMXHC57TMV9Z6SV"
+            ],
+            "action_ids": [
+              "01M4FJ7XM84RV70ZSNAMPQ03HX"
+            ],
+            "dedupe_key": "email:thread:officina-ferrari:consegna-ottobre"
+          },
+          {
+            "id": "01M4FJ7MV0P2563GEE53HBDVPN",
+            "kind": "followup",
+            "title": "Ring tillbaka Thomas Weber, Weber Logistik GmbH",
+            "body": "Thomas Weber lämnade ett meddelande i går eftermiddag: \"Bitte rufen Sie mich zurück, wir möchten das Angebot für die Lagerverwaltung noch diese Woche besprechen.\" Han finns i kalendern som \"Rückruf Weber\" fredag 10 oktober 10:00. CRM-anteckningen från 2 oktober nämner att han vill ha en tyskspråkig demo.",
+            "priority": "normal",
+            "source_refs": [
+              "01M4FJ7TPGMZYEWQV83KK07D8J",
+              "01M4FJ7VNR32E7DH0T2MHMD75Q"
+            ],
+            "dedupe_key": "crm:contact:thomas-weber:callback"
+          },
+          {
+            "id": "01M4FJ7NT86MJ76MGPQV413FP9",
+            "kind": "info",
+            "title": "Möjlig förskjutning av Q4-releasen",
+            "body": "Kombinationen av den röda CI-pipelinen och två öppna säkerhetsgranskningar kan innebära att Q4-releasen inte kan tas den 13 oktober som planerat. Inget beslut eller datum är dokumenterat i någon källa; detta är en bedömning, inte ett faktum.",
+            "priority": "low",
+            "uncertainty": {
+              "reason": "Slutsats dragen från CI-status och granskningskö; ingen källa anger ett nytt releasedatum.",
+              "confidence": 0.4
+            }
+          }
+        ],
+        "sources": [
+          {
+            "id": "01M4FJ7PSGHQK9584ZERF9GYGM",
+            "type": "email",
+            "uri": "lxai://email/messages/01M4FJ7PSGHQK9584ZERF9GYGM",
+            "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+            "account_label": "andreas@example.se (Google Workspace)",
+            "title": "Re: Offert 2026-114 ombyggnad lager Mölndal",
+            "captured_at": "2026-10-09T05:29:41+02:00",
+            "excerpt_hash": "sha256:5c1b3a9e2f7d4c6b8a0e1f2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6e5f4a3"
+          },
+          {
+            "id": "01M4FJ7QRR3GBK8K31HFTES3EC",
+            "type": "crm",
+            "uri": "lxai://crm/customers/01M4FJ7ZJRDVPBT5PEZTZWC6BX/offers/2026-114",
+            "account_id": null,
+            "title": "Nordlund Bygg AB — offert 2026-114",
+            "captured_at": "2026-10-09T05:29:42+02:00",
+            "excerpt_hash": "sha256:0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4"
+          },
+          {
+            "id": "01M4FJ7RR0HQKC2YNNGA3JW3TZ",
+            "type": "github",
+            "uri": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/workflows/ci.yml?query=branch%3Amain",
+            "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+            "account_label": "github.com/STAFE-GROUP-AB (GitHub App)",
+            "title": "ci — main — 7 failed runs since 2026-10-06",
+            "captured_at": "2026-10-09T05:29:44+02:00",
+            "excerpt_hash": "sha256:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b"
+          },
+          {
+            "id": "01M4FJ7SQ88YMXHC57TMV9Z6SV",
+            "type": "email",
+            "uri": "lxai://email/threads/01M4FJ7SQ88YMXHC57TMV9Z6SV",
+            "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+            "account_label": "andreas@example.it (iCloud Mail)",
+            "title": "Re: Consegna ottobre — Officina Ferrari S.r.l.",
+            "captured_at": "2026-10-09T05:29:45+02:00",
+            "excerpt_hash": "sha256:1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809"
+          },
+          {
+            "id": "01M4FJ7TPGMZYEWQV83KK07D8J",
+            "type": "calendar",
+            "uri": "lxai://calendar/events/01M4FJ7TPGMZYEWQV83KK07D8J",
+            "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+            "account_label": "andreas@example.se (Google Calendar)",
+            "title": "Rückruf Weber",
+            "captured_at": "2026-10-09T05:29:46+02:00",
+            "excerpt_hash": "sha256:b1c2d3e4f5a60718293a4b5c6d7e8f90b1c2d3e4f5a60718293a4b5c6d7e8f90"
+          },
+          {
+            "id": "01M4FJ7VNR32E7DH0T2MHMD75Q",
+            "type": "crm",
+            "uri": "lxai://crm/contacts/01M4FJ7VNR32E7DH0T2MHMD75Q/notes/2026-10-02",
+            "account_id": null,
+            "title": "Thomas Weber — anteckning 2 oktober",
+            "captured_at": "2026-10-09T05:29:47+02:00",
+            "excerpt_hash": "sha256:c3d4e5f6a7b8091a2b3c4d5e6f708192c3d4e5f6a7b8091a2b3c4d5e6f708192"
+          }
+        ],
+        "action_ids": [
+          "01M4FJ7WN0BRGSZJGNGZ5FSVT5",
+          "01M4FJ7XM84RV70ZSNAMPQ03HX"
+        ],
+        "model_provenance": {
+          "provider": "ollama",
+          "model": "fixture-local-7b-instruct",
+          "privacy_mode": "LOCAL_ONLY",
+          "prompt_hash": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+          "trace_id": "01M4FJ7GY0PZH6YA3D9574XN5K-run-1"
+        },
+        "content_hash": "sha256:558c32969727cb2a55714a4698183318c813445b7288011fc668d08cdb0d5a26",
+        "delivery_state": "sent",
+        "idempotency_key": "01M4FJ7ZJRDVPBT5PEZTZWC6BX",
+        "deliveries": [
+          {
+            "channel": "menubar",
+            "recipient": "menubar:local",
+            "attempt": 1,
+            "status": "sent",
+            "message_id": "menubar:01M4FJ7ZJRDVPBT5PEZTZWC6BX",
+            "sent_at": "2026-10-09T05:30:01+02:00"
+          },
+          {
+            "channel": "pwa",
+            "recipient": "pwa:local",
+            "attempt": 1,
+            "status": "sent",
+            "message_id": "pwa:01M4FJ7ZJRDVPBT5PEZTZWC6BX",
+            "sent_at": "2026-10-09T05:30:01+02:00"
+          },
+          {
+            "channel": "email",
+            "recipient": "andreas@example.se",
+            "attempt": 1,
+            "status": "failed",
+            "message_id": null,
+            "sent_at": null,
+            "error": "SMTP 421 service not available; retry scheduled"
+          },
+          {
+            "channel": "email",
+            "recipient": "andreas@example.se",
+            "attempt": 2,
+            "status": "sent",
+            "message_id": "<01M4FJ7ZJRDVPBT5PEZTZWC6BX.email.andreas=example.se@laravel-executive-ai.local>",
+            "sent_at": "2026-10-09T05:31:12+02:00"
+          }
+        ],
+        "stale_after": "2026-10-10T05:30:00+02:00"
+      }
+    }
+  }
+}

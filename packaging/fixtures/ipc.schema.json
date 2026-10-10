@@ -1,0 +1,656 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/ipc.schema.json",
+  "$comment": "Swift ↔ Laravel IPC contract 1.0.0 (S0-15). One recorded exchange (request + response) per fixture. See docs/architecture/ipc-contract.md. Blueprint §2, §6, §11, §1.1. Refs: brief.schema.json (briefs.latest data), health.schema.json#/$defs/ready (health data).",
+  "title": "IPC contract exchange",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "description", "request", "response"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "operation": { "$ref": "#/$defs/operation" },
+    "description": {
+      "description": "What this exchange demonstrates. Documentation only.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "request": { "$ref": "#/$defs/request" },
+    "response": { "$ref": "#/$defs/response" }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "health" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/getRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/health" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/healthData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "briefs.latest" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/getRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/briefs/latest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/briefData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "approvals.pending" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/getRequestFor", "type": "object", "properties": { "path": { "type": "string", "pattern": "^/ipc/v1/approvals\\?state=pending(&(limit=[0-9]{1,2}|cursor=[A-Za-z0-9_-]{1,128}))*$" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/approvalsData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "enum": ["ai.pause", "ai.resume"] } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "enum": ["/ipc/v1/ai/pause", "/ipc/v1/ai/resume"] }, "body": { "$ref": "#/$defs/aiControlRequest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/aiControlData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "heartbeat" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/heartbeat" }, "body": { "$ref": "#/$defs/heartbeatRequest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/heartbeatData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "oauth.callback" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/oauth/callback" }, "body": { "$ref": "#/$defs/oauthCallbackRequest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/oauthCallbackData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "remote-access.status" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/getRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/remote-access" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/remoteAccessStatusData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "remote-access.enable" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/remote-access/enable" }, "body": { "$ref": "#/$defs/remoteAccessEnableRequest" }, "headers": { "type": "object", "properties": { "X-Lxai-Elevation": { "type": "string" } }, "required": ["X-Lxai-Elevation"] } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/remoteAccessEnableData" } } } ] } } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "remote-access.disable" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/remote-access/disable" }, "body": { "$ref": "#/$defs/remoteAccessDisableRequest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/remoteAccessDisableData" } } } ] } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "nonce": {
+      "description": "16 random bytes, base64url without padding.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$"
+    },
+    "loopbackUrl": {
+      "type": "string",
+      "pattern": "^http://127\\.0\\.0\\.1:[0-9]{2,5}/[A-Za-z0-9/._-]*$"
+    },
+    "operation": {
+      "description": "Route id. Mirrors the §6 table; the fixture file is named after it.",
+      "type": "string",
+      "enum": [
+        "health",
+        "briefs.latest",
+        "approvals.pending",
+        "ai.pause",
+        "ai.resume",
+        "heartbeat",
+        "oauth.callback",
+        "remote-access.status",
+        "remote-access.enable",
+        "remote-access.disable"
+      ]
+    },
+    "requestHeaders": {
+      "description": "§4.1. Every X-Lxai-* header not listed here is rejected; Origin, Referer, Cookie and Sec-Fetch-* must be absent (§5.2), which additionalProperties: false encodes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Host", "Authorization", "Accept", "X-Lxai-Ipc-Version", "X-Lxai-Timestamp", "X-Lxai-Nonce", "X-Lxai-Signature"],
+      "properties": {
+        "Host": {
+          "type": "string",
+          "pattern": "^127\\.0\\.0\\.1:[0-9]{2,5}$"
+        },
+        "Authorization": {
+          "description": "Bearer lxai1.<client>.<session_id>.<expires_at>.<mac> (§3.3). Fixtures are signed with the all-zero test key (§4.6).",
+          "type": "string",
+          "pattern": "^Bearer lxai1\\.(menubar|supervisor)\\.[0-7][0-9A-HJKMNP-TV-Z]{25}\\.[0-9]{1,12}\\.[0-9a-f]{32}$"
+        },
+        "Accept": {
+          "type": "string",
+          "const": "application/json"
+        },
+        "Content-Type": {
+          "type": "string",
+          "const": "application/json"
+        },
+        "X-Lxai-Ipc-Version": {
+          "description": "Wire major. The server supports the current and previous major for one release (§5.1).",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "X-Lxai-Timestamp": {
+          "description": "Unix seconds on the client clock; accepted within ±30 s.",
+          "type": "string",
+          "pattern": "^[0-9]{1,12}$"
+        },
+        "X-Lxai-Nonce": { "$ref": "#/$defs/nonce" },
+        "X-Lxai-Signature": {
+          "description": "v1=hex(HMAC-SHA256(signing_key, canonical request string)) (§4.2).",
+          "type": "string",
+          "pattern": "^v1=[0-9a-f]{64}$"
+        },
+        "X-Lxai-Request-Id": { "$ref": "#/$defs/ulid" },
+        "X-Lxai-Elevation": {
+          "description": "lxai1e.<operation>.<nonce>.<expires_at>.<mac> (§7.3). Only on elevated operations.",
+          "type": "string",
+          "pattern": "^lxai1e\\.[a-z][a-z0-9-]*\\.[A-Za-z0-9_-]{22}\\.[0-9]{1,12}\\.[0-9a-f]{32}$"
+        },
+        "If-None-Match": {
+          "description": "Only on GET /ipc/v1/briefs/latest: the cached ETag \"<brief id>:<version>\" (§6.2).",
+          "type": "string",
+          "pattern": "^\"[0-7][0-9A-HJKMNP-TV-Z]{25}:[0-9]+\"$"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "headers", "body"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST"]
+        },
+        "path": {
+          "description": "Exact request-target bytes, including the query string, as signed (§4.2).",
+          "type": "string",
+          "pattern": "^/ipc/v1/[a-z][a-z0-9/-]*(\\?[A-Za-z0-9=&_-]+)?$"
+        },
+        "headers": { "$ref": "#/$defs/requestHeaders" },
+        "body": {
+          "description": "JSON body, or null when there is none. Fixture body bytes are the RFC 8785 canonical form (§4.6).",
+          "type": ["object", "null"]
+        }
+      }
+    },
+    "getRequestFor": {
+      "type": "object",
+      "properties": {
+        "method": { "const": "GET" },
+        "body": { "type": "null" },
+        "headers": {
+          "type": "object",
+          "not": { "type": "object", "properties": { "Content-Type": { "type": "string" } }, "required": ["Content-Type"] }
+        }
+      }
+    },
+    "postRequestFor": {
+      "type": "object",
+      "properties": {
+        "method": { "const": "POST" },
+        "body": { "type": "object" },
+        "headers": {
+          "type": "object",
+          "properties": { "Content-Type": { "type": "string" } },
+          "required": ["Content-Type"]
+        }
+      }
+    },
+    "responseHeaders": {
+      "description": "§4.5. X-Lxai-Signature is absent only on responses the server emits before it has a signing key (origin_rejected, version_unsupported, session_invalid); the validator enforces that rule.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["X-Lxai-Ipc-Version", "X-Lxai-Request-Id", "X-Lxai-Origin", "Cache-Control"],
+      "properties": {
+        "Content-Type": {
+          "type": "string",
+          "const": "application/json; charset=utf-8"
+        },
+        "Cache-Control": {
+          "type": "string",
+          "const": "no-store"
+        },
+        "X-Lxai-Ipc-Version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "X-Lxai-Request-Id": { "$ref": "#/$defs/ulid" },
+        "X-Lxai-Signature": {
+          "type": "string",
+          "pattern": "^v1=[0-9a-f]{64}$"
+        },
+        "X-Lxai-Origin": {
+          "description": "Set by ADR-006 D3's ResolveRequestOrigin; always the loopback origin on this channel.",
+          "type": "string",
+          "pattern": "^127\\.0\\.0\\.1:[0-9]{2,5}$"
+        },
+        "ETag": {
+          "type": "string",
+          "pattern": "^\"[0-7][0-9A-HJKMNP-TV-Z]{25}:[0-9]+\"$"
+        },
+        "Retry-After": {
+          "type": "string",
+          "pattern": "^[0-9]{1,5}$"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "headers", "body"],
+      "properties": {
+        "status": {
+          "type": "integer",
+          "enum": [200, 304, 400, 401, 403, 404, 409, 413, 415, 422, 426, 429, 500, 503]
+        },
+        "headers": { "$ref": "#/$defs/responseHeaders" },
+        "body": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/successEnvelope" },
+            { "$ref": "#/$defs/errorEnvelope" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "status": { "const": 304 } } },
+          "then": { "type": "object", "properties": { "body": { "type": "null" } } },
+          "else": { "type": "object", "properties": { "body": { "type": "object" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "status": { "const": 200 } } },
+          "then": { "type": "object", "properties": { "body": { "$ref": "#/$defs/successEnvelope" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "status": { "enum": [400, 401, 403, 404, 409, 413, 415, 422, 426, 429, 500] } } },
+          "then": { "type": "object", "properties": { "body": { "$ref": "#/$defs/errorEnvelope" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "status": { "const": 429 } } },
+          "then": { "type": "object", "properties": { "headers": { "type": "object", "properties": { "Retry-After": { "type": "string" } }, "required": ["Retry-After"] } } }
+        }
+      ]
+    },
+    "responseWithData": {
+      "$comment": "Base for the per-operation data constraints in allOf. The full shape is enforced by #/$defs/response via properties.response; this only narrows body.data per operation.",
+      "type": "object",
+      "properties": { "body": {} },
+      "required": ["body"]
+    },
+    "successEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "request_id", "server_time", "data"],
+      "properties": {
+        "ok": { "const": true },
+        "request_id": { "$ref": "#/$defs/ulid" },
+        "server_time": { "$ref": "#/$defs/dateTime" },
+        "data": { "type": "object" }
+      }
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "bad_request",
+        "session_invalid",
+        "timestamp_skew",
+        "nonce_replayed",
+        "signature_invalid",
+        "origin_rejected",
+        "forbidden_scope",
+        "elevation_required",
+        "elevation_invalid",
+        "policy_denied",
+        "reauth_required",
+        "not_found",
+        "state_conflict",
+        "payload_too_large",
+        "unsupported_media_type",
+        "validation_failed",
+        "oauth_state_invalid",
+        "version_unsupported",
+        "rate_limited",
+        "internal",
+        "secrets_unavailable"
+      ]
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "request_id", "server_time", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "request_id": { "$ref": "#/$defs/ulid" },
+        "server_time": { "$ref": "#/$defs/dateTime" },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message", "hint", "retry_after_seconds", "supported_versions", "details"],
+          "properties": {
+            "code": { "$ref": "#/$defs/errorCode" },
+            "message": {
+              "description": "Fixed English sentence per code; no user data, paths or stack traces.",
+              "type": "string",
+              "maxLength": 200
+            },
+            "hint": {
+              "type": ["string", "null"],
+              "maxLength": 300
+            },
+            "retry_after_seconds": {
+              "type": ["integer", "null"],
+              "minimum": 1
+            },
+            "supported_versions": {
+              "type": ["array", "null"],
+              "items": { "type": "integer", "minimum": 1 },
+              "minItems": 1
+            },
+            "details": {
+              "type": ["object", "null"]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "error": { "type": "object", "properties": { "code": { "const": "version_unsupported" } } } } },
+          "then": { "type": "object", "properties": { "error": { "type": "object", "properties": { "supported_versions": { "type": "array" } } } } },
+          "else": { "type": "object", "properties": { "error": { "type": "object", "properties": { "supported_versions": { "type": "null" } } } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "error": { "type": "object", "properties": { "code": { "enum": ["rate_limited", "secrets_unavailable"] } } } } },
+          "then": { "type": "object", "properties": { "error": { "type": "object", "properties": { "retry_after_seconds": { "type": "integer" } } } } },
+          "else": { "type": "object", "properties": { "error": { "type": "object", "properties": { "retry_after_seconds": { "type": "null" } } } } }
+        }
+      ]
+    },
+    "healthData": {
+      "description": "GET /ipc/v1/health: the health contract's ready document, unchanged (§6.1).",
+      "$ref": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/health.schema.json#/$defs/ready"
+    },
+    "briefData": {
+      "description": "GET /ipc/v1/briefs/latest: a full Executive Brief document (§6.2).",
+      "$ref": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/brief.schema.json"
+    },
+    "approvalItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "summary", "created_at", "expires_at", "brief_item_id", "open_url"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "kind": {
+          "description": "Free-form identifier so a new proposal type is not a major bump. v1: email_send, crm_delete, github_write, external_form, automation_action, mcp_tool_call.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,63}$"
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "summary": {
+          "description": "Sanitised; never secrets or mail bodies.",
+          "type": "string",
+          "maxLength": 500
+        },
+        "created_at": { "$ref": "#/$defs/dateTime" },
+        "expires_at": { "$ref": "#/$defs/dateTime" },
+        "brief_item_id": { "oneOf": [ { "$ref": "#/$defs/ulid" }, { "type": "null" } ] },
+        "open_url": {
+          "description": "PWA deep link where the owner re-authenticates and decides (§11). Approvals are never granted over IPC.",
+          "$ref": "#/$defs/loopbackUrl"
+        }
+      }
+    },
+    "approvalsData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "total_pending", "next_cursor"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/approvalItem" }
+        },
+        "total_pending": {
+          "description": "Equals the health contract's pending_approvals; the only badge source.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_cursor": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        }
+      }
+    },
+    "aiControlRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "aiControlData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ai_actions", "changed_at", "paused_since", "in_flight_runs_cancelled"],
+      "properties": {
+        "ai_actions": { "type": "string", "enum": ["paused", "running"] },
+        "changed_at": { "$ref": "#/$defs/dateTime" },
+        "paused_since": { "oneOf": [ { "$ref": "#/$defs/dateTime" }, { "type": "null" } ] },
+        "in_flight_runs_cancelled": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "ai_actions": { "const": "paused" } } },
+          "then": { "type": "object", "properties": { "paused_since": { "type": "string" } } },
+          "else": { "type": "object", "properties": { "paused_since": { "type": "null" }, "in_flight_runs_cancelled": { "const": 0 } } }
+        }
+      ]
+    },
+    "heartbeatRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["client", "client_version", "contract_version", "panel_open", "since"],
+      "properties": {
+        "client": { "type": "string", "const": "menubar" },
+        "client_version": { "type": "string", "maxLength": 64 },
+        "contract_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "panel_open": { "type": "boolean" },
+        "since": {
+          "description": "When this GUI process started.",
+          "$ref": "#/$defs/dateTime"
+        },
+        "quitting": {
+          "description": "True on the final heartbeat sent by Quit UI (§6.8).",
+          "type": "boolean"
+        }
+      }
+    },
+    "heartbeatData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["received_at", "next_heartbeat_in_seconds", "threshold_seconds", "server"],
+      "properties": {
+        "received_at": { "$ref": "#/$defs/dateTime" },
+        "next_heartbeat_in_seconds": { "type": "integer", "minimum": 5, "maximum": 60 },
+        "threshold_seconds": { "type": "integer", "minimum": 30 },
+        "server": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["app_version", "runtime_version"],
+          "properties": {
+            "app_version": { "type": "string", "maxLength": 64 },
+            "runtime_version": { "type": "string", "maxLength": 64 }
+          }
+        }
+      }
+    },
+    "oauthCallbackRequest": {
+      "description": "ADR-003 D4: exactly code and state, nothing else.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "code"],
+      "properties": {
+        "state": { "type": "string", "minLength": 16, "maxLength": 512 },
+        "code": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      }
+    },
+    "oauthCallbackData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "connection_id", "provider", "open_url", "error_reason"],
+      "properties": {
+        "status": { "type": "string", "enum": ["connected", "pending", "failed"] },
+        "connection_id": { "oneOf": [ { "$ref": "#/$defs/ulid" }, { "type": "null" } ] },
+        "provider": { "oneOf": [ { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" }, { "type": "null" } ] },
+        "open_url": { "oneOf": [ { "$ref": "#/$defs/loopbackUrl" }, { "type": "null" } ] },
+        "error_reason": {
+          "description": "Sanitised category (e.g. invalid_grant), never provider prose. Null unless status is failed.",
+          "oneOf": [ { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" }, { "type": "null" } ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "status": { "const": "failed" } } },
+          "then": { "type": "object", "properties": { "error_reason": { "type": "string" } } },
+          "else": { "type": "object", "properties": { "error_reason": { "type": "null" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "status": { "const": "connected" } } },
+          "then": { "type": "object", "properties": { "connection_id": { "type": "string" }, "provider": { "type": "string" }, "open_url": { "type": "string" } } }
+        }
+      ]
+    },
+    "tunnelState": {
+      "description": "Exactly ADR-006 D2's TunnelStatus states.",
+      "type": "string",
+      "enum": ["NotInstalled", "NotLoggedIn", "HttpsNotEnabled", "Ready", "Active", "Drifted", "FunnelDetected"]
+    },
+    "tailnetOrigin": {
+      "type": "string",
+      "pattern": "^https://[a-z0-9-]+\\.[a-z0-9-]+\\.ts\\.net$"
+    },
+    "remoteAccessStatusData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "origin", "tailscale", "detail", "checked_at"],
+      "properties": {
+        "state": { "$ref": "#/$defs/tunnelState" },
+        "origin": { "oneOf": [ { "$ref": "#/$defs/tailnetOrigin" }, { "type": "null" } ] },
+        "tailscale": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["variant", "version"],
+          "properties": {
+            "variant": { "oneOf": [ { "type": "string", "enum": ["standalone", "app_store", "unsupported"] }, { "type": "null" } ] },
+            "version": { "oneOf": [ { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$" }, { "type": "null" } ] }
+          }
+        },
+        "detail": { "type": "string", "maxLength": 500 },
+        "checked_at": { "$ref": "#/$defs/dateTime" }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "Active" } } },
+          "then": { "type": "object", "properties": { "origin": { "type": "string" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "NotInstalled" } } },
+          "then": { "type": "object", "properties": { "origin": { "type": "null" }, "tailscale": { "type": "object", "properties": { "variant": { "type": "null" }, "version": { "type": "null" } } } } }
+        }
+      ]
+    },
+    "remoteAccessEnableRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmed_origin", "replace_existing"],
+      "properties": {
+        "confirmed_origin": {
+          "description": "The exact origin the user saw on the confirmation screen (ADR-006 D1.3). Compared, never passed to a CLI.",
+          "$ref": "#/$defs/tailnetOrigin"
+        },
+        "replace_existing": {
+          "description": "Only meaningful from the Drifted state; the user chose Replace.",
+          "type": "boolean"
+        }
+      }
+    },
+    "remoteAccessEnableData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "origin", "verified_at"],
+      "properties": {
+        "state": { "type": "string", "const": "Active" },
+        "origin": { "$ref": "#/$defs/tailnetOrigin" },
+        "verified_at": {
+          "description": "When the self-request over the tailnet origin returned 200 with the expected X-Lxai-Origin (ADR-006 D2 verify).",
+          "$ref": "#/$defs/dateTime"
+        }
+      }
+    },
+    "remoteAccessDisableRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "remoteAccessDisableData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "origin", "remaining_handlers"],
+      "properties": {
+        "state": { "$ref": "#/$defs/tunnelState" },
+        "origin": { "type": "null" },
+        "remaining_handlers": {
+          "description": "Serve handlers the app did not create and therefore left alone (ADR-006 D2 disable).",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  }
+}

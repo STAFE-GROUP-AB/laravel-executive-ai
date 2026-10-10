@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "approvals.pending",
+  "description": "The Supervisor's own token on a menu-bar route: 403 forbidden_scope; the scope is inside the token MAC (§2, §3.4).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/approvals?state=pending",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.supervisor.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.145d37136c40c926d50a42d9765a1ec6",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "ZXJyb3ItZm9yYmlkZGVuLQ",
+      "X-Lxai-Signature": "v1=62ab739aadc8ac6c580a3c52a8727fd66523f2ab6f196b7a817a896c9c5530de",
+      "X-Lxai-Request-Id": "01M4G0BTD22DS6SXYPTQQW798K"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0BTD22DS6SXYPTQQW798K",
+      "X-Lxai-Signature": "v1=5763e429a813c1d84ccb7eea38678ff38bc5ca3685e222c98a1f89141e5c119c",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": false,
+      "request_id": "01M4G0BTD22DS6SXYPTQQW798K",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "error": {
+        "code": "forbidden_scope",
+        "message": "This client is not allowed to call this operation.",
+        "hint": null,
+        "retry_after_seconds": null,
+        "supported_versions": null,
+        "details": null
+      }
+    }
+  }
+}
