@@ -1,0 +1,261 @@
+# build-macos — blueprint §16 step 5 (a signed internal Mac build produced by CI), §12.1 (DMG),
+# §14 (codesign / spctl evidence), backlog S1-12 (#40). Job name `build-macos` is stable so it can
+# be added to the S0-27 required checks; do not rename it.
+#
+# What it produces: a Release build of apps/macos (app + embedded Supervisor tool + LaunchAgent
+# plist) wrapped in a UDZO disk image, plus build/signing-report.txt with the codesign and spctl
+# output — uploaded as artifacts (14 days) on every run, signed or not.
+#
+# Signing is gated on three repository secrets (packaging/signing/README.md §2):
+#   APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD, APPLE_TEAM_ID  (+ optional APPLE_KEYCHAIN_PASSWORD)
+# Pull requests ALWAYS build unsigned (the run proves the pipeline, never touches the identity);
+# pushes to main and manual runs sign when all three are present and otherwise fall back to an
+# unsigned image named *-unsigned.dmg with a warning. The xcodebuild step itself never signs
+# (CODE_SIGNING_ALLOWED=NO, the Shared.xcconfig default); packaging/signing/sign.sh signs the
+# finished bundle inside-out afterwards, in a temporary keychain deleted in an always() step.
+# Secret values are only ever mapped into `env:`; nothing echoes them and no script enables `set -x`.
+#
+# No runtime package is bundled (OPEN-QUESTIONS A23; packaging/manifest/runtime.json stays
+# `unbuilt`). Notarization and stapling are the Sprint 4 gate — see the disabled `notarize` job.
+# Every third-party action is pinned to a full commit SHA.
+
+name: build-macos
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/macos/**'
+      - 'packaging/signing/**'
+      - '.github/workflows/build-macos.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-macos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Matches ci.yml and the local toolchain (Xcode 26.2). Bump both together, with S0-22.
+  XCODE_VERSION: '26.2'
+  XCODE_PROJECT: apps/macos/LaravelExecutiveAI.xcodeproj
+  XCODE_SCHEME: LaravelExecutiveAI
+  APP_PATH: build/dd/Build/Products/Release/LaravelExecutiveAI.app
+  SIGNING_REPORT: build/signing-report.txt
+  DIST_DIR: build/dist
+
+jobs:
+  build-macos:
+    name: build-macos
+    runs-on: macos-15
+    timeout-minutes: 45
+    # The temporary keychain sign.sh creates and the cleanup step deletes defaults to
+    # $RUNNER_TEMP/lxai-signing.keychain-db (sign.sh `keychain_path`): outside the checkout, same
+    # path in every step of this job. (The `runner` context is not available in workflow- or
+    # job-level env, so it is not spelled out here.)
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only booleans leave this step. The secret values are mapped into env again, and only
+      # there, in the two signing steps below.
+      - name: Decide signing mode
+        id: mode
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HAS_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+          HAS_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+        run: |
+          set -euo pipefail
+          signed=false
+          if [ "$EVENT_NAME" = pull_request ]; then
+            echo "::notice title=build-macos::Pull request run: the image is built unsigned on purpose (the pipeline check never uses the signing identity)."
+          elif [ "$HAS_CERTIFICATE" = true ] && [ "$HAS_CERTIFICATE_PASSWORD" = true ] && [ "$HAS_TEAM_ID" = true ]; then
+            signed=true
+            echo "Signing identity configured: the app, the Supervisor and the image will be Developer ID signed."
+          else
+            echo "::warning title=build-macos::APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD and APPLE_TEAM_ID are not all set (OPEN-QUESTIONS A12). Building an UNSIGNED debug image instead."
+          fi
+          status=unsigned
+          [ "$signed" = true ] && status=signed
+          {
+            echo "signed=$signed"
+            echo "status=$status"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/SourcePackages
+            apps/macos/.build
+          key: spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('apps/macos/**/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-
+
+      # Unsigned on purpose: Shared.xcconfig leaves the identity empty and this build never
+      # overrides it. sign.sh re-signs the finished bundle so the same build is used in both modes.
+      - name: Build Release (no signing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          set -o pipefail
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/dd \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -resultBundlePath build/build-macos.xcresult \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build \
+            | xcbeautify --renderer github-actions
+
+      - name: Locate the bundle
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Expected $APP_PATH after the Release build."
+            exit 1
+          fi
+          for required in Contents/MacOS/LaravelExecutiveAI Contents/MacOS/LaravelExecutiveAISupervisor Contents/Library/LaunchAgents/se.stafe.executive-ai.supervisor.plist; do
+            if [ ! -f "$APP_PATH/$required" ]; then
+              echo "::error::$APP_PATH is missing $required (S1-07 embeds the Supervisor and its LaunchAgent plist)."
+              exit 1
+            fi
+          done
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" >> "$GITHUB_OUTPUT"
+          find "$APP_PATH" -maxdepth 4 | sort
+
+      # Developer ID signing, inside-out: Supervisor tool (its entitlements, Team ID prefix
+      # expanded) first, then the app (its entitlements). Hardened runtime + secure timestamp.
+      - name: Sign the app and the Supervisor
+        if: steps.mode.outputs.signed == 'true'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh app "$APP_PATH"
+
+      - name: Create the disk image
+        id: dmg
+        shell: bash
+        env:
+          STATUS: ${{ steps.mode.outputs.status }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          packaging/signing/make-dmg.sh --app "$APP_PATH" --out-dir "$DIST_DIR" --sha "${SHA:0:7}" --status "$STATUS"
+
+      # The certificate is already in the temporary keychain; only the Team ID is needed to pick it.
+      - name: Sign the disk image
+        if: steps.mode.outputs.signed == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DMG_PATH: ${{ steps.dmg.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh dmg "$DMG_PATH"
+
+      # Always recorded, also for the unsigned image, where spctl says "rejected" — that is the
+      # honest record §14 asks for. In signed mode the step fails unless the app verifies.
+      - name: Record codesign and spctl verdicts
+        if: always() && steps.locate.outcome == 'success'
+        shell: bash
+        env:
+          LXAI_EXPECT_SIGNED: ${{ steps.mode.outputs.signed == 'true' && '1' || '0' }}
+          DMG_PATH: ${{ steps.dmg.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh report "$APP_PATH" "$SIGNING_REPORT" "$DMG_PATH"
+          {
+            echo '## Signing report'
+            echo
+            echo '```'
+            sed -n '1,12p' "$SIGNING_REPORT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the disk image
+        if: always() && steps.dmg.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.dmg.outputs.dmg_name }}
+          path: ${{ steps.dmg.outputs.dmg_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the signing report
+        if: always() && steps.locate.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signing-report-${{ steps.mode.outputs.status }}-${{ github.run_id }}
+          path: ${{ env.SIGNING_REPORT }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload xcresult bundle
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-macos-xcresult-${{ github.run_id }}
+          path: build/build-macos.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Delete the temporary keychain
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh cleanup
+          security list-keychains -d user
+
+  # Sprint 4 release gate, intentionally disabled (`if: false`): notarization and stapling are
+  # backlog row "E4-6 Release engineering and docs completeness" (docs/BACKLOG.md, Sprint 4; no
+  # GitHub issue exists for it yet — open one when Sprint 4 is planned) and §14 of the release
+  # checklist (docs/operations/release-policy.md §5). It needs a Developer-ID-signed image from the
+  # job above plus three more secrets (App Store Connect API key id, issuer id and the .p8), which do
+  # not exist today. The outline is kept here so the gap is visible in the workflow, not only in
+  # the docs: packaging/notarization/README.md.
+  notarize:
+    name: notarize (disabled until Sprint 4 / E4-6)
+    if: false
+    needs: build-macos
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Not implemented
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "xcrun notarytool submit <dmg> --key <p8> --key-id <id> --issuer <issuer> --wait"
+          echo "xcrun stapler staple <dmg> && xcrun stapler validate <dmg>"
+          echo "spctl --assess --type open --context context:primary-signature --verbose <dmg>  # must be 'accepted'"
+          exit 1

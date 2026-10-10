@@ -430,6 +430,13 @@ jobs:
         if: hashFiles('packaging/manifest/launchd/test/*.test.mjs') != ''
         run: node --test 'packaging/manifest/launchd/test/*.test.mjs'
 
+      # Dependency-free node:test suite for the signing scripts and the build-macos workflow (S1-12):
+      # no hard-coded identity, secrets only via `${{ secrets.* }}` into env, entitlements present,
+      # hardened runtime, Supervisor signed before the app, fail-closed without an identity.
+      - name: Signing and DMG pipeline tests (S1-12)
+        if: hashFiles('packaging/signing/test/*.test.mjs') != ''
+        run: node --test 'packaging/signing/test/*.test.mjs'
+
   # S1-10 tri-surface brief parity gate (docs/architecture/brief-parity.md §3). One macOS job so
   # the Swift export and the PHP comparison share a filesystem: (a) only the Swift parity test runs
   # and writes one JCS export per brief fixture into build/parity, then (b) Pest renders the mail

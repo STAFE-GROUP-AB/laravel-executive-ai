@@ -28,6 +28,13 @@ xcodebuild -project apps/macos/LaravelExecutiveAI.xcodeproj -scheme LaravelExecu
 
 Package-only tests: `cd apps/macos/DesignTokens && swift test`.
 
+Disk image from CI (S1-12): `.github/workflows/build-macos.yml` builds this project in Release with
+the same unsigned `xcodebuild` arguments, then `packaging/signing/sign.sh` signs the Supervisor tool
+and the app inside-out when the Developer ID secrets exist (pull requests always stay unsigned) and
+`packaging/signing/make-dmg.sh` wraps it as `LaravelExecutiveAI-<version>-<sha>[-unsigned].dmg`, with
+a `codesign`/`spctl` report as a second artifact. No runtime is bundled yet (A23). How to verify the
+image on a clean Mac: `docs/operations/release-build.md`.
+
 Walk the six installer screens against doubles (DEBUG build, temporary directory, nothing real is
 touched): `LXAI_INSTALL_SIMULATE=1 open <DerivedData>/Build/Products/Debug/LaravelExecutiveAI.app`.
 Without the variable the live dependencies run `INSTALL_CORE` and `BOOT_SERVICES` for real
