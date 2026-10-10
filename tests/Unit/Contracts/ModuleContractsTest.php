@@ -38,6 +38,21 @@ use App\CRM\Queries\TaskQuery;
 use App\CRM\Tasks\TaskSummary;
 use App\CRM\WorkspaceRepository;
 use App\CRM\WorkspaceScope;
+use App\Integrations\Mail\Dto\ApprovedOutgoingEmail;
+use App\Integrations\Mail\Dto\AuthorizationFlow;
+use App\Integrations\Mail\Dto\ConnectionHealth;
+use App\Integrations\Mail\Dto\EmailAddress;
+use App\Integrations\Mail\Dto\EmailAttachmentRef;
+use App\Integrations\Mail\Dto\EmailConnection;
+use App\Integrations\Mail\Dto\EmailConnectionDraft;
+use App\Integrations\Mail\Dto\EmailFolder;
+use App\Integrations\Mail\Dto\EmailMessage;
+use App\Integrations\Mail\Dto\MailServerSettings;
+use App\Integrations\Mail\Dto\SendReceipt;
+use App\Integrations\Mail\Dto\SyncBatch;
+use App\Integrations\Mail\Dto\SyncCursor;
+use App\Integrations\Mail\Dto\SyncRequest;
+use App\Integrations\Mail\EmailConnector;
 use App\Support\Cancellation\CancellationToken;
 use App\Support\Cancellation\NeverCancelled;
 use App\Support\Install\Tunnel\TunnelConfig;
@@ -48,7 +63,7 @@ use App\Support\Install\TunnelProvider;
 
 /*
 |--------------------------------------------------------------------------
-| S0-16 — architecture tests for the blueprint §3 module contracts
+| S0-16 / S0-17 — architecture tests for the blueprint module contracts
 |--------------------------------------------------------------------------
 |
 | These tests pin the *shape* of the contracts, not any behaviour: every
@@ -57,6 +72,7 @@ use App\Support\Install\TunnelProvider;
 | and cancellation are declared in the signatures, and every DTO is a final
 | readonly value object. Sprint 2 implementers can refactor freely behind
 | these assertions; breaking one is a contract change that needs a review.
+| S0-17 adds the §5.6 EmailConnector and its DTOs to the same datasets.
 |
 */
 
@@ -66,6 +82,7 @@ $contracts = [
     'WorkspaceRepository' => [WorkspaceRepository::class, '§3'],
     'ComputerUseProvider' => [ComputerUseProvider::class, '§3'],
     'TunnelProvider' => [TunnelProvider::class, '§3'],
+    'EmailConnector' => [EmailConnector::class, '§5.6'],
 ];
 
 dataset('contracts', $contracts);
@@ -110,6 +127,20 @@ $dtos = [
     TunnelResult::class,
     TunnelVerificationStep::class,
     NeverCancelled::class,
+    EmailConnectionDraft::class,
+    AuthorizationFlow::class,
+    EmailConnection::class,
+    ConnectionHealth::class,
+    SyncCursor::class,
+    SyncRequest::class,
+    SyncBatch::class,
+    EmailMessage::class,
+    EmailAddress::class,
+    EmailAttachmentRef::class,
+    EmailFolder::class,
+    MailServerSettings::class,
+    ApprovedOutgoingEmail::class,
+    SendReceipt::class,
 ];
 
 dataset('dtos', array_combine(
@@ -275,7 +306,24 @@ it('keeps every §3 contract and DTO in the §2.1 module it belongs to', functio
     expect(AiProviderAdapter::class)->toStartWith('App\AI\Providers\\')
         ->and(WorkspaceRepository::class)->toBe('App\CRM\WorkspaceRepository')
         ->and(ComputerUseProvider::class)->toBe('App\Browser\ComputerUse\ComputerUseProvider')
-        ->and(TunnelProvider::class)->toBe('App\Support\Install\TunnelProvider');
+        ->and(TunnelProvider::class)->toBe('App\Support\Install\TunnelProvider')
+        ->and(EmailConnector::class)->toBe('App\Integrations\Mail\EmailConnector');
+});
+
+it('declares every §5.6 sketch method on EmailConnector and accepts only an ApprovedOutgoingEmail on send()', function (): void {
+    $reflection = new ReflectionClass(EmailConnector::class);
+    $methods = array_map(fn (ReflectionMethod $method): string => $method->getName(), $reflection->getMethods());
+
+    expect($methods)->toContain('authorization', 'verify', 'sync', 'folders', 'getMessage', 'send', 'disconnect')
+        ->and((string) $reflection->getDocComment())->toContain('rovisional');
+
+    $send = $reflection->getMethod('send');
+    $types = array_map(
+        fn (ReflectionParameter $parameter): array => s0_16_native_type_names($parameter->getType()),
+        $send->getParameters(),
+    );
+
+    expect($types)->toBe([[EmailConnection::class], [ApprovedOutgoingEmail::class], [CancellationToken::class]]);
 });
 
 test('App\AI never imports the laravel/ai SDK outside the adapter implementation (ADR-004 D2)', function (): void {
@@ -283,6 +331,6 @@ test('App\AI never imports the laravel/ai SDK outside the adapter implementation
 });
 
 test('contract modules do not depend on Eloquent, HTTP or Livewire concerns', function (): void {
-    expect(['App\AI\Providers', 'App\CRM', 'App\Browser\ComputerUse', 'App\Support\Install', 'App\Support\Cancellation'])
+    expect(['App\AI\Providers', 'App\CRM', 'App\Browser\ComputerUse', 'App\Support\Install', 'App\Support\Cancellation', 'App\Integrations\Mail'])
         ->not->toUse(['Illuminate\Database\Eloquent', 'Illuminate\Http', 'Livewire']);
 });
