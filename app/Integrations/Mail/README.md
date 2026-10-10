@@ -1,1 +1,1 @@
-EmailConnector contract, Microsoft 365/Outlook (Graph), generic IMAP/SMTP, Proton Bridge, sync/normalisation and the unified inbox (§5.6).
+EmailConnector contract, Microsoft 365/Outlook (Graph), generic IMAP/SMTP, Proton Bridge, sync/normalisation and the unified inbox (§5.6). The contract and its `Dto\`/`Exceptions\` are S0-17; see `docs/architecture/module-contracts.md` §3.1, §4.1 and §6 before writing an adapter.
