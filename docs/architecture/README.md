@@ -9,3 +9,9 @@ Contracts and schemas: module contracts, brief schema, health contract, IPC cont
 | [support-matrix.md](support-matrix.md) — macOS 15–26, Apple Silicon only (Intel unsupported), measured vs PROVISIONAL RAM/disk, the ten §12.1 preflight checks with EN/SV blocker text, Sprint 1 measurement checklist | S0-22 | `packaging/fixtures/prototypes/adr-001/` (measurements) |
 
 Validate schemas and fixtures: `node packaging/fixtures/validate-schema.mjs` (after `npm ci --prefix packaging/fixtures`).
+
+The trust boundaries these contracts create, and the threats each control answers, are modelled in
+[`docs/security/threat-model.md`](../security/threat-model.md) (S0-23): the brief schema feeds its
+data-at-rest and redaction rows, the health contract its exposure rows, the IPC contract boundary B2
+(§2.3) in full, and the support matrix the preflight assumptions in §1.2. A change to any contract
+here that moves a boundary or a control must update that register in the same PR.
