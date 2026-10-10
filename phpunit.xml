@@ -11,6 +11,13 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!-- Negative security tests (tests/Security/README.md). Registered so the
+             §16.7 refusal gate runs in the `php` CI lane and so the Security suite
+             can be selected by name; `tests/Security/Support` holds the harness and
+             carries no *Test.php files. -->
+        <testsuite name="Security">
+            <directory>tests/Security</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

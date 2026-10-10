@@ -30,7 +30,8 @@ are checkable. Read `packaging/fixtures/README.md` → "Security corpora" for th
 
 | Suite | Reads | Status |
 |---|---|---|
-| `tests/Security/ForeignEmailCannotTriggerSendTest.php` | the §16.7 cases: `email_body` × `exfiltration` (all four languages), plus `privilege_escalation` and the From-identity variant | S0-21 (#21) commits it as an **expected-failing** gate; turns green with E2-4. Threat model T-01, T-05, T-06, T-08 |
+| `tests/Security/ForeignEmailCannotTriggerSendTest.php` | four `email_body` cases: `01M4JGMWH02GAABCPY27KT2DQK` (the §16.7 case verbatim), `01M4JGN0E09WM1ENPV27T4CB53` (From identity), `01M4JGN4B0GG8Y5HA5J0JRYDS0` (privilege escalation), `01M4JGMSK84X4MM4BWNBYD3PG0` (delimiter spoofing) | **Live, expected-failing** (S0-21, #21). Threat model T-01, T-05, T-06, T-08. xfail mechanism: `Support\ExpectedFailure::guard()` — the body runs, a failure is printed as `EXPECTED FAILURE #21` with the removal condition and CI stays green, an **unexpected pass fails the build**. Skipping, `todo()` and `markTestIncomplete()` are forbidden here and the helper re-throws a skip rather than absorbing it. Removal condition: *remove `expectedFailure` when E2-4 lands `PolicyGate` + approvals and all four cases pass* |
+| `tests/Security/ExpectedFailureTest.php` | — | Proves the xfail mechanism in both directions (reported-and-green, and build-failed on XPASS), so a broken helper cannot silence the gate above |
 | `tests/Security/PromptInjectionCorpusTest.php` | every case in `prompt-injection/*.json` | S1, once an agent run exists; the S0-21 file is its first rows |
 | `tests/Security/HostileMcpServerTest.php` | every exchange in `hostile-mcp/*.json` | S1/S3, with the MCP client (ADR-005 D4). Threat model T-02, T-52 |
 | `tests/Security/LocalOnlyEgressTest.php` | the `policy_downgrade` cases plus the AI fixture suite | ADR-004 D4 requires it before that ADR can be Accepted |
@@ -56,6 +57,24 @@ it('refuses the attack', function (array $case) {
 
 `toRefuse()` is the single place the effect vocabulary is interpreted. It must fail loudly on an
 effect name it does not know, so adding a case with a new effect cannot silently assert nothing.
+
+### The harness (`tests/Security/Support/`, S0-21)
+
+S0-21 built that interpreter and the fakes the suites share. The sketch above is the shape; the
+implementation is typed, because an untyped `$case['expected']` is one renamed key away from
+asserting nothing:
+
+| File | Role |
+|---|---|
+| `InjectionCorpus` / `InjectionCase` | loads and validates a frozen case by id, resolves `context.ref` into the S0-18 world, and builds the Pest dataset keyed by case id. Every problem is a `RuntimeException`, never a skip |
+| `ForeignEmailArrival` | the payload as it arrives: the owner's benign turn, the body as a `ToolResult` message, and the account-resolved From identity |
+| `Refusal` | `toRefuse()` — the one place the effect vocabulary is read. Throws a `LogicException` naming the case and the effect for any effect it does not interpret |
+| `AgentRunUnderTest` / `AgentRunOutcome` | the seam E2-4/E2-5 implement, and the recorded facts a run reports. There is deliberately no `refused: bool` |
+| `FakeAiProviderAdapter` | a model scripted to obey the injection completely (§7 puts policy in code, so no test may depend on the model behaving); records every `AiRequest` |
+| `FakeEmailConnector` | the egress boundary: records any `send()` on a read-only connection, so the assertion is "no send exists", not "the send was refused" |
+| `FakeWorkspaceRepository` | the data-gathering boundary, seeded with the frozen customers so a leak is recognisable |
+| `AuditLogSpy` / `InMemoryAuditLogSpy` | the `audit_event_recorded` seam; swapped for an adapter over `audit_events` once S1-01 lands it. The event type is the case's `user_message_key`, so the forensic record and the UI message cannot drift apart |
+| `ExpectedFailure` | real xfail semantics for a gate written before its defence |
 
 ## The contract
 
@@ -158,7 +177,7 @@ difference: for these corpora the unit of addition is a **case**, not a file.
 npm ci --prefix packaging/fixtures          # the corpora are validated by the fixtures job
 node packaging/fixtures/validate-schema.mjs
 
-php artisan test --testsuite=Security       # once the suites exist (S0-21, S1)
+php artisan test --testsuite=Security       # registered in phpunit.xml by S0-21
 ```
 
 The validator is the gate on the data, the suites are the gate on the behaviour. Neither substitutes
