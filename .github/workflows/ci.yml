@@ -417,3 +417,9 @@ jobs:
       - name: Service-worker cache audit (S1-04)
         if: hashFiles('packaging/fixtures/e2e/sw-cache-audit.test.mjs') != ''
         run: node --test 'packaging/fixtures/e2e/**/*.test.mjs'
+
+      # Dependency-free node:test suite for the runtime assembler (S1-06); self-detecting so the
+      # steps above are untouched. runtime.json itself is validated by validate-schema.mjs.
+      - name: Runtime assembler tests (S1-06)
+        if: hashFiles('packaging/runtime/test/*.test.mjs') != ''
+        run: node --test 'packaging/runtime/test/*.test.mjs'

@@ -146,7 +146,7 @@ struct InstallHarness {
             bundledRuntimeDirectory: packageDirectory,
             preflightProbes: StubPreflightProbes(),
             packageVerifier: PackageVerifier(signatureChecker: AcceptAnySignatureChecker()),
-            runtimeInstaller: StagingRuntimeInstaller(),
+            runtimeInstaller: RuntimeInstaller(backupExclusion: RecordingBackupExclusion()),
             ownerCreator: ownerCreator,
             aiSelectionApplier: aiApplier,
             localAiRuntimeDetector: StaticLocalAiRuntimeDetector(runtimes: [.ollama]),
@@ -165,6 +165,8 @@ struct InstallHarness {
     }
 
     func tearDown() {
+        // An installed runtime is read-only (chmod -R a-w); restore write bits before removing.
+        try? RuntimeInstaller.makeWritable(root)
         try? FileManager.default.removeItem(at: root)
     }
 

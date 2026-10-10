@@ -1,0 +1,39 @@
+# Laravel Executive AI runtime — loopback-only HTTP server (ADR-001 D3/D4).
+#
+# This file is static and identical on every Mac: it carries no port, no path and no secret,
+# so the runtime directory it lives in is byte-for-byte the manifest's and stays verifiable on
+# every boot. Per-install values arrive as process environment from the Supervisor
+# (docs/architecture/runtime-layout.md):
+#
+#   LEA_HTTP_PORT     the free loopback port preflight chose (8787 or a fallback)
+#   LEA_RUNTIME_DIR   absolute path of this runtime version directory
+#
+# There are deliberately no defaults: a missing variable makes Caddy refuse to start, and the
+# Supervisor reports that, instead of the server quietly binding somewhere unexpected.
+
+{
+	admin off
+	auto_https off
+	persist_config off
+	grace_period 10s
+	log {
+		output stderr
+		format json
+		level WARN
+	}
+	frankenphp
+	order php_server before file_server
+}
+
+http://127.0.0.1:{$LEA_HTTP_PORT} {
+	bind 127.0.0.1
+	root * {$LEA_RUNTIME_DIR}/app/public
+	encode zstd gzip
+	header {
+		-Server
+		-X-Powered-By
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+	}
+	php_server
+}

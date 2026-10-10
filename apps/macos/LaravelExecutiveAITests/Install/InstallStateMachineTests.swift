@@ -194,7 +194,7 @@ final class InstallStateMachineTests: XCTestCase {
     }
 
     func testCancelAtInstallCoreRollsBackThePartialRuntime() async throws {
-        harness.dependencies.runtimeInstaller = StagingRuntimeInstaller(beforeEachFile: { index in
+        harness.dependencies.runtimeInstaller = RuntimeInstaller(backupExclusion: RecordingBackupExclusion(), beforeEachFile: { index in
             if index == 2 {
                 try await hangUntilCancelled()
             }
@@ -376,7 +376,7 @@ final class InstallStateMachineTests: XCTestCase {
 
     func testFailureInsideInstallCoreOffersRollbackAndRetryWorksAfterwards() async throws {
         let failOnce = FailOnce()
-        harness.dependencies.runtimeInstaller = StagingRuntimeInstaller(beforeEachFile: { index in
+        harness.dependencies.runtimeInstaller = RuntimeInstaller(backupExclusion: RecordingBackupExclusion(), beforeEachFile: { index in
             if index == 1, await failOnce.consume() {
                 throw RuntimeInstallError.copyFailed(path: "injected")
             }

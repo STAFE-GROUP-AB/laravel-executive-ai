@@ -3,12 +3,13 @@
 use App\Http\Middleware\ResolveRequestOrigin;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\TrustLoopbackHosts;
+use App\Support\Runtime\RuntimeLayout;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -45,3 +46,9 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('health/*') || $request->is('ipc/*') || $request->expectsJson(),
         );
     })->create();
+
+// ADR-001 D4: when the Supervisor passes LEA_DATA_DIR, storage_path() and database_path()
+// resolve into the mutable data directory while base_path() stays in the immutable runtime.
+RuntimeLayout::apply($app);
+
+return $app;

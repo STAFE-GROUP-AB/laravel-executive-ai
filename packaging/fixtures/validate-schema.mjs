@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-15 IPC contract,
-// S0-18 CRM fixture pack, S0-19 security corpora, S0-20 install-timer record) and every committed
-// fixture against them. CI step: `node packaging/fixtures/validate-schema.mjs` (see S0-05).
+// S0-18 CRM fixture pack, S0-19 security corpora, S0-20 install-timer record, S1-06 runtime
+// manifest) and every committed fixture against them. CI step:
+// `node packaging/fixtures/validate-schema.mjs` (see S0-05).
 //
 // Exit code 0 when everything passes, 1 on any failure. No network access.
 
@@ -26,6 +27,7 @@ import {
 } from './ipc-signing.mjs';
 import { briefContentHash, canonicalize } from './lib/jcs.mjs';
 import { toolsSchemaHash } from './lib/mcp-tools.mjs';
+import { validateManifest as validateRuntimeDirectoryManifest } from '../runtime/lib/manifest.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -55,6 +57,15 @@ const suites = [
         fixturesDir: join(here, '..', 'manifest', 'install-timer', 'results', 'example'),
         mode: 'each',
         extraChecks: [checkInstallTimerRecordIsSynthetic],
+    },
+    {
+        // S1-06 runtime release manifest (ADR-001 D4). The only JSON directly under
+        // packaging/manifest/ is runtime.json; its `package` member is the per-directory
+        // manifest the Mac app's PackageVerifier parses.
+        schema: join(here, '..', 'manifest', 'runtime.schema.json'),
+        fixturesDir: join(here, '..', 'manifest'),
+        mode: 'each',
+        extraChecks: [checkRuntimeManifest],
     },
     {
         schema: join(here, 'ipc.schema.json'),
@@ -247,6 +258,87 @@ function checkInstallTimerRecordIsSynthetic(subject, record) {
 
         return false;
     }
+
+    return true;
+}
+
+// S1-06 / ADR-001 D1, D4, ADR-007 D2: the pinned component set stays inside the curated list, and
+// `package` (when built) is a directory manifest the Mac app's PackageVerifier would accept —
+// re-checked with the same rules the assembler used to write it.
+const FORBIDDEN_PHP_EXTENSIONS = ['gmp', 'gettext', 'readline', 'imagick', 'ldap', 'pgsql', 'pdo_pgsql', 'mysqli', 'pdo_mysql', 'memcached', 'amqp', 'ssh2', 'parallel', 'xlswriter', 'imap', 'ffi'];
+
+function checkRuntimeManifest(subject, document) {
+    const problems = [];
+    const extensions = document.components.php_extensions;
+
+    if (extensions.join(',') !== [...extensions].sort().join(',')) {
+        problems.push('components.php_extensions must be sorted');
+    }
+
+    for (const extension of extensions) {
+        if (FORBIDDEN_PHP_EXTENSIONS.includes(extension)) {
+            problems.push(`components.php_extensions contains ${extension}, which is outside ADR-001 D1 / ADR-007 D2 (gmp is LGPL, gettext/GNU readline are GPL/LGPL, the rest need a legal review)`);
+        }
+    }
+
+    for (const module of document.components.caddy_modules) {
+        if (/mercure|vulcain/.test(module)) {
+            problems.push(`components.caddy_modules links ${module} (AGPL-3.0)`);
+        }
+    }
+
+    for (const required of ['github.com/dunglas/mercure/caddy', 'github.com/dunglas/vulcain/caddy']) {
+        if (! document.components.caddy_modules_excluded.includes(required)) {
+            problems.push(`components.caddy_modules_excluded must list ${required}`);
+        }
+    }
+
+    const { preferred_port: preferred, fallback_ports: fallback } = document.http;
+
+    if (fallback.from > fallback.to) {
+        problems.push('http.fallback_ports.from must not exceed .to');
+    }
+
+    if (preferred >= fallback.from && preferred <= fallback.to) {
+        problems.push('http.preferred_port must lie outside the fallback range');
+    }
+
+    if (document.package !== null) {
+        try {
+            validateRuntimeDirectoryManifest(document.package);
+
+            if (document.package.runtime_version !== document.runtime_version) {
+                problems.push(`package.runtime_version ${document.package.runtime_version} differs from runtime_version ${document.runtime_version}`);
+            }
+
+            if (document.package.executable !== 'frankenphp') {
+                problems.push('package.executable must be frankenphp (ADR-001 D4)');
+            }
+
+            const paths = new Set(document.package.files.map((entry) => entry.path));
+
+            for (const required of ['frankenphp', 'Caddyfile', 'php.ini', 'app/public/index.php', 'app/artisan']) {
+                if (! paths.has(required)) {
+                    problems.push(`package.files must list ${required}`);
+                }
+            }
+
+            if ([...paths].some((path) => /(^|\/)\.env(\..*)?$|^app\/bootstrap\/cache\/(config|routes-v7|events)\.php$|\.sqlite/.test(path))) {
+                problems.push('package.files lists a .env, an environment-derived cache or a database file');
+            }
+        } catch (error) {
+            problems.push(`package is not a valid directory manifest: ${error.message}`);
+        }
+    }
+
+    if (problems.length > 0) {
+        fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    const state = document.package === null ? 'unbuilt, no package yet' : `${document.package.files.length} files pinned`;
+    console.log(`      runtime ${document.runtime_version}: FrankenPHP ${document.components.frankenphp.version}, PHP ${document.components.php.version}, Caddy ${document.components.caddy.version}, ${extensions.length} extensions, ${state}`);
 
     return true;
 }
