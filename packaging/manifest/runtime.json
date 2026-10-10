@@ -1,0 +1,92 @@
+{
+    "$schema": "./runtime.schema.json",
+    "schema_version": 1,
+    "runtime_version": "0.1.0",
+    "status": "unbuilt",
+    "built_at": null,
+    "source_commit": null,
+    "components": {
+        "frankenphp": {
+            "version": "1.13.0",
+            "git_tag": "v1.13.0",
+            "repository": "https://github.com/php/frankenphp",
+            "license": "MIT"
+        },
+        "php": {
+            "version": "8.5.11",
+            "thread_safe": true,
+            "license": "PHP-3.01"
+        },
+        "caddy": {
+            "version": "2.11.7",
+            "license": "Apache-2.0"
+        },
+        "static_php_cli": {
+            "version": "2.8.5",
+            "git_tag": "2.8.5",
+            "repository": "https://github.com/crazywhalecc/static-php-cli",
+            "license": "MIT",
+            "shipped": false
+        },
+        "php_extensions": [
+            "bcmath",
+            "ctype",
+            "curl",
+            "dom",
+            "exif",
+            "fileinfo",
+            "filter",
+            "gd",
+            "iconv",
+            "intl",
+            "mbregex",
+            "mbstring",
+            "opcache",
+            "openssl",
+            "pcntl",
+            "pdo",
+            "pdo_sqlite",
+            "phar",
+            "posix",
+            "session",
+            "simplexml",
+            "sodium",
+            "sqlite3",
+            "tokenizer",
+            "xml",
+            "xmlreader",
+            "xmlwriter",
+            "zip",
+            "zlib"
+        ],
+        "php_extension_libs": [
+            "brotli",
+            "libjpeg",
+            "libwebp"
+        ],
+        "caddy_modules": [
+            "github.com/dunglas/caddy-cbrotli"
+        ],
+        "caddy_modules_excluded": [
+            "github.com/dunglas/mercure/caddy",
+            "github.com/dunglas/vulcain/caddy"
+        ]
+    },
+    "signing": {
+        "team_identifier": "LXAI_TEAM_ID",
+        "identifier": "se.stafe.executive-ai.frankenphp",
+        "hardened_runtime": true,
+        "entitlements": [
+            "com.apple.security.cs.allow-jit"
+        ]
+    },
+    "http": {
+        "loopback_host": "127.0.0.1",
+        "preferred_port": 8787,
+        "fallback_ports": {
+            "from": 8788,
+            "to": 8799
+        }
+    },
+    "package": null
+}

@@ -160,7 +160,7 @@ so no runtime can be installed from an unsigned app.
 
 | Item | Protocol / type here | Stand-in in `InstallDependencies.live` | What the item must deliver |
 |---|---|---|---|
-| **S1-06** runtime install | `RuntimeInstalling` (`install(_:into:started:progress:)`, `rollback(_:in:)`), `RuntimeManifest`, `InstallPaths` | `StagingRuntimeInstaller` — copies a verified package to `runtime/.staging-<v>/`, re-hashes, renames to `runtime/<v>/`, flips `current`/`previous` atomically, creates `data/` | `packaging/manifest/runtime.json` and the bundled `Contents/Resources/runtime/` directory (`manifest.json` + `SHA256SUMS` in the shape of section 5); Caddyfile/php.ini generation with the preflight port; `chmod -R a-w`; Time Machine exclusion (A21); data-preserving upgrade |
+| **S1-06** runtime install — **delivered** ([runtime-layout.md](runtime-layout.md)) | `RuntimeInstalling` (`install(_:into:started:progress:)`, `rollback(_:in:)`, `rollbackToPrevious(in:)`), `RuntimeManifest`, `InstallPaths`, `BackupExcluding`, `RuntimeUninstaller`, `RuntimeEnvironment` | `RuntimeInstaller` with `TimeMachineBackupExclusion` — copies a verified package to `runtime/.staging-<v>/`, re-hashes, `chmod -R a-w`, renames to `runtime/<v>/`, flips `current`/`previous` atomically, garbage-collects older versions, creates `data/`, Logs and Caches, excludes the live database from Time Machine | `packaging/manifest/runtime.json` + `packaging/runtime/` (build, assemble, static Caddyfile/php.ini — the port is process environment, not a rendered file). Still open for S1-12: the signed binary and the bundled `Contents/Resources/runtime/` directory |
 | **S1-07** supervision | `ServiceBooting` (`boot(runtime:port:) -> started \| requiresLoginItemApproval`, `openLoginItemsSettings()`) | `UnavailableServiceBooter` (fails `BOOT_SERVICES` with an actionable error) | `SMAppService.agent(plistName:).register()`, `openSystemSettingsLoginItems()`, and the `AiSelectionApplying` implementation that hands an API key to the secrets broker |
 | **S1-08** IPC / health | `HealthProbe` (`readiness() -> HealthReadiness{ready, failingChecks, aiState}`) | `UnavailableHealthProbe` (fails `HEALTH_CHECK`; `READY` is unreachable) | `GET /health/ready` with the `supervisor`-scoped token from pairing (ipc-contract §2/§3.2/§6.1); the `/health/live` part of preflight 6.8 |
 | **S1-02** owner | `OwnerCreating` (`createOwner(OwnerDraft) -> OwnerHandoff`) | `UnavailableOwnerCreator` | account creation through the core, credential/passkey, the T-72 repeated-install guarantee |
@@ -190,6 +190,8 @@ check (S1-14 forces each one).
 
 ## 8. Not decided here
 
-Whether the app flips `LSUIElement`/activation policy after `READY` (S1-09); the uninstaller
-(S1-13); the per-user directory name — this item uses `<bundle id>` as the task requires, while
-ADR-001 D4 writes `LaravelExecutiveAI`; one of the two must change when A12 settles.
+Whether the app flips `LSUIElement`/activation policy after `READY` (S1-09); the uninstall UI,
+launchd unregistration and Keychain clean-up (S1-13 — the file-system half is
+`RuntimeUninstaller`, S1-06); the per-user directory name — this item uses `<bundle id>` as the
+task requires, while ADR-001 D4 writes `LaravelExecutiveAI`; one of the two must change when A12
+settles.

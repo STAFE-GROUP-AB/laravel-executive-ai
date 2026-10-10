@@ -15,6 +15,7 @@ use App\Support\Health\ConfiguredProviderAiReadiness;
 use App\Support\Health\NoPendingApprovals;
 use App\Support\Health\PendingApprovals;
 use App\Support\Health\QueueWorkerHeartbeat;
+use App\Support\Runtime\RuntimeLayout;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Queue\Events\Looping;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
@@ -59,11 +60,27 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadMigrationsFromTheRuntime();
         $this->ensureSqliteDatabaseFileExists();
 
         Event::listen(Looping::class, QueueWorkerHeartbeat::class);
 
         View::composer(['layouts.app', 'home.*', 'briefs.*'], ShellStateComposer::class);
+    }
+
+    /**
+     * ADR-001 D4: database_path() points into the data directory under the Mac
+     * runtime, but migrations are part of the immutable runtime (base_path). Register
+     * that directory explicitly so `migrate` finds them in both layouts; without
+     * LEA_DATA_DIR the two paths are the same and the migrator dedupes them.
+     */
+    private function loadMigrationsFromTheRuntime(): void
+    {
+        if (RuntimeLayout::dataDirectory() === null) {
+            return;
+        }
+
+        $this->loadMigrationsFrom(RuntimeLayout::migrationsPath($this->app));
     }
 
     /**

@@ -1,14 +1,21 @@
-// INSTALL_CORE hand-off (S1-05 defines; S1-06 owns the full runtime install).
+// INSTALL_CORE: the app-owned, immutable, versioned runtime and the separate user data
+// directory (S1-06, ADR-001 D4; S1-05 defined the hand-off).
 //
 // What the state machine needs from the runtime installer: real checkpoints it can show (§12.1
 // "progress must reflect real checkpoints"), cancellation between files, and a rollback that
-// leaves no partial runtime behind. `StagingRuntimeInstaller` is the minimal honest version of
-// that: it copies a *verified* package into `runtime/.staging-<version>/`, re-hashes what it
-// copied, then activates by renaming the staging directory to `runtime/<version>/` and flipping
-// the `current`/`previous` symlinks (ADR-001 D4). S1-06 extends it (Caddyfile, php.ini,
-// `runtime.json`, read-only permissions, Time Machine exclusion, data-preserving upgrade).
+// leaves no partial runtime behind. `RuntimeInstaller` copies a *verified* package into
+// `runtime/.staging-<version>/`, re-hashes what it copied, makes the staged tree read-only,
+// activates it by renaming the staging directory to `runtime/<version>/` and flipping the
+// `current`/`previous` symlinks atomically, garbage-collects versions older than `previous`,
+// then prepares `data/`, the Logs and Caches directories and the Time Machine exclusion.
+//
+// Nothing in the runtime directory is generated per machine. The Caddyfile and php.ini read the
+// port and the paths from the process environment the Supervisor passes (runtime-layout.md), so
+// `runtime/<version>/` is byte-for-byte what `manifest.json` describes and `PackageVerifier`
+// accepts it unchanged on every boot (ADR-001 D3).
 
 import Foundation
+import Synchronization
 
 /// A checkpoint the install screen renders. Every value is something that actually happened.
 enum InstallCoreCheckpoint: Equatable, Sendable {
@@ -55,16 +62,24 @@ enum RuntimeInstallError: Error, Equatable, Sendable {
     case unavailable(String)
     case copyFailed(path: String)
     case verificationAfterCopyFailed(path: String)
+    case permissionsFailed(String)
     case activationFailed(String)
+    case dataDirectoryFailed(String)
+    case backupExclusionFailed(String)
     case rollbackFailed(String)
+    case noPreviousRuntime
 
     var userFacingReason: String {
         switch self {
         case .unavailable(let reason): return reason
         case .copyFailed(let path): return "Copying \(path) failed."
         case .verificationAfterCopyFailed(let path): return "\(path) did not verify after copying."
+        case .permissionsFailed(let reason): return "Making the runtime read-only failed (\(reason))."
         case .activationFailed(let reason): return "Activating the runtime failed (\(reason))."
+        case .dataDirectoryFailed(let reason): return "Preparing the data folder failed (\(reason))."
+        case .backupExclusionFailed(let reason): return "Excluding the live database from Time Machine failed (\(reason))."
         case .rollbackFailed(let reason): return "Removing the partial runtime failed (\(reason))."
+        case .noPreviousRuntime: return "There is no previous runtime to roll back to."
         }
     }
 }
@@ -82,14 +97,83 @@ protocol RuntimeInstalling: Sendable {
 
     /// Removes everything a run with this handle left behind that was not activated. Idempotent.
     func rollback(_ handle: RuntimeInstallHandle, in paths: InstallPaths) async throws
+
+    /// Flips `current` back to `previous` (ADR-001 D4, §9 binary rollback). `data/` is untouched;
+    /// an incompatible schema change is not rolled back automatically (§9).
+    func rollbackToPrevious(in paths: InstallPaths) async throws -> InstalledRuntime
 }
 
-struct StagingRuntimeInstaller: RuntimeInstalling {
+// MARK: - Time Machine exclusion (ADR-002 D5, OPEN-QUESTIONS A21)
+
+protocol BackupExcluding: Sendable {
+    /// Marks `url` so Time Machine never copies it. The item-level (sticky) exclusion follows the
+    /// item if it is moved and needs no privileges.
+    func exclude(_ url: URL) throws
+}
+
+/// `/usr/bin/tmutil addexclusion <path>` as the current user. Chosen over
+/// `URLResourceKey.isExcludedFromBackupKey` for the data directory because the resource key
+/// resets after common file operations (ADR-003 E26) and the live database is exactly the file
+/// that must never be copied (threat model T-43).
+struct TimeMachineBackupExclusion: BackupExcluding {
+    func exclude(_ url: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tmutil")
+        process.arguments = ["addexclusion", url.path]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+
+        let stderr = Pipe()
+        process.standardError = stderr
+
+        do {
+            try process.run()
+        } catch {
+            throw RuntimeInstallError.backupExclusionFailed("tmutil could not be started")
+        }
+
+        let errorText = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let detail = errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw RuntimeInstallError.backupExclusionFailed(detail.isEmpty ? "tmutil exited with status \(process.terminationStatus)" : detail)
+        }
+    }
+}
+
+/// Records what would have been excluded. Simulation and tests only — never wired into `live`.
+final class RecordingBackupExclusion: BackupExcluding {
+    private let excluded = Mutex<[URL]>([])
+    private let failure: RuntimeInstallError?
+
+    init(failingWith failure: RuntimeInstallError? = nil) {
+        self.failure = failure
+    }
+
+    var excludedURLs: [URL] {
+        excluded.withLock { $0 }
+    }
+
+    func exclude(_ url: URL) throws {
+        if let failure {
+            throw failure
+        }
+
+        excluded.withLock { $0.append(url) }
+    }
+}
+
+// MARK: - The installer
+
+struct RuntimeInstaller: RuntimeInstalling {
     /// Called before each file is copied, with its index. Tests use it to block or to inject a
     /// failure at a precise point; the product passes nil.
     let beforeEachFile: (@Sendable (Int) async throws -> Void)?
+    let backupExclusion: any BackupExcluding
 
-    init(beforeEachFile: (@Sendable (Int) async throws -> Void)? = nil) {
+    init(backupExclusion: any BackupExcluding, beforeEachFile: (@Sendable (Int) async throws -> Void)? = nil) {
+        self.backupExclusion = backupExclusion
         self.beforeEachFile = beforeEachFile
     }
 
@@ -107,6 +191,7 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
         try fileManager.createDirectory(at: paths.runtimeRoot, withIntermediateDirectories: true)
 
         if fileManager.fileExists(atPath: staging.path) {
+            try Self.makeWritable(staging)
             try fileManager.removeItem(at: staging)
         }
 
@@ -154,20 +239,30 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
 
             let copied = staging.appending(path: entry.path)
 
-            guard let digest = try? PackageVerifier.sha256Hex(of: copied), digest == entry.sha256 else {
+            guard let attributes = try? fileManager.attributesOfItem(atPath: copied.path),
+                  let size = (attributes[.size] as? NSNumber)?.int64Value, size == entry.bytes,
+                  let digest = try? PackageVerifier.sha256Hex(of: copied), digest == entry.sha256
+            else {
                 throw RuntimeInstallError.verificationAfterCopyFailed(path: entry.path)
             }
         }
 
         try Task.checkCancellation()
+
+        // Immutable before it becomes visible as `runtime/<version>/` (ADR-001 D4: chmod -R a-w).
+        do {
+            try Self.makeReadOnly(staging)
+        } catch {
+            throw RuntimeInstallError.permissionsFailed("permissions could not be set")
+        }
+
+        try Task.checkCancellation()
         progress(.activatingRuntime)
         let installed = try activate(staging: staging, version: version, paths: paths)
+        collectGarbage(in: paths)
 
         progress(.preparingDataDirectory)
-
-        for directory in [paths.databaseDirectory, paths.storageDirectory, paths.backupsDirectory] {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        }
+        try prepareDataDirectory(paths: paths)
 
         progress(.completed)
 
@@ -180,6 +275,7 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
 
         if fileManager.fileExists(atPath: staging.path) {
             do {
+                try Self.makeWritable(staging)
                 try fileManager.removeItem(at: staging)
             } catch {
                 throw RuntimeInstallError.rollbackFailed("staging directory could not be removed")
@@ -189,10 +285,10 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
         // A version directory that exists but is not what `current` points at was never
         // activated by this run (activation flips the link last); remove it too.
         let versionDirectory = paths.runtimeDirectory(version: handle.version)
-        let currentTarget = try? fileManager.destinationOfSymbolicLink(atPath: paths.currentRuntimeLink.path)
 
-        if fileManager.fileExists(atPath: versionDirectory.path), currentTarget != handle.version {
+        if fileManager.fileExists(atPath: versionDirectory.path), paths.currentRuntimeVersion() != handle.version {
             do {
+                try Self.makeWritable(versionDirectory)
                 try fileManager.removeItem(at: versionDirectory)
             } catch {
                 throw RuntimeInstallError.rollbackFailed("version directory could not be removed")
@@ -200,14 +296,45 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
         }
     }
 
+    func rollbackToPrevious(in paths: InstallPaths) async throws -> InstalledRuntime {
+        let fileManager = FileManager.default
+
+        guard let previous = paths.previousRuntimeVersion(), previous != paths.currentRuntimeVersion() else {
+            throw RuntimeInstallError.noPreviousRuntime
+        }
+
+        let directory = paths.runtimeDirectory(version: previous)
+        var isDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue,
+              fileManager.fileExists(atPath: directory.appending(path: PackageVerifier.manifestFileName).path)
+        else {
+            throw RuntimeInstallError.noPreviousRuntime
+        }
+
+        let current = paths.currentRuntimeVersion()
+        try Self.flipLink(paths.currentRuntimeLink, to: previous, in: paths.runtimeRoot)
+
+        if let current {
+            try? Self.flipLink(paths.previousRuntimeLink, to: current, in: paths.runtimeRoot)
+        } else {
+            try? fileManager.removeItem(at: paths.previousRuntimeLink)
+        }
+
+        return InstalledRuntime(version: previous, directory: directory)
+    }
+
+    // MARK: Activation
+
     private func activate(staging: URL, version: String, paths: InstallPaths) throws -> InstalledRuntime {
         let fileManager = FileManager.default
         let destination = paths.runtimeDirectory(version: version)
 
         if fileManager.fileExists(atPath: destination.path) {
-            // Same version already present (reinstall). Replace it; `current` still points at the
-            // old directory name, which is this one, so the flip below is a no-op for the link.
+            // Same version already present (data-preserving reinstall). Replace it; `current`
+            // still points at this directory name, so the flip below is a no-op for the link.
             do {
+                try Self.makeWritable(destination)
                 try fileManager.removeItem(at: destination)
             } catch {
                 throw RuntimeInstallError.activationFailed("the existing runtime directory could not be replaced")
@@ -220,30 +347,259 @@ struct StagingRuntimeInstaller: RuntimeInstalling {
             throw RuntimeInstallError.activationFailed("the staged runtime could not be moved into place")
         }
 
-        let previousTarget = try? fileManager.destinationOfSymbolicLink(atPath: paths.currentRuntimeLink.path)
+        let previousTarget = paths.currentRuntimeVersion()
 
         if let previousTarget, previousTarget != version {
-            try? fileManager.removeItem(at: paths.previousRuntimeLink)
-            try? fileManager.createSymbolicLink(atPath: paths.previousRuntimeLink.path, withDestinationPath: previousTarget)
+            try? Self.flipLink(paths.previousRuntimeLink, to: previousTarget, in: paths.runtimeRoot)
         }
 
-        // Atomic flip: create the new link under a temporary name, then rename over `current`.
-        let temporaryLink = paths.runtimeRoot.appending(path: ".current-\(UUID().uuidString)")
-
-        do {
-            try fileManager.createSymbolicLink(atPath: temporaryLink.path, withDestinationPath: version)
-
-            if rename(temporaryLink.path, paths.currentRuntimeLink.path) != 0 {
-                try? fileManager.removeItem(at: temporaryLink)
-                throw RuntimeInstallError.activationFailed("the current link could not be switched")
-            }
-        } catch let error as RuntimeInstallError {
-            throw error
-        } catch {
-            throw RuntimeInstallError.activationFailed("the current link could not be created")
-        }
+        try Self.flipLink(paths.currentRuntimeLink, to: version, in: paths.runtimeRoot)
 
         return InstalledRuntime(version: version, directory: destination)
+    }
+
+    /// Atomic flip: create the new link under a temporary name, then `rename(2)` over the old one.
+    static func flipLink(_ link: URL, to target: String, in root: URL) throws {
+        let fileManager = FileManager.default
+        let temporaryLink = root.appending(path: ".\(link.lastPathComponent)-\(UUID().uuidString)")
+
+        do {
+            try fileManager.createSymbolicLink(atPath: temporaryLink.path, withDestinationPath: target)
+        } catch {
+            throw RuntimeInstallError.activationFailed("the \(link.lastPathComponent) link could not be created")
+        }
+
+        if rename(temporaryLink.path, link.path) != 0 {
+            try? fileManager.removeItem(at: temporaryLink)
+            throw RuntimeInstallError.activationFailed("the \(link.lastPathComponent) link could not be switched")
+        }
+    }
+
+    /// Removes every version directory that is neither `current` nor `previous` (ADR-001 D4:
+    /// "older versions are garbage-collected"), plus a `previous` link whose target is gone.
+    /// Best effort: a leftover directory is a disk-space problem, not an install failure.
+    func collectGarbage(in paths: InstallPaths) {
+        let fileManager = FileManager.default
+        let current = paths.currentRuntimeVersion()
+        var previous = paths.previousRuntimeVersion()
+
+        if let target = previous, !fileManager.fileExists(atPath: paths.runtimeDirectory(version: target).path) {
+            try? fileManager.removeItem(at: paths.previousRuntimeLink)
+            previous = nil
+        }
+
+        let keep = Set([current, previous].compactMap { $0 })
+
+        guard let names = try? fileManager.contentsOfDirectory(atPath: paths.runtimeRoot.path) else {
+            return
+        }
+
+        for name in names where RuntimeManifest.isVersion(name) && !keep.contains(name) {
+            let directory = paths.runtimeDirectory(version: name)
+
+            guard (try? fileManager.destinationOfSymbolicLink(atPath: directory.path)) == nil else {
+                continue
+            }
+
+            try? Self.makeWritable(directory)
+            try? fileManager.removeItem(at: directory)
+        }
+    }
+
+    // MARK: Data directory
+
+    private func prepareDataDirectory(paths: InstallPaths) throws {
+        let fileManager = FileManager.default
+
+        do {
+            for relative in InstallPaths.dataSubdirectories {
+                try fileManager.createDirectory(at: paths.dataRoot.appending(path: relative), withIntermediateDirectories: true)
+            }
+
+            try fileManager.createDirectory(at: paths.logs, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: paths.caches, withIntermediateDirectories: true)
+            try Self.linkStorageLogs(paths: paths)
+        } catch {
+            throw RuntimeInstallError.dataDirectoryFailed("a folder could not be created")
+        }
+
+        for directory in paths.backupExcludedDirectories {
+            try backupExclusion.exclude(directory)
+        }
+    }
+
+    /// `data/storage/logs -> ~/Library/Logs/<bundle id>`. An existing symlink is re-pointed, an
+    /// empty real directory is replaced; a real directory with content is left alone, because it
+    /// holds logs a person may want.
+    static func linkStorageLogs(paths: InstallPaths) throws {
+        let fileManager = FileManager.default
+        let link = paths.storageLogsLink
+        let target = paths.logs.path
+
+        if let existing = try? fileManager.destinationOfSymbolicLink(atPath: link.path) {
+            if existing != target {
+                try fileManager.removeItem(at: link)
+                try fileManager.createSymbolicLink(atPath: link.path, withDestinationPath: target)
+            }
+
+            return
+        }
+
+        var isDirectory: ObjCBool = false
+
+        if fileManager.fileExists(atPath: link.path, isDirectory: &isDirectory) {
+            guard isDirectory.boolValue, try fileManager.contentsOfDirectory(atPath: link.path).isEmpty else {
+                return
+            }
+
+            try fileManager.removeItem(at: link)
+        }
+
+        try fileManager.createSymbolicLink(atPath: link.path, withDestinationPath: target)
+    }
+
+    // MARK: Permissions
+
+    /// `chmod -R a-w`: clears every write bit on the tree rooted at `url`, files and directories.
+    static func makeReadOnly(_ url: URL) throws {
+        try setPermissions(under: url) { $0 & ~0o222 }
+    }
+
+    /// Restores the owner's write bit so the tree can be removed or replaced.
+    static func makeWritable(_ url: URL) throws {
+        try setPermissions(under: url) { $0 | 0o200 }
+    }
+
+    private static func setPermissions(under url: URL, _ transform: (Int) -> Int) throws {
+        let fileManager = FileManager.default
+        let keys: [URLResourceKey] = [.isSymbolicLinkKey]
+
+        guard let enumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: keys, options: []) else {
+            return
+        }
+
+        // Directories first so the enumerator can still descend while permissions are changing;
+        // a symlink's permissions are meaningless and chmod would follow it.
+        var files: [URL] = []
+
+        for case let child as URL in enumerator {
+            let values = try child.resourceValues(forKeys: Set(keys))
+
+            if values.isSymbolicLink == true {
+                continue
+            }
+
+            files.append(child)
+        }
+
+        for item in files.reversed() + [url] {
+            let attributes = try fileManager.attributesOfItem(atPath: item.path)
+
+            guard let type = attributes[.type] as? FileAttributeType, type != .typeSymbolicLink,
+                  let mode = (attributes[.posixPermissions] as? NSNumber)?.intValue
+            else {
+                continue
+            }
+
+            try fileManager.setAttributes([.posixPermissions: transform(mode)], ofItemAtPath: item.path)
+        }
+    }
+}
+
+// MARK: - Uninstall (§12.2; S1-13 wires the UI, launchd and Keychain parts)
+
+enum RuntimeUninstallError: Error, Equatable, Sendable {
+    case removalFailed(path: String)
+
+    var userFacingReason: String {
+        switch self {
+        case .removalFailed(let path): return "\(path) could not be removed."
+        }
+    }
+}
+
+struct RuntimeUninstaller: Sendable {
+    struct Report: Equatable, Sendable {
+        /// Directories that existed and were removed.
+        let removed: [URL]
+        /// `data/` when it was kept, nil when it was removed or never existed.
+        let preservedData: URL?
+    }
+
+    /// Removes the runtime, the install checkpoint, the Caches and Logs directories, and — unless
+    /// `preservingData` — the data directory. Idempotent: a second call removes nothing and
+    /// reports an empty list.
+    func remove(preservingData: Bool, in paths: InstallPaths) throws -> Report {
+        let fileManager = FileManager.default
+        var removed: [URL] = []
+
+        var targets = [paths.runtimeRoot, paths.installDirectory, paths.caches, paths.logs]
+
+        if !preservingData {
+            targets.append(paths.dataRoot)
+        }
+
+        for target in targets where Self.exists(target) {
+            do {
+                try RuntimeInstaller.makeWritable(target)
+                try fileManager.removeItem(at: target)
+                removed.append(target)
+            } catch {
+                throw RuntimeUninstallError.removalFailed(path: target.lastPathComponent)
+            }
+        }
+
+        var preservedData: URL?
+
+        if preservingData, Self.exists(paths.dataRoot) {
+            preservedData = paths.dataRoot
+            // The Logs directory is gone; leave a real, empty logs directory in its place so the
+            // preserved tree is self-contained and a later reinstall can re-link it.
+            if (try? fileManager.destinationOfSymbolicLink(atPath: paths.storageLogsLink.path)) != nil {
+                try? fileManager.removeItem(at: paths.storageLogsLink)
+                try? fileManager.createDirectory(at: paths.storageLogsLink, withIntermediateDirectories: true)
+            }
+        }
+
+        if preservedData == nil, Self.exists(paths.applicationSupport),
+           (try? fileManager.contentsOfDirectory(atPath: paths.applicationSupport.path))?.isEmpty == true {
+            try? fileManager.removeItem(at: paths.applicationSupport)
+        }
+
+        return Report(removed: removed, preservedData: preservedData)
+    }
+
+    private static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path) || (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil
+    }
+}
+
+// MARK: - Environment contract for the Supervisor (S1-07)
+
+/// The non-secret process environment every PHP child gets (ADR-001 D4: "non-secret
+/// configuration is passed as process environment by the Supervisor"). Documented in
+/// docs/architecture/runtime-layout.md §3; the Laravel side reads `LEA_DATA_DIR` in
+/// bootstrap/app.php. No key, token or password is ever in this dictionary (ADR-003 D7 row 12).
+enum RuntimeEnvironment {
+    static let dataDirectoryKey = "LEA_DATA_DIR"
+    static let runtimeDirectoryKey = "LEA_RUNTIME_DIR"
+    static let cacheDirectoryKey = "LEA_CACHE_DIR"
+    static let logDirectoryKey = "LEA_LOG_DIR"
+    static let httpPortKey = "LEA_HTTP_PORT"
+
+    static func supervisorEnvironment(runtime: InstalledRuntime, paths: InstallPaths, port: Int) -> [String: String] {
+        [
+            runtimeDirectoryKey: runtime.directory.path,
+            dataDirectoryKey: paths.dataRoot.path,
+            cacheDirectoryKey: paths.caches.path,
+            logDirectoryKey: paths.logs.path,
+            httpPortKey: String(port),
+            "PHPRC": runtime.directory.path,
+            "APP_ENV": "production",
+            "APP_DEBUG": "false",
+            "APP_URL": "http://127.0.0.1:\(port)",
+            "LEA_BACKEND_PROFILE": "local",
+        ]
     }
 }
 
@@ -254,8 +610,12 @@ struct UnavailableRuntimeInstaller: RuntimeInstalling {
         started: @escaping @Sendable (RuntimeInstallHandle) -> Void,
         progress: @escaping @Sendable (InstallCoreCheckpoint) -> Void
     ) async throws -> InstalledRuntime {
-        throw RuntimeInstallError.unavailable("The runtime installer arrives with S1-06.")
+        throw RuntimeInstallError.unavailable("The runtime installer is not available in this build.")
     }
 
     func rollback(_ handle: RuntimeInstallHandle, in paths: InstallPaths) async throws {}
+
+    func rollbackToPrevious(in paths: InstallPaths) async throws -> InstalledRuntime {
+        throw RuntimeInstallError.noPreviousRuntime
+    }
 }

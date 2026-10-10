@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\Runtime\RuntimeLayout;
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
@@ -35,14 +36,16 @@ return [
         /*
         | ADR-002 D2 (binding). One WAL-mode file holds the application tables,
         | jobs, cache and sessions. A relative DB_DATABASE resolves against the
-        | repository root. IMMEDIATE transactions make busy_timeout apply to the
-        | database queue's read-then-write pop; DEFERRED would fail with
-        | SQLITE_BUSY_SNAPSHOT instead of waiting.
+        | repository root. Under the Mac runtime (ADR-001 D4, LEA_DATA_DIR set)
+        | the default is <LEA_DATA_DIR>/database/executive.sqlite. IMMEDIATE
+        | transactions make busy_timeout apply to the database queue's
+        | read-then-write pop; DEFERRED would fail with SQLITE_BUSY_SNAPSHOT
+        | instead of waiting.
         */
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'database' => env('DB_DATABASE', RuntimeLayout::defaultDatabaseFile()),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => 5000,

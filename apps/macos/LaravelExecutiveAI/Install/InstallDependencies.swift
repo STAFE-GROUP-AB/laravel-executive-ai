@@ -11,7 +11,8 @@ struct InstallDependencies: Sendable {
     var paths: InstallPaths
     var productVersion: String
     var language: PreflightLanguage
-    /// The runtime directory shipped inside the app bundle (S1-06 decides the exact location).
+    /// `Contents/Resources/runtime/`: the directory `packaging/runtime/assemble-runtime.mjs`
+    /// produced, copied into the bundle by the S1-12 build (packaging/runtime/README.md §5).
     var bundledRuntimeDirectory: URL?
     var preflightProbes: any PreflightProbes
     var packageVerifier: PackageVerifier
@@ -60,7 +61,7 @@ struct InstallDependencies: Sendable {
                 supervisorPlistName: supervisorPlistName(bundlePrefix: bundlePrefix)
             ),
             packageVerifier: PackageVerifier(signatureChecker: signatureChecker),
-            runtimeInstaller: StagingRuntimeInstaller(),
+            runtimeInstaller: RuntimeInstaller(backupExclusion: TimeMachineBackupExclusion()),
             ownerCreator: UnavailableOwnerCreator(),
             aiSelectionApplier: SkipOnlyAiSelectionApplier(),
             localAiRuntimeDetector: FileSystemLocalAiRuntimeDetector(),
@@ -88,7 +89,10 @@ struct InstallDependencies: Sendable {
             bundledRuntimeDirectory: package,
             preflightProbes: SimulatedPreflightProbes(),
             packageVerifier: PackageVerifier(signatureChecker: AcceptAnySignatureChecker()),
-            runtimeInstaller: StagingRuntimeInstaller(beforeEachFile: { _ in try await Task.sleep(for: .milliseconds(250)) }),
+            runtimeInstaller: RuntimeInstaller(
+                backupExclusion: RecordingBackupExclusion(),
+                beforeEachFile: { _ in try await Task.sleep(for: .milliseconds(250)) }
+            ),
             ownerCreator: ScriptedOwnerCreator(),
             aiSelectionApplier: ScriptedAiSelectionApplier(),
             localAiRuntimeDetector: FileSystemLocalAiRuntimeDetector(),
