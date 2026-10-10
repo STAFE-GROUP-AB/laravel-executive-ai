@@ -22,6 +22,18 @@ A personal secretary that lives on your Mac, not in someone else's cloud:
 
 From opening the signed `.dmg` to a usable local PWA, an owner account, working AI chat (with an already-available local model or your own API key) and a working menu bar app: **p50 < 3 min, p95 < 5 min** on a tested Mac profile. Large model downloads, OAuth flows, Peekaboo permissions and Tailscale login happen *after* core-ready and are never hidden inside that number. Without a model or API key the app is installed but clearly shows **AI setup required**, never a false **AI ready**.
 
+## Requirements
+
+| | |
+|---|---|
+| **macOS** | **15.0 (Sequoia) or later.** Highest tested: 26.6.2. Newer majors install with a logged warning, never a block. |
+| **Chip** | **Apple Silicon only (M1 or later). Intel Macs are not supported** and no Intel build is planned — Apple: *"macOS Tahoe will be the final release for Intel Macs"* ([WWDC25](https://developer.apple.com/videos/play/wwdc2025/102/)). |
+| **Memory** | **8 GB** — *provisional*, derived from measured components; **16 GB recommended if you run a local model**. |
+| **Free disk** | **2 GB to install, 5 GB recommended** — *provisional*; plus about twice the download size of any optional local model (0.8–4.7 GB each). |
+| **Nothing else** | No Homebrew, Docker, MySQL, Redis or Terminal. No admin password unless macOS itself requires it. |
+
+Provisional numbers become measured numbers on the minimum lab machine in Sprint 1 (S1-14). The full matrix, the reasons for the floor and the exact preflight checks are in [`docs/architecture/support-matrix.md`](docs/architecture/support-matrix.md).
+
 ## Principles that are enforced, not aspirational
 
 - **Local Only mode is strict**: no model traffic, embeddings, screenshots or prompts leave the Mac; no silent fallbacks.
