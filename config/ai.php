@@ -66,7 +66,8 @@ return [
             'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-6-sol'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
             'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-2.5-flare'),
-            'store' => env('AZURE_OPENAI_STORE', true),
+            // ADR-004 / Europe First: never ask a vendor to retain responses unless the owner opts in.
+            'store' => (bool) env('AZURE_OPENAI_STORE', false),
         ],
 
         'bedrock' => [
@@ -131,7 +132,8 @@ return [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
-            'store' => env('OPENAI_STORE', true),
+            // ADR-004 / Europe First: never ask a vendor to retain responses unless the owner opts in.
+            'store' => (bool) env('OPENAI_STORE', false),
         ],
 
         'openai-compatible' => [
