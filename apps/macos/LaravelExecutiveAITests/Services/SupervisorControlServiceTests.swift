@@ -60,6 +60,50 @@ final class SupervisorControlServiceTests: XCTestCase {
         XCTAssertEqual(store.snapshot.count, 1, "still exactly one K item")
     }
 
+    // S1-13 / ADR-003 D8, threat model T-41: the uninstall sweep runs through the one Keychain
+    // writer and reports names only.
+    func testRemoveAllSecretsSweepsTheInventoryThroughTheOneWriterAndDropsSessions() async throws {
+        let (service, secrets, _, store) = try makeService()
+        try secrets.ensureAppKey()
+        try secrets.storeProviderApiKey(provider: "openai", apiKey: TransientSecret("sk-test-not-a-real-key-000000000000")!)
+        try store.write(KeychainItemRef(service: "com.example.unrelated", account: "other"), data: Data("keep".utf8), label: "unrelated")
+        _ = try await service.pair(client: .menubar)
+
+        let removed = try await service.removeAllSecrets()
+
+        XCTAssertEqual(Set(removed.map(\.service)), [SecretService.appKey, SecretService.ipcMenubar, SecretService.aiProvider])
+        XCTAssertEqual(removed.map(\.account).sorted(), ["default", "default", "openai"])
+        XCTAssertEqual(store.snapshot.keys.map(\.service), ["com.example.unrelated"], "only the inventory is swept; a foreign item is untouched")
+
+        let sessions = await service.currentSessions
+        XCTAssertTrue(sessions.isEmpty, "nothing paired against the deleted K may elevate")
+
+        let again = try await service.removeAllSecrets()
+        XCTAssertEqual(again, [], "idempotent")
+
+        // The wire form carries service and account only — never a value (ipc-contract §7.2).
+        let encoded = try XCTUnwrap(SupervisorControlWire.encode(removed))
+        let text = String(decoding: encoded, as: UTF8.self)
+        XCTAssertFalse(text.contains("sk-test"))
+        XCTAssertFalse(text.contains("base64:"))
+        XCTAssertEqual(SupervisorControlWire.decode([KeychainItemRef].self, from: encoded), removed)
+    }
+
+    func testRemoveAllSecretsReportsAKeychainFailureAsSecretsError() async throws {
+        let now = self.now
+        let store = InMemoryKeychainStore(failingWith: .status(-25308))
+        let secrets = SupervisorSecrets(store: store, now: { now })
+        let supervisor = ServiceSupervisor(specs: [ServicesTestSupport.shellSpec(.core, "sleep 30")], configuration: ServicesTestSupport.fastConfiguration())
+        let service = SupervisorControlService(secrets: secrets, key: IpcKey(Data(repeating: 9, count: 32))!, supervisor: supervisor, port: 8792, authenticator: ScriptedDeviceOwnerAuthenticator(succeeds: true), now: { now })
+
+        do {
+            _ = try await service.removeAllSecrets()
+            XCTFail("expected failure")
+        } catch let error as SupervisorControlError {
+            XCTAssertEqual(error, .secrets("the Keychain items could not be removed"))
+        }
+    }
+
     func testElevationRequiresALiveSessionAndDeviceOwnerAuthentication() async throws {
         let authenticator = ScriptedDeviceOwnerAuthenticator(succeeds: true)
         let (service, secrets, _, _) = try makeService(authenticator: authenticator)

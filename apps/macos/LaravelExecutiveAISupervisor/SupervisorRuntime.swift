@@ -80,7 +80,7 @@ enum SupervisorBootPlan {
     }
 
     static func secretsSocket(in paths: InstallPaths) -> URL {
-        paths.applicationSupport.appending(path: "run").appending(path: "secrets.sock")
+        paths.runDirectory.appending(path: "secrets.sock")
     }
 }
 

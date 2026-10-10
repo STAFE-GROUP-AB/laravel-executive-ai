@@ -12,7 +12,9 @@ import Foundation
 import Security
 import Synchronization
 
-struct KeychainItemRef: Hashable, Sendable, CustomStringConvertible {
+/// Codable so the uninstall sweep can report what it removed over XPC (ipc-contract §7.2
+/// `removeAllSecrets`): service and account names only, never a value.
+struct KeychainItemRef: Hashable, Sendable, Codable, CustomStringConvertible {
     let service: String
     let account: String
 

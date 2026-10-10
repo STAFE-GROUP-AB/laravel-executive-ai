@@ -98,9 +98,15 @@ struct InstallPaths: Equatable, Sendable {
         [databaseDirectory, storageFrameworkDirectory]
     }
 
+    /// `run/` — the Supervisor's secrets-broker socket (services.md §1). Process state, never
+    /// user data: uninstall removes it even when `data/` is kept.
+    var runDirectory: URL { applicationSupport.appending(path: "run") }
+
     // Installer bookkeeping.
     var installDirectory: URL { applicationSupport.appending(path: "install") }
     var checkpointURL: URL { installDirectory.appending(path: "checkpoint.json") }
+    /// Uninstall progress (S1-13): which steps finished, so a crash mid-way resumes.
+    var uninstallJournalURL: URL { installDirectory.appending(path: "uninstall.json") }
 
     func eventLogURL(runID: UUID) -> URL {
         logs.appending(path: "install-events-\(runID.uuidString.lowercased()).ndjson")

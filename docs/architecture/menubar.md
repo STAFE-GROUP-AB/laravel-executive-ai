@@ -20,7 +20,7 @@
 | Open full brief | `<origin>/briefs/<latest_brief.id>` (the PWA accepts a document id, pwa.md §3) | `CoreClient.origin` + health |
 | Pause AI actions | toggles to "Resume AI actions"; `POST /ipc/v1/ai/pause` / `resume` | ipc §6.4 |
 | Open PWA | `<origin>/home` | ipc §1.1 origin |
-| Settings | the `Settings` scene (⌘,) — a placeholder until the §1.1 settings sections land | — |
+| Settings | the `Settings` scene (⌘,): `SettingsView` — the §1.1 sections still to come, and **Uninstall** (S1-13): "Uninstall…" opens `UninstallConfirmationView` with Keep my data / Delete everything / Cancel, wired to `ServiceControlling.uninstall(keepingData:)` ([`docs/operations/uninstall.md`](../operations/uninstall.md)) | — |
 | Quit UI | terminates this process only (section 5) | — |
 
 The brief body follows brief-parity.md §2: every item in document order, title and the whole
@@ -34,6 +34,12 @@ Screenshots, rendered from the fixture client (`MenuBarRenderingTests` with
 | Fresh | Stale + offline | Error (not ready) | Core unreachable | AI setup required |
 |---|---|---|---|---|
 | [01](images/menubar/01-fresh.png) | [02](images/menubar/02-stale-offline.png) | [03](images/menubar/03-error-not-ready.png) | [04](images/menubar/04-core-unreachable.png) | [05](images/menubar/05-ai-setup-required.png) |
+
+Settings → Uninstall (S1-13), rendered by `UninstallViewTests` from the same fixture data:
+[Settings](images/menubar/06-settings.png), [the sheet](images/menubar/07-uninstall-choose.png)
+([Swedish](images/menubar/07-uninstall-choose-sv.png)),
+[done with data kept](images/menubar/08-uninstall-done-kept.png),
+[stopped half-way](images/menubar/09-uninstall-failed.png).
 
 ## 2. State table (health fields → panel state → icon / badge / copy)
 
@@ -79,7 +85,7 @@ later health minor adds it; until then the pause toggle keeps the last `ai/pause
 | **Open path** | `PanelModel.openPanel()` reads the cache and nothing else. `PanelModelTests.testOpeningThePanelPerformsNoClientCall` opens the panel against a counting `CoreClient` and asserts **zero** calls; the same holds with an empty cache. |
 | **Refresh path** | `PanelModel.refresh()` runs on a 30 s loop (`startRefreshing`) and is never awaited by rendering: `health` → `briefs/latest` only when `latest_brief.{id,version}` ≠ the cached ETag (`If-None-Match` sent; `304` keeps the cache) → `approvals?state=pending` only when `pending_approvals > 0` → `heartbeat`. |
 | **Eviction** | A newer version replaces the file (one entry, ever). A document refused for a newer schema major is **not** written; the previous cache stays. A corrupt or foreign file is ignored. |
-| **Invalidation** | `BriefCache.clear()` — called by "Reset security pairing" (ipc §3.4, S1-08) and uninstall (S1-07); nothing else deletes it. |
+| **Invalidation** | `BriefCache.clear()` — called by "Reset security pairing" (ipc §3.4, `SupervisorServiceControl.resetPairing()`) and by the uninstaller's step 5 (S1-13, services.md §8); nothing else deletes it. |
 | **Portability note** | Written with `.atomic` (rename into place) and then chmod'ed. macOS 15 refuses moves into a read-only directory while macOS 26 allows it; the cache directory is never made read-only, only the file, and the file is replaced, not moved. |
 
 ## 4. The `CoreClient` protocol S1-08 part 2 implements
@@ -119,10 +125,13 @@ owner re-authenticates (§11, ADR-005 D1.6).
 
 `PanelModel.quitUI()` cancels the refresh loop and calls `AppTerminating.terminateUI()` — in the
 app, `NSApplication.terminate`. The GUI ↔ Supervisor control surface (`ServiceControlling`:
-`restartServices`, `stopServices`, `uninstall`, implemented by S1-07 over XPC) is a separate port,
-and `PanelModelTests.testQuitUITerminatesTheGuiOnlyAndNeverTouchesServiceControl` proves the quit
-path never invokes it and sends nothing to the core. The only caller of `ServiceControlling` is
-"Restart services" in the unreachable / not-ready band. After Quit UI the heartbeat stops, so
+`restartServices`, `stopServices`, `uninstall(keepingData:)`, implemented by S1-07/S1-13 over
+XPC) is a separate port, and `PanelModelTests.testQuitUITerminatesTheGuiOnlyAndNeverTouchesServiceControl`
+proves the quit path never invokes it and sends nothing to the core. The panel's only caller of
+`ServiceControlling` is "Restart services" in the unreachable / not-ready band; `uninstall` is
+reached from the Settings window alone, behind the confirmation sheet
+(`UninstallViewTests.testTheChosenDataOptionReachesServiceControlAndNothingRunsBeforeConfirm`).
+After Quit UI the heartbeat stops, so
 `menubar_integration` fails 120 s later by design; the Supervisor does not restart on `ready`
 dropping (ipc §6.5).
 
@@ -177,4 +186,4 @@ Still open:
 ## 9. Not decided here
 
 - The live client's transport details — ipc-contract §1–§5 (S1-08).
-- Where the uninstaller and "Reset security pairing" call `BriefCache.clear()` from — S1-07 / S1-08.
+- Where "Reset security pairing" is surfaced in Settings (its port, `resetPairing()`, exists) — S1-08.

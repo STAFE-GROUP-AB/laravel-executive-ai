@@ -17,6 +17,7 @@ import Foundation
     func startAll(reply: @escaping @Sendable (String?) -> Void)
     func elevate(sessionId: String, operation: String, nonce: String, reply: @escaping @Sendable (Data?, String?) -> Void)
     func storeProviderApiKey(provider: String, apiKey: String, reply: @escaping @Sendable (String?) -> Void)
+    func removeAllSecrets(reply: @escaping @Sendable (Data?, String?) -> Void)
 }
 
 enum SupervisorControlWire {
@@ -187,6 +188,17 @@ final class SupervisorControlExporter: NSObject, SupervisorControlXPCProtocol, @
                 reply(nil)
             } catch {
                 reply(SupervisorControlWire.code(for: error))
+            }
+        }
+    }
+
+    func removeAllSecrets(reply: @escaping @Sendable (Data?, String?) -> Void) {
+        let service = self.service
+        Task {
+            do {
+                reply(SupervisorControlWire.encode(try await service.removeAllSecrets()), nil)
+            } catch {
+                reply(nil, SupervisorControlWire.code(for: error))
             }
         }
     }

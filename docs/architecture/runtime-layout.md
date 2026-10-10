@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented (S1-06, #34): `apps/macos/LaravelExecutiveAI/Install/{InstallPaths,RuntimeInstaller}.swift`, `app/Support/Runtime/RuntimeLayout.php`, `packaging/runtime/`, `packaging/manifest/runtime.json`. The Supervisor that consumes §3 is S1-07 ([services.md](services.md)); the signed artefact that fills `runtime.json#package` is S1-12; the uninstall UI is S1-13. |
+| **Status** | Implemented (S1-06, #34): `apps/macos/LaravelExecutiveAI/Install/{InstallPaths,RuntimeInstaller}.swift`, `app/Support/Runtime/RuntimeLayout.php`, `packaging/runtime/`, `packaging/manifest/runtime.json`. The Supervisor that consumes §3 is S1-07 ([services.md](services.md)); the signed artefact that fills `runtime.json#package` is S1-12; the uninstall UI and order are S1-13 ([`docs/operations/uninstall.md`](../operations/uninstall.md)). |
 | **Blueprint** | §12.1 (app-owned, immutable, versioned runtime; separate mutable data directory with managed backups), §9 (binary rollback), §12.2 (data-preserving reinstall, uninstall), §6 (verify before execute) |
 | **Decisions** | ADR-001 D1 (one FrankenPHP static binary), D3 (Supervisor verifies on every boot), **D4 (this layout)**; ADR-002 D5 (Time Machine exclusion of the live database); ADR-003 D7 row 12 (no secret in any child's environment); ADR-007 D2 (bundled-binary licence allowlist); OPEN-QUESTIONS A12 (bundle prefix placeholder), A21 (answered in §4) |
 | **Tests** | `apps/macos/LaravelExecutiveAITests/Install/RuntimeInstallerTests.swift`, `tests/Feature/Install/RuntimeLayoutTest.php`, `packaging/runtime/test/assemble-runtime.test.mjs`, the `runtime.json` suite in `packaging/fixtures/validate-schema.mjs` |
@@ -63,10 +63,14 @@ Rules the installer enforces (`RuntimeInstaller`, tested):
 - **Data-preserving reinstall.** Installing the version `current` already points at replaces the
   runtime directory and leaves `data/` byte-identical (tested on the SQLite file). `previous` is
   not touched.
-- **Uninstall** (`RuntimeUninstaller.remove(preservingData:in:)`) removes `runtime/`, `install/`,
-  Caches and Logs; keeps or removes `data/`. When data is preserved, the `storage/logs` symlink is
-  replaced by an empty real directory so the preserved tree is self-contained; a later install
-  re-links it. Idempotent. S1-13 adds the UI, the launchd unregistration and the Keychain items.
+- **Uninstall** (`RuntimeUninstaller.remove(preservingData:includingInstallDirectory:in:)`)
+  removes `runtime/`, `run/`, Caches and Logs, and `install/` unless the caller keeps it; keeps or
+  removes `data/`. When data is preserved, the `storage/logs` symlink is replaced by an empty real
+  directory so the preserved tree is self-contained; a later install re-links it. Idempotent.
+  This is step 4 of the S1-13 order (services.md §8): the UI, the launchd unregistration, the
+  Keychain sweep through the Supervisor, the reinstall marker and the Trash step are
+  `Install/Uninstaller.swift`, documented in
+  [`docs/operations/uninstall.md`](../operations/uninstall.md).
 
 ## 2. Laravel side
 

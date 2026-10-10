@@ -112,6 +112,14 @@ every completed state. Shape (snake_case, ISO 8601 dates):
   (preflight is cheap and verification is never trusted across launches); `INSTALL_CORE` or
   later → the next state. `READY` → the app opens straight to the main window.
 - `run_id` names the event log file, so a resumed run appends to the same log.
+- **`uninstalled_preserving_data`** (S1-13) — `{"at", "product_version", "owner_created"}`,
+  written by a keep-data uninstall into an otherwise empty checkpoint (`last_completed_state:
+  null`, `owner_created` carried over). The next run is a fresh run from `PREFLIGHT` that installs
+  the runtime again and **skips `CREATE_OWNER`**, so a reinstall boots to the previous owner and
+  briefs in the untouched `data/` ([`docs/operations/uninstall.md`](../operations/uninstall.md)
+  §5; `UninstallerTests.testReinstallOverPreservedDataSkipsCreateOwner`). `canResume` is false
+  for it: a marker is not a half-done install. The journal of an uninstall in progress is the
+  sibling file `install/uninstall.json`.
 
 ## 4. Event log
 
@@ -193,8 +201,9 @@ check (S1-14 forces each one).
 
 ## 8. Not decided here
 
-Whether the app flips `LSUIElement`/activation policy after `READY` (S1-09); the uninstall UI,
-launchd unregistration and Keychain clean-up (S1-13 — the file-system half is
-`RuntimeUninstaller`, S1-06); the per-user directory name — this item uses `<bundle id>` as the
-task requires, while ADR-001 D4 writes `LaravelExecutiveAI`; one of the two must change when A12
-settles.
+Whether the app flips `LSUIElement`/activation policy after `READY` (S1-09); the per-user
+directory name — this item uses `<bundle id>` as the task requires, while ADR-001 D4 writes
+`LaravelExecutiveAI`; one of the two must change when A12 settles. The uninstall UI, launchd
+unregistration and Keychain clean-up are delivered by S1-13 (`Install/Uninstaller.swift`,
+services.md §8, [`docs/operations/uninstall.md`](../operations/uninstall.md)); the file-system
+half stays `RuntimeUninstaller` (S1-06).

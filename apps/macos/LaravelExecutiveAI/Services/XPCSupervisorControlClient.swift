@@ -73,6 +73,12 @@ final class XPCSupervisorControlClient: SupervisorControlling, @unchecked Sendab
         }
     }
 
+    func removeAllSecrets() async throws -> [KeychainItemRef] {
+        try await call { proxy, finish in
+            proxy.removeAllSecrets { data, error in finish(Self.result([KeychainItemRef].self, data, error)) }
+        }
+    }
+
     // MARK: - Plumbing
 
     private func call<T: Sendable>(_ body: @escaping @Sendable (SupervisorControlXPCProtocol, @escaping @Sendable (Result<T, SupervisorControlError>) -> Void) -> Void) async throws -> T {

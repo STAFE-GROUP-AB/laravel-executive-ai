@@ -508,7 +508,8 @@ struct RuntimeInstaller: RuntimeInstalling {
     }
 }
 
-// MARK: - Uninstall (§12.2; S1-13 wires the UI, launchd and Keychain parts)
+// MARK: - Uninstall, file-system half (§12.2). `Uninstaller.swift` (S1-13) owns the order:
+// services, Keychain and launchd first, then this, then the install directory and the bundle.
 
 enum RuntimeUninstallError: Error, Equatable, Sendable {
     case removalFailed(path: String)
@@ -528,14 +529,19 @@ struct RuntimeUninstaller: Sendable {
         let preservedData: URL?
     }
 
-    /// Removes the runtime, the install checkpoint, the Caches and Logs directories, and — unless
-    /// `preservingData` — the data directory. Idempotent: a second call removes nothing and
-    /// reports an empty list.
-    func remove(preservingData: Bool, in paths: InstallPaths) throws -> Report {
+    /// Removes the runtime, the Supervisor's `run/` directory, the Caches and Logs directories,
+    /// the install directory unless `includingInstallDirectory` is false (the S1-13 orchestrator
+    /// keeps its journal there until the last step), and — unless `preservingData` — the data
+    /// directory. Idempotent: a second call removes nothing and reports an empty list.
+    func remove(preservingData: Bool, includingInstallDirectory: Bool = true, in paths: InstallPaths) throws -> Report {
         let fileManager = FileManager.default
         var removed: [URL] = []
 
-        var targets = [paths.runtimeRoot, paths.installDirectory, paths.caches, paths.logs]
+        var targets = [paths.runtimeRoot, paths.runDirectory, paths.caches, paths.logs]
+
+        if includingInstallDirectory {
+            targets.insert(paths.installDirectory, at: 1)
+        }
 
         if !preservingData {
             targets.append(paths.dataRoot)

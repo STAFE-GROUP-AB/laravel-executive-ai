@@ -106,6 +106,32 @@ enum MenuBarCopy {
     static var settingsPlaceholderTitle: String { strings.settingsPlaceholderTitle }
     static var settingsPlaceholderBody: String { strings.settingsPlaceholderBody }
 
+    // Settings → Uninstall (S1-13; blueprint §1.1, §12.2)
+    static var settingsUninstallSection: String { strings.settingsUninstallSection }
+    static var settingsUninstallBody: String { strings.settingsUninstallBody }
+    static var uninstall: String { strings.uninstall }
+    static var uninstallTitle: String { strings.uninstallTitle }
+    static var uninstallIntro: String { strings.uninstallIntro }
+    static var uninstallKeepData: String { strings.uninstallKeepData }
+    static var uninstallKeepDataDetail: String { strings.uninstallKeepDataDetail }
+    static var uninstallDeleteEverything: String { strings.uninstallDeleteEverything }
+    static var uninstallDeleteEverythingDetail: String { strings.uninstallDeleteEverythingDetail }
+    static var uninstallConfirm: String { strings.uninstallConfirm }
+    static var cancel: String { strings.cancel }
+    static var uninstallRunning: String { strings.uninstallRunning }
+    static var uninstallRunningDetail: String { strings.uninstallRunningDetail }
+    static var uninstallDoneTitle: String { strings.uninstallDoneTitle }
+    static var uninstallDoneKeptData: String { strings.uninstallDoneKeptData }
+    static var uninstallDoneDeleted: String { strings.uninstallDoneDeleted }
+    static var uninstallSecretsRemovedPrefix: String { strings.uninstallSecretsRemovedPrefix }
+    static var uninstallSecretsSkipped: String { strings.uninstallSecretsSkipped }
+    static var uninstallTrashed: String { strings.uninstallTrashed }
+    static var uninstallNotTrashed: String { strings.uninstallNotTrashed }
+    static var uninstallFailedTitle: String { strings.uninstallFailedTitle }
+    static var uninstallFailedDetail: String { strings.uninstallFailedDetail }
+    static var uninstallRetry: String { strings.uninstallRetry }
+    static var quit: String { strings.quit }
+
     static func approvalsTitle(count: Int) -> String {
         strings.approvalsTitle(count: count)
     }
@@ -203,6 +229,31 @@ struct MenuBarStrings: Sendable {
     let settingsPlaceholderTitle: String
     let settingsPlaceholderBody: String
 
+    let settingsUninstallSection: String
+    let settingsUninstallBody: String
+    let uninstall: String
+    let uninstallTitle: String
+    let uninstallIntro: String
+    let uninstallKeepData: String
+    let uninstallKeepDataDetail: String
+    let uninstallDeleteEverything: String
+    let uninstallDeleteEverythingDetail: String
+    let uninstallConfirm: String
+    let cancel: String
+    let uninstallRunning: String
+    let uninstallRunningDetail: String
+    let uninstallDoneTitle: String
+    let uninstallDoneKeptData: String
+    let uninstallDoneDeleted: String
+    let uninstallSecretsRemovedPrefix: String
+    let uninstallSecretsSkipped: String
+    let uninstallTrashed: String
+    let uninstallNotTrashed: String
+    let uninstallFailedTitle: String
+    let uninstallFailedDetail: String
+    let uninstallRetry: String
+    let quit: String
+
     let taskAwaitingApproval: String
     let tasksAwaitingApproval: String
 
@@ -285,7 +336,31 @@ struct MenuBarStrings: Sendable {
         restartServices: "Restart services",
         pauseFailed: "Could not change the AI pause state.",
         settingsPlaceholderTitle: "Settings",
-        settingsPlaceholderBody: "Services, Local Models, Privacy, Updates, Backups, Diagnostics, Power and Uninstall arrive in later sprints.",
+        settingsPlaceholderBody: "Services, Local Models, Privacy, Updates, Backups, Diagnostics and Power arrive in later sprints.",
+        settingsUninstallSection: "Uninstall",
+        settingsUninstallBody: "Removes the local services, the runtime, the Keychain items and this app from this Mac. You choose whether your data stays.",
+        uninstall: "Uninstall…",
+        uninstallTitle: "Uninstall Laravel Executive AI",
+        uninstallIntro: "The local services are stopped, the launch agent is unregistered, every Keychain item this app created is deleted, the runtime is removed and the app is moved to the Trash.",
+        uninstallKeepData: "Keep my data",
+        uninstallKeepDataDetail: "Your database, briefs and files stay in Application Support. Installing the app again continues with the same owner account and the same briefs.",
+        uninstallDeleteEverything: "Delete everything",
+        uninstallDeleteEverythingDetail: "Database, briefs, files, logs and caches are deleted. This cannot be undone.",
+        uninstallConfirm: "Uninstall",
+        cancel: "Cancel",
+        uninstallRunning: "Uninstalling…",
+        uninstallRunningDetail: "Stopping services, removing Keychain items and files.",
+        uninstallDoneTitle: "Uninstalled",
+        uninstallDoneKeptData: "Your data was kept in Application Support. Install the app again to continue with the same owner account and briefs.",
+        uninstallDoneDeleted: "Your data, logs and caches were deleted.",
+        uninstallSecretsRemovedPrefix: "Keychain items removed",
+        uninstallSecretsSkipped: "The Keychain could not be swept because the Supervisor was not running. Search Keychain Access for “Laravel Executive AI” and delete any remaining items.",
+        uninstallTrashed: "The app has been moved to the Trash. Quit to finish.",
+        uninstallNotTrashed: "Quit, then drag the app to the Trash to finish.",
+        uninstallFailedTitle: "Uninstall did not finish",
+        uninstallFailedDetail: "Nothing is done twice. Try again to continue where it stopped.",
+        uninstallRetry: "Try again",
+        quit: "Quit",
         taskAwaitingApproval: "task awaiting approval",
         tasksAwaitingApproval: "tasks awaiting approval",
         kinds: ["action": "Action", "followup": "Follow-up", "risk": "Risk", "info": "Info", "commitment": "Commitment"],
@@ -355,7 +430,31 @@ struct MenuBarStrings: Sendable {
         restartServices: "Starta om tjänster",
         pauseFailed: "Kunde inte ändra AI:ns pausläge.",
         settingsPlaceholderTitle: "Inställningar",
-        settingsPlaceholderBody: "Tjänster, Lokala modeller, Sekretess, Uppdateringar, Säkerhetskopior, Diagnostik, Energi och Avinstallera kommer i senare sprintar.",
+        settingsPlaceholderBody: "Tjänster, Lokala modeller, Sekretess, Uppdateringar, Säkerhetskopior, Diagnostik och Energi kommer i senare sprintar.",
+        settingsUninstallSection: "Avinstallera",
+        settingsUninstallBody: "Tar bort de lokala tjänsterna, körmiljön, nyckelringsposterna och den här appen från den här Macen. Du väljer om dina data ska behållas.",
+        uninstall: "Avinstallera…",
+        uninstallTitle: "Avinstallera Laravel Executive AI",
+        uninstallIntro: "De lokala tjänsterna stoppas, startagenten avregistreras, varje nyckelringspost som appen skapat raderas, körmiljön tas bort och appen flyttas till papperskorgen.",
+        uninstallKeepData: "Behåll mina data",
+        uninstallKeepDataDetail: "Din databas, dina briefer och filer ligger kvar i Application Support. Installerar du appen igen fortsätter den med samma ägarkonto och samma briefer.",
+        uninstallDeleteEverything: "Ta bort allt",
+        uninstallDeleteEverythingDetail: "Databas, briefer, filer, loggar och cachar raderas. Det går inte att ångra.",
+        uninstallConfirm: "Avinstallera",
+        cancel: "Avbryt",
+        uninstallRunning: "Avinstallerar…",
+        uninstallRunningDetail: "Stoppar tjänster, tar bort nyckelringsposter och filer.",
+        uninstallDoneTitle: "Avinstallerad",
+        uninstallDoneKeptData: "Dina data behölls i Application Support. Installera appen igen för att fortsätta med samma ägarkonto och briefer.",
+        uninstallDoneDeleted: "Dina data, loggar och cachar raderades.",
+        uninstallSecretsRemovedPrefix: "Nyckelringsposter borttagna",
+        uninstallSecretsSkipped: "Nyckelringen kunde inte rensas eftersom Supervisorn inte kördes. Sök efter ”Laravel Executive AI” i Nyckelhanterare och radera eventuella kvarvarande poster.",
+        uninstallTrashed: "Appen har flyttats till papperskorgen. Avsluta för att slutföra.",
+        uninstallNotTrashed: "Avsluta och dra sedan appen till papperskorgen för att slutföra.",
+        uninstallFailedTitle: "Avinstallationen slutfördes inte",
+        uninstallFailedDetail: "Inget görs två gånger. Försök igen för att fortsätta där det stannade.",
+        uninstallRetry: "Försök igen",
+        quit: "Avsluta",
         taskAwaitingApproval: "uppgift väntar på godkännande",
         tasksAwaitingApproval: "uppgifter väntar på godkännande",
         kinds: ["action": "Åtgärd", "followup": "Uppföljning", "risk": "Risk", "info": "Info", "commitment": "Åtagande"],

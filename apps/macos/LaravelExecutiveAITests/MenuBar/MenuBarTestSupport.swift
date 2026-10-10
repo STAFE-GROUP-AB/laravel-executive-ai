@@ -132,9 +132,16 @@ final class SpySettingsPresenter: SettingsPresenting, @unchecked Sendable {
 
 final class SpyServiceControl: ServiceControlling, @unchecked Sendable {
     private let lock = NSLock()
+    private let uninstallError: ServiceControlError?
     private(set) var restarts = 0
     private(set) var stops = 0
     private(set) var uninstalls = 0
+    /// The `keepingData` flag of every uninstall call, in order.
+    private(set) var uninstallChoices: [Bool] = []
+
+    init(uninstallError: ServiceControlError? = nil) {
+        self.uninstallError = uninstallError
+    }
 
     func restartServices() async throws {
         lock.withLock { restarts += 1 }
@@ -144,8 +151,24 @@ final class SpyServiceControl: ServiceControlling, @unchecked Sendable {
         lock.withLock { stops += 1 }
     }
 
-    func uninstall() async throws {
-        lock.withLock { uninstalls += 1 }
+    func uninstall(keepingData: Bool) async throws -> UninstallReport {
+        lock.withLock {
+            uninstalls += 1
+            uninstallChoices.append(keepingData)
+        }
+
+        if let uninstallError {
+            throw uninstallError
+        }
+
+        return UninstallReport(
+            dataChoice: keepingData ? .keep : .delete,
+            performed: UninstallStep.allCases,
+            resumedFrom: [],
+            secretsSweep: .removed(count: 3),
+            preservedData: keepingData ? URL(fileURLWithPath: "/placeholder/data") : nil,
+            appBundleTrashed: true
+        )
     }
 }
 
@@ -153,7 +176,7 @@ struct SpyPorts {
     let urlOpener = SpyURLOpener()
     let terminator = SpyTerminator()
     let settings = SpySettingsPresenter()
-    let serviceControl = SpyServiceControl()
+    var serviceControl = SpyServiceControl()
 
     var ports: PanelPorts {
         PanelPorts(urlOpener: urlOpener, terminator: terminator, settings: settings, serviceControl: serviceControl)
