@@ -76,7 +76,7 @@ the chip before they run the installer — but the README states the requirement
 ## 3. Measured components (what exists today)
 
 All on **this Mac**: Mac16,9, Apple M4 Max (14 cores), 36 GB (`hw.memsize` = 38 654 705 664),
-macOS 26.6.2 (25G83), Xcode 26.2, Swift 6.2.3, APFS SSD, FileVault off. Date: 2026-10-10.
+macOS 26.6.2 (25G83), Xcode 26.2, Swift 6.2.3, APFS SSD. Date: 2026-10-10.
 This is the **upper-bound** machine (ADR-002 E1); none of these numbers is from the minimum machine.
 
 | # | Component | Value | Label | How measured |
@@ -88,7 +88,7 @@ This is the **upper-bound** machine (ADR-002 E1); none of these numbers is from 
 | M5 | Laravel application + `vendor/` on disk | **82 184 KiB total, of which `vendor/` 81 524 KiB** (≈80 MiB) | MEASURED **as a proxy only** | Fresh `laravel/laravel` (Framework 13.35.0) + `livewire/livewire`, `composer create-project --no-scripts`, no `node_modules`, no built assets, in the scratchpad. The product's `app/` is empty today (S0-26 open). **PROVISIONAL budget: 150 MiB** per runtime version incl. `bootstrap/cache` and built assets. |
 | M6 | SQLite database per 100 000 synced messages (headers, no bodies, with indexes) | **≈74 MB** (ADR-002 E1); `VACUUM INTO` snapshot of the 43.8 MB bench file → 42.6 MB (ADR-002 E3) | MEASURED (ADR-002, this Mac) | `packaging/fixtures/prototypes/adr-002/wal-contention-bench.php`. **FTS5 index size was not measured** — ADR-002 E1 measured FTS5 trigger *throughput*, not bytes. Open item for §7. |
 | M7 | Optional local model download (ADR-004 D8, Ollama registry sizes, no selection made) | Phi-4-mini 2.5 GB · Llama 3.2 3B 2.0 GB (1B 1.3 GB) · Gemma 3 4B 3.4 GB (1B 806 MB) · Qwen2.5 7B 4.7 GB · Mistral 7B 4.4 GB | Vendor-stated, not measured | Registry metadata, 2026-10-10. §15.6 still requires the download to be *timed* in the lab. Never part of core-ready (§12.2). |
-| M8 | FileVault query without privileges | `fdesetup status` → `FileVault is Off.` (exit 0, no prompt); `diskutil apfs list` prints a `FileVault:` line per volume | MEASURED | Confirms both read-only paths in §4.9 work as a normal user. |
+| M8 | FileVault query without privileges | `fdesetup status` → `FileVault is On.` / `FileVault is Off.` (exit 0, no prompt); `diskutil apfs list` prints a `FileVault:` line per volume | MEASURED | Confirms both read-only paths in §4.9 work as a normal user. |
 | M9 | Loopback port probe | `nc -z 127.0.0.1 8787` → exit 1 (free) in < 10 ms | MEASURED | Shell parity for the `bind()` probe in §4.6. |
 
 ---
