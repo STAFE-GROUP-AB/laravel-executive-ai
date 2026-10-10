@@ -1,0 +1,145 @@
+# SCA — blueprint §11 (supply chain: pinned deps, SBOM, SCA), §14 (release checklist:
+# SBOM + license audit), backlog S0-05. Runs weekly and on demand; it is not a PR gate.
+#
+# Three jobs:
+#   detect  - finds which lockfiles exist (none until S0-25/S0-26 land; stays green).
+#   sca     - composer audit + npm audit against the lockfiles, then a CycloneDX SBOM
+#             of the whole repository (Composer, npm, Swift) uploaded as an artifact.
+#   osv     - Google OSV-Scanner reusable workflow; results go to Security > Code scanning.
+# No secrets are used. Every third-party action is pinned to a full commit SHA.
+
+name: SCA
+
+on:
+  schedule:
+    # Mondays 04:17 UTC. Off the hour to avoid the GitHub schedule rush.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sca-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PHP_VERSION: '8.4'
+  NODE_VERSION: '24'
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_composer_lock: ${{ steps.detect.outputs.has_composer_lock }}
+      has_npm_lock: ${{ steps.detect.outputs.has_npm_lock }}
+      has_swift_lock: ${{ steps.detect.outputs.has_swift_lock }}
+      has_any_lock: ${{ steps.detect.outputs.has_any_lock }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect lockfiles
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          has_composer_lock=false; has_npm_lock=false; has_swift_lock=false; has_any_lock=false
+          [ -f composer.lock ] && has_composer_lock=true
+          [ -f package-lock.json ] && has_npm_lock=true
+          if find apps/macos -name 'Package.resolved' -print -quit 2>/dev/null | grep -q .; then
+            has_swift_lock=true
+          fi
+          if [ "$has_composer_lock" = true ] || [ "$has_npm_lock" = true ] || [ "$has_swift_lock" = true ]; then
+            has_any_lock=true
+          fi
+          {
+            echo "has_composer_lock=$has_composer_lock"
+            echo "has_npm_lock=$has_npm_lock"
+            echo "has_swift_lock=$has_swift_lock"
+            echo "has_any_lock=$has_any_lock"
+          } >> "$GITHUB_OUTPUT"
+          echo "composer.lock=$has_composer_lock package-lock.json=$has_npm_lock Package.resolved=$has_swift_lock"
+          if [ "$has_any_lock" = false ]; then
+            echo "::notice title=sca::No lockfiles yet (S0-25/S0-26 pending). Vulnerability scans are skipped; the SBOM is still generated."
+          fi
+
+  sca:
+    name: sca
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        if: needs.detect.outputs.has_composer_lock == 'true'
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer audit (lockfile)
+        if: needs.detect.outputs.has_composer_lock == 'true'
+        run: composer audit --locked --no-interaction --ansi
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        if: needs.detect.outputs.has_npm_lock == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: npm audit (lockfile, high and above)
+        if: needs.detect.outputs.has_npm_lock == 'true'
+        run: npm audit --audit-level=high --package-lock-only
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          artifact-name: sbom-cyclonedx-${{ github.sha }}.json
+          upload-artifact: true
+          upload-artifact-retention: 90
+          upload-release-assets: false
+          dependency-snapshot: false
+
+      - name: Summarise SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          components=$(jq '.components | length' sbom.cyclonedx.json)
+          echo "CycloneDX SBOM generated with $components components."
+          {
+            echo "### SBOM"
+            echo ""
+            echo "- Format: CycloneDX JSON"
+            echo "- Components: $components"
+            echo "- Artifact: sbom-cyclonedx-${{ github.sha }}.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  osv:
+    name: osv
+    needs: detect
+    if: needs.detect.outputs.has_any_lock == 'true'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+    with:
+      scan-args: |-
+        -r
+        --skip-git
+        ./
+      fail-on-vuln: true
+      upload-sarif: true
