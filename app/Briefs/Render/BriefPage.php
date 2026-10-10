@@ -44,6 +44,8 @@ final readonly class BriefPage
     {
         $document = $mapper->export($brief);
         $payload = BriefParityPayload::fromDocument($document);
+        // S1-10 deliberate break (reverted in the next commit): one key on the PWA surface only.
+        $payload['surface'] = 'pwa';
         $locale = BriefLocale::resolve($payload['language']);
         $provenance = $document['model_provenance'];
 
