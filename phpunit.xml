@@ -21,6 +21,12 @@
         <testsuite name="Security">
             <directory>tests/Security</directory>
         </testsuite>
+        <!-- End-to-end slices (tests/E2E/README.md): the S1-10 tri-surface brief parity
+             gate lives here. Registered so it runs in the `php` lane (committed-snapshot
+             oracle) and can be selected by name in the `parity` lane (Swift export). -->
+        <testsuite name="E2E">
+            <directory>tests/E2E</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

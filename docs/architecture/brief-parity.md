@@ -1,7 +1,8 @@
-# Brief parity across surfaces (S1-03 skeleton, finished by S1-10)
+# Brief parity across surfaces (S1-03 payload, S1-10 gate)
 
-**Status:** Skeleton — payload shape frozen by S1-03 (#31); the tri-surface harness lands with
-S1-10 (#38) · **Owner:** Workstream I (QA/release) with B (Laravel) and A (macOS)
+**Status:** In force — payload shape frozen by S1-03 (#31); the tri-surface gate (§3) lands with
+S1-10 (#38) and runs on every pull request · **Owner:** Workstream I (QA/release) with B (Laravel)
+and A (macOS)
 **Binding references:** blueprint §1.3 ("samma semantiska data … innehållsskillnader förbjuds"),
 §16 step 3, §17; [`brief-schema.md`](brief-schema.md) §6 (what must be identical, what may differ)
 
@@ -83,22 +84,79 @@ From brief-schema §6, restated per surface:
 | Exports the payload as JCS | `RenderedBrief::parityJson()`; `lea:brief:preview` writes `*.parity.json` | `GET /briefs/{brief}/parity.json` (`BriefPage::parityJson()`); `data-parity-hash` on the article | `BriefParityPayload.canonicalJSON()` (`MenuBar/JCS.swift`); `BriefParityPayloadTests` asserts byte-identity with the committed snapshot |
 | Declares the max `schema_version`; refuses a higher major | `BriefMailRenderer::SUPPORTED_SCHEMA_VERSION` | inherits the mapper's `Brief::SCHEMA_VERSION` gate at import | `BriefParityPayload.supportedSchemaVersion`; a higher major → `error(.updateRequired)`, never a partial brief, cache untouched |
 
-## 3. The S1-10 test (to be written)
+## 3. The S1-10 gate
 
-- One run, one fixture (`brief-canonical.json`): render all three surfaces, export three payloads,
-  assert byte-identical JCS and `content_hash` equal to the fixture's.
-- Deliberately break it once (add a key on one surface) and record that it failed.
-- `version` and `generated_at` asserted identical across all three.
-- Runs in CI on every PR touching `app/Briefs/Render/`, `resources/views/briefs/`,
-  `resources/views/mail/` or `apps/macos/LaravelExecutiveAI/MenuBar/`.
-- Presentation is guarded separately per surface: mail by
-  `tests/Feature/Briefs/Mail/BriefMailSnapshotTest.php` (`tests/__snapshots__/brief-canonical.{html,txt}`).
+One harness, every fixture in `packaging/fixtures/briefs/`, three renderers, one comparison: the
+RFC 8785 bytes of §1's payload. Markup is never compared, so a layout change cannot break the gate
+and a content change cannot pass it.
 
-The Swift export is produced in the `swift` CI lane: `BriefParityPayloadTests` (S1-09) projects
-`brief-canonical.json` through the Swift port and asserts the JCS bytes equal the committed
-`tests/__snapshots__/brief-canonical.parity.json`, so the PHP snapshot is the shared oracle and no
-file crosses between the lanes. Open for S1-10: whether to also diff the three exports in one job. The PWA export is the JSON endpoint
-`GET /briefs/{brief}/parity.json` (S1-04; auth + `BriefPolicy`, `Cache-Control: no-store`), which
-returns `BriefPage::parityJson()` — the payload the page was rendered from — and the page carries
-`data-parity-hash` for a DOM-side check (`tests/Feature/Pwa/BriefsPagesTest.php` asserts both equal
-the mail snapshot).
+### 3.1 What runs
+
+| Piece | Surface | What it does |
+|---|---|---|
+| [`tests/E2E/BriefParityTest.php`](../../tests/E2E/BriefParityTest.php) (Pest, suite `E2E`, `DatabaseTransactions`) | Mail + PWA, and the owner of the comparison | For **every** fixture: imports it (`BriefFixtures::import`), renders the mail from the stored row (`BriefMailRenderer::renderBrief`) and the PWA twice — `BriefPage::fromBrief()` and the real owner route `GET /briefs/{brief}/parity.json` — and asserts: the three PHP exports are byte-identical; they equal the fixture's own projection `BriefParityPayload::fromDocument(fixture)`; `version`, `generated_at` and `content_hash` are identical across them and equal the fixture's; the page's `data-parity-hash` (and the endpoint's `X-LEA-Parity-Hash`) is `Jcs::sha256` of the export. The canonical fixture is additionally held to `tests/__snapshots__/brief-canonical.parity.json`. Then the third surface: every fixture's menu bar export is read (§3.2) and asserted byte-identical to the mail, the page and the endpoint, with the same `version`/`generated_at`/`content_hash`. |
+| [`apps/macos/LaravelExecutiveAITests/MenuBar/BriefParitySnapshotTests.swift`](../../apps/macos/LaravelExecutiveAITests/MenuBar/BriefParitySnapshotTests.swift) (XCTest, app-hosted) | Menu bar | For **every** fixture: projects through the Swift port `BriefParityPayload.fromDocument`, asserts `version`, `generated_at` and `content_hash` equal the fixture's, asserts the canonical export equals the committed snapshot, and writes `<fixture>.parity.json` (payload JCS + one `\n`, the snapshot's framing) into the export directory, then asserts that directory holds exactly one file per fixture. |
+| [`tests/Support/MenuBarParityExport.php`](../../tests/Support/MenuBarParityExport.php) | — | Decides, once, while Pest collects datasets, which **oracle** this lane has for the menu bar (§3.2) and spells it out in the dataset key, so a run's output always says what it compared against. |
+
+Presentation stays guarded separately per surface (brief-schema §6): mail by
+`tests/Feature/Briefs/Mail/BriefMailSnapshotTest.php` (`tests/__snapshots__/brief-canonical.{html,txt}`),
+PWA by `tests/Feature/Pwa/BriefsPagesTest.php`, menu bar by `MenuBarRenderingTests`.
+
+### 3.2 The handoff and the oracle per lane
+
+The Swift test writes its exports to **`build/parity/` under the repository root** (git-ignored, next
+to the xcresult bundles CI writes). `LXAI_SWIFT_PARITY_EXPORT_DIR` overrides the location when the
+test *process* has it (an Xcode scheme environment variable), but not from `xcodebuild`: an
+app-hosted XCTest on macOS is launched with a scrubbed environment and never sees
+`TEST_RUNNER_*` (verified in S1-10 by dumping `ProcessInfo.processInfo.environment` from the test
+host). The PHP side only compares against the Swift export when **it** has
+`LXAI_SWIFT_PARITY_EXPORT_DIR` — a stray local export can never silently become the oracle of a
+plain `vendor/bin/pest` run.
+
+| CI job (`.github/workflows/ci.yml`) | Runner | Mail + PWA | Menu bar oracle |
+|---|---|---|---|
+| `php` | ubuntu | every fixture, three PHP exports vs the fixture projection and each other | **committed snapshot**, canonical fixture only. The run prints `Swift export not available in this lane` and the dataset key reads `canonical · oracle: committed snapshot (…)`. This is sound because the `swift` lane proves the Swift port produces exactly those bytes. |
+| `swift` | macos-15 | — | `BriefParityPayloadTests` (S1-09) and `BriefParitySnapshotTests`: Swift canonical export == committed snapshot; all fixtures project; `build/parity/` written as a by-product. |
+| `parity` | macos-15 | every fixture | **live Swift export**: step (a) runs only `BriefParitySnapshotTests` (same unsigned `xcodebuild` flags as `swift`, `rm -rf build/parity` first) and checks one file per fixture exists; step (b) installs PHP 8.4 + Composer and runs `vendor/bin/pest tests/E2E/BriefParityTest.php` with `LXAI_SWIFT_PARITY_EXPORT_DIR=$GITHUB_WORKSPACE/build/parity`. Dataset keys read `<fixture> · oracle: swift export`. The exports are uploaded as the `parity-exports-<run id>` artifact. |
+
+`parity` runs on **every pull request**, not behind a `paths` filter: in GitHub Actions a filter is
+workflow-wide (it would gate `php`, `swift` and `fixtures` too), and a correct filter would have to
+enumerate every file a renderer depends on — view models, locale tables, the document mapper,
+fixtures, snapshots — where one missed path is a silent hole in the gate. The job costs one macOS
+runner for the Swift build plus a Composer install; the job name is stable so S0-27 can add it to
+the required checks.
+
+### 3.3 Verified broken
+
+The acceptance "adding a field to one surface and not the others fails the test" was proven once by
+adding one key to the PWA payload only (`BriefPage::fromBrief()`), pushing, and letting CI fail:
+
+- **Verified broken on 2026-10-10:** _run URL and the failing assertion are recorded in the commit
+  that reverts the break (see the PR for S1-10 and the entry below once CI has run)._
+
+### 3.4 Adding a fixture, changing the payload
+
+- **New fixture:** drop `brief-<name>.json` into `packaging/fixtures/briefs/` (it must pass
+  `node packaging/fixtures/validate-schema.mjs`). Nothing else: both sides glob the directory,
+  and the harness fails if the Swift export set and the PHP fixture set differ.
+- **Changing the canonical fixture's content** changes the committed snapshot: run
+  `UPDATE_SNAPSHOTS=1 vendor/bin/pest tests/Feature/Briefs/Mail/BriefMailSnapshotTest.php`, review
+  the diff, and expect `BriefParityPayloadTests` (Swift) to need its byte count updated.
+- **Adding or renaming a payload key** is a contract change for all three surfaces: change
+  `BriefParityPayload.php` and `BriefParityPayload.swift` in the same PR, update §1, regenerate the
+  snapshot — the `parity` job is what tells you if one side was forgotten.
+
+### 3.5 Running it locally
+
+```sh
+# menu bar surface → build/parity/*.parity.json
+xcodebuild -project apps/macos/LaravelExecutiveAI.xcodeproj -scheme LaravelExecutiveAI \
+  -destination 'platform=macOS' -only-testing:LaravelExecutiveAITests/BriefParitySnapshotTests \
+  CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO test
+
+# mail + PWA against it (46 tests: 11 fixtures × 4 + 2)
+LXAI_SWIFT_PARITY_EXPORT_DIR="$PWD/build/parity" vendor/bin/pest tests/E2E/BriefParityTest.php
+
+# without the Swift side (what the `php` lane does; 36 tests, committed-snapshot oracle)
+vendor/bin/pest tests/E2E/BriefParityTest.php
+```
