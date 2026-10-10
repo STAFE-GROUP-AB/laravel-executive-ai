@@ -1,0 +1,313 @@
+{
+    "environment": {
+        "date": "2026-10-10T14:05:22+00:00",
+        "host": "GOOSE.home",
+        "os": "Darwin 25.6.0 arm64",
+        "php": "8.4.19",
+        "php_binary": "/Users/andreaskviby/Library/Application Support/Herd/bin/php84",
+        "sqlite": "3.45.2",
+        "fts5": true,
+        "threadsafe": true,
+        "default_wal_autocheckpoint": 1000,
+        "cpu": "Apple M4 Max",
+        "cores": 14,
+        "memory_bytes": 38654705664,
+        "db_dir": "/Users/andreaskviby/Herd/LaravelExecutiveAI/.claude/worktrees/agent-a473d9624786ab161/packaging/fixtures/prototypes/adr-002/tmp"
+    },
+    "parameters": {
+        "total_rows": 100000,
+        "batch": 500,
+        "busy_timeout_ms": 5000,
+        "writers": [
+            1,
+            8
+        ],
+        "synchronous": [
+            "NORMAL"
+        ],
+        "fts5": true,
+        "fullfsync": false
+    },
+    "scenarios": [
+        {
+            "synchronous": "NORMAL",
+            "fts5": true,
+            "fullfsync": false,
+            "fts5_match_probe": {
+                "matches": 100000,
+                "ms": 3.4
+            },
+            "writers": 1,
+            "total_rows": 100000,
+            "batch": 500,
+            "busy_timeout_ms": 5000,
+            "wall_ms": 2561.1,
+            "inserts_per_sec": 39046,
+            "transactions": 200,
+            "busy_errors_writers": 0,
+            "busy_errors_reader": 0,
+            "tx_ms": {
+                "p50": 11.51,
+                "p95": 18.39,
+                "p99": 24.07,
+                "max": 62.03
+            },
+            "lock_wait_ms": {
+                "p95": 0.01,
+                "max": 0.01
+            },
+            "reader": {
+                "queries": 1689,
+                "queries_per_sec": 649,
+                "loop_ms": {
+                    "p50": 1.47,
+                    "p95": 3.59,
+                    "max": 21.21
+                }
+            },
+            "verify": {
+                "row_count": 100000,
+                "distinct_connection_provider": 100000,
+                "ok": true
+            },
+            "wal_bytes_before_checkpoint": 0,
+            "checkpoint_truncate": {
+                "ms": 0,
+                "result": [
+                    0,
+                    0,
+                    0
+                ]
+            },
+            "db_bytes": 90341376,
+            "per_writer": [
+                {
+                    "writer": 1,
+                    "rows": 100000,
+                    "transactions": 200,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2529.6,
+                    "tx_ms": {
+                        "p50": 11.51,
+                        "p95": 18.39,
+                        "p99": 24.07,
+                        "max": 62.03
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0,
+                        "p95": 0.01,
+                        "max": 0.01,
+                        "total": 0.7
+                    }
+                }
+            ]
+        },
+        {
+            "synchronous": "NORMAL",
+            "fts5": true,
+            "fullfsync": false,
+            "fts5_match_probe": {
+                "matches": 100000,
+                "ms": 3.5
+            },
+            "writers": 8,
+            "total_rows": 100000,
+            "batch": 500,
+            "busy_timeout_ms": 5000,
+            "wall_ms": 2835.6,
+            "inserts_per_sec": 35266,
+            "transactions": 200,
+            "busy_errors_writers": 0,
+            "busy_errors_reader": 0,
+            "tx_ms": {
+                "p50": 12.3,
+                "p95": 139.59,
+                "p99": 1558.72,
+                "max": 2094.51
+            },
+            "lock_wait_ms": {
+                "p95": 1002.54,
+                "max": 2083.65
+            },
+            "reader": {
+                "queries": 1869,
+                "queries_per_sec": 649,
+                "loop_ms": {
+                    "p50": 1.64,
+                    "p95": 3.49,
+                    "max": 11.21
+                }
+            },
+            "verify": {
+                "row_count": 100000,
+                "distinct_connection_provider": 100000,
+                "ok": true
+            },
+            "wal_bytes_before_checkpoint": 0,
+            "checkpoint_truncate": {
+                "ms": 0,
+                "result": [
+                    0,
+                    0,
+                    0
+                ]
+            },
+            "db_bytes": 90140672,
+            "per_writer": [
+                {
+                    "writer": 1,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2509.2,
+                    "tx_ms": {
+                        "p50": 11.46,
+                        "p95": 1014.81,
+                        "p99": 1135.06,
+                        "max": 1135.06
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0,
+                        "p95": 1002.54,
+                        "max": 1123.04,
+                        "total": 2149.7
+                    }
+                },
+                {
+                    "writer": 2,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 736.4,
+                    "tx_ms": {
+                        "p50": 13.19,
+                        "p95": 123.54,
+                        "p99": 139.59,
+                        "max": 139.59
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0.01,
+                        "p95": 111.13,
+                        "max": 127.06,
+                        "total": 407.2
+                    }
+                },
+                {
+                    "writer": 3,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2049.8,
+                    "tx_ms": {
+                        "p50": 11.85,
+                        "p95": 82.89,
+                        "p99": 1657.98,
+                        "max": 1657.98
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0,
+                        "p95": 71.58,
+                        "max": 1645.46,
+                        "total": 1728.3
+                    }
+                },
+                {
+                    "writer": 4,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2800.5,
+                    "tx_ms": {
+                        "p50": 12.22,
+                        "p95": 806.46,
+                        "p99": 1459.31,
+                        "max": 1459.31
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0.01,
+                        "p95": 794.22,
+                        "max": 1443.3,
+                        "total": 2446.4
+                    }
+                },
+                {
+                    "writer": 5,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 1059.2,
+                    "tx_ms": {
+                        "p50": 12.55,
+                        "p95": 148.34,
+                        "p99": 607.79,
+                        "max": 607.79
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0.01,
+                        "p95": 134.04,
+                        "max": 595.01,
+                        "total": 729.2
+                    }
+                },
+                {
+                    "writer": 6,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2082.3,
+                    "tx_ms": {
+                        "p50": 14.83,
+                        "p95": 87.78,
+                        "p99": 1558.72,
+                        "max": 1558.72
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0.01,
+                        "p95": 73.52,
+                        "max": 1545.11,
+                        "total": 1719.5
+                    }
+                },
+                {
+                    "writer": 7,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 1592,
+                    "tx_ms": {
+                        "p50": 12.44,
+                        "p95": 83.52,
+                        "p99": 1126.7,
+                        "max": 1126.7
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0.01,
+                        "p95": 72.17,
+                        "max": 1115.83,
+                        "total": 1237.5
+                    }
+                },
+                {
+                    "writer": 8,
+                    "rows": 12500,
+                    "transactions": 25,
+                    "busy_errors": 0,
+                    "elapsed_ms": 2381.5,
+                    "tx_ms": {
+                        "p50": 11.28,
+                        "p95": 23.28,
+                        "p99": 2094.51,
+                        "max": 2094.51
+                    },
+                    "lock_wait_ms": {
+                        "p50": 0,
+                        "p95": 0.01,
+                        "max": 2083.65,
+                        "total": 2083.7
+                    }
+                }
+            ]
+        }
+    ],
+    "backup_probe": null
+}
