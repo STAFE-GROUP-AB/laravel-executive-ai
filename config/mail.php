@@ -79,6 +79,15 @@ return [
             'transport' => 'array',
         ],
 
+        // Blueprint §1.3 / §5.5 (S1-03): the only mailer the brief preview surfaces and
+        // their tests may name. The array transport keeps messages in memory and has no
+        // network path, so building a BriefMailable through it can never deliver anything.
+        // Real delivery (Sprint 2, ADR-009) goes through the owner's confirmed sender
+        // account, never through this mailer.
+        'preview' => [
+            'transport' => 'array',
+        ],
+
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
@@ -114,5 +123,19 @@ return [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Brief Message-ID domain
+    |--------------------------------------------------------------------------
+    |
+    | Brief schema §2 / data-model §2: the mail Message-ID of a brief delivery
+    | is derived deterministically from (idempotency_key, channel, recipient)
+    | so a retry that reaches the provider twice is deduplicated downstream.
+    | This is the right-hand side of that id (App\Briefs\Render\BriefMessageId).
+    |
+    */
+
+    'message_id_domain' => env('MAIL_MESSAGE_ID_DOMAIN', 'laravel-executive-ai.local'),
 
 ];
