@@ -100,6 +100,8 @@ private struct StatusSection: View {
             }
             .padding(.top, Tokens.Spacing.s1)
 
+            AiRowDetails(model: model)
+
             if let mode = model.privacyMode {
                 Text("\(MenuBarCopy.privacyModePrefix): \(mode)")
                     .font(Tokens.Typography.caption)
@@ -153,6 +155,37 @@ private struct StatusSection: View {
         case .ready where model.health?.aiReady == true: return .success
         case .error: return .danger
         default: return .warning
+        }
+    }
+}
+
+/// The AI row's details (S1-11, menubar.md §8): provider, the recorded last success while AI is
+/// ready, and the one action — "Set up AI" or "Reconfigure AI". Never a second "ready" claim.
+private struct AiRowDetails: View {
+    let model: PanelModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s1) {
+            if let provider = model.aiProviderText {
+                Text(model.aiProviderNote.map { "\(MenuBarCopy.aiProviderPrefix): \(provider) — \($0)" } ?? "\(MenuBarCopy.aiProviderPrefix): \(provider)")
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(Tokens.Colors.textSecondary.dynamic)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let lastSuccess = model.aiLastSuccessText {
+                Text("\(MenuBarCopy.aiLastSuccessPrefix): \(lastSuccess)")
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(Tokens.Colors.textMuted.dynamic)
+            }
+
+            if let action = model.aiAction {
+                Button(action.title) {
+                    model.reconfigureAI()
+                }
+                .controlSize(.small)
+                .padding(.top, Tokens.Spacing.s1)
+            }
         }
     }
 }

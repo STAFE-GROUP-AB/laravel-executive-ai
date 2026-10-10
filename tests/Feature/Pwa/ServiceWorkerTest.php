@@ -29,7 +29,7 @@ it('keeps every PWA page path on the service worker deny list', function (): voi
     preg_match('/const NEVER_CACHE = \[(.*?)\];/s', $source, $match);
     preg_match_all('/"(\/[^"]*)"/', $match[1] ?? '', $denied);
 
-    $pagePrefixes = collect(['/home', '/briefs', '/login', '/logout', '/auth', '/ipc', '/health', '/livewire']);
+    $pagePrefixes = collect(['/home', '/briefs', '/settings', '/login', '/logout', '/auth', '/ipc', '/health', '/livewire']);
 
     expect($denied[1])->toContain(...$pagePrefixes->all());
 

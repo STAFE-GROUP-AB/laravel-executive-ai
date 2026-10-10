@@ -220,3 +220,136 @@ struct StaticLocalAiRuntimeDetector: LocalAiRuntimeDetecting {
         runtimes
     }
 }
+
+// MARK: - Provider catalogue (S1-11; packaging/fixtures/ai-providers/ai-providers.json)
+
+/// One row of the shared provider catalogue. Presentation data only: no URL, no key, no model.
+struct AiProviderCatalogEntry: Codable, Equatable, Hashable, Sendable, Identifiable {
+    enum Kind: String, Codable, Sendable {
+        case local
+        case remote
+    }
+
+    let id: String
+    let displayName: String
+    let kind: Kind
+    let driver: String
+    /// True only when the core binds a real `AiProviderAdapter` for this provider. The one field
+    /// that changes over time, and only in the PR that lands the adapter.
+    let adapterAvailable: Bool
+}
+
+/// The list SELECT_AI may offer (blueprint §1.1 "only options a real adapter supports"), mirrored
+/// from the fixture the Laravel core also mirrors (`App\AI\Providers\SupportedProviders`).
+/// `ChooseAiScreenTests.testCatalogueMirrorsTheSharedFixture` pins the equality.
+enum AiProviderCatalog {
+    static let schemaVersion = "1.0.0"
+
+    static let all: [AiProviderCatalogEntry] = [
+        AiProviderCatalogEntry(id: "ollama", displayName: "Ollama", kind: .local, driver: "ollama", adapterAvailable: false),
+        AiProviderCatalogEntry(id: "lmstudio", displayName: "LM Studio", kind: .local, driver: "openai-compatible", adapterAvailable: false),
+        AiProviderCatalogEntry(id: "openai", displayName: "OpenAI", kind: .remote, driver: "openai", adapterAvailable: false),
+        AiProviderCatalogEntry(id: "anthropic", displayName: "Anthropic", kind: .remote, driver: "anthropic", adapterAvailable: false),
+        AiProviderCatalogEntry(id: "custom", displayName: "Other OpenAI-compatible endpoint", kind: .remote, driver: "openai-compatible", adapterAvailable: false),
+    ]
+
+    /// Entries a real adapter supports: the only ones a screen may offer as a choice.
+    static var selectable: [AiProviderCatalogEntry] {
+        all.filter(\.adapterAvailable)
+    }
+
+    static func entry(_ id: String) -> AiProviderCatalogEntry? {
+        all.first { $0.id == id }
+    }
+
+    static func displayName(for id: String) -> String? {
+        entry(id)?.displayName
+    }
+}
+
+// MARK: - SELECT_AI view model (§12.3 screen 5)
+
+/// What screen 5 can show, derived from the catalogue and the detected runtimes. Pure data; no
+/// selection lives here, so nothing can be preselected by construction.
+struct ChooseAiOptions: Equatable, Sendable {
+    /// Detected runtimes whose adapter is available: offered as options, none selected.
+    let selectableRuntimes: [LocalAiRuntime]
+    /// Detected runtimes without an adapter in this build: shown as "Detected: …", a suggestion
+    /// that cannot be chosen and is never selected (§12.3 "suggest … without preselecting").
+    let suggestedRuntimes: [LocalAiRuntime]
+    /// Remote providers with an adapter: the own-key picker's choices, with no brand preselected.
+    let remoteProviders: [AiProviderID]
+
+    init(detected: [LocalAiRuntime], catalog: [AiProviderCatalogEntry] = AiProviderCatalog.all) {
+        let selectable = Set(catalog.filter(\.adapterAvailable).map(\.id))
+
+        selectableRuntimes = detected.filter { selectable.contains($0.id) }
+        suggestedRuntimes = detected.filter { !selectable.contains($0.id) }
+        remoteProviders = catalog
+            .filter { $0.adapterAvailable && $0.kind == .remote }
+            .compactMap { AiProviderID(rawValue: $0.id) }
+    }
+
+    var offersOwnKey: Bool {
+        !remoteProviders.isEmpty
+    }
+
+    /// True while no adapter exists at all: the screen says so instead of listing anything.
+    var onlySkipIsSelectable: Bool {
+        selectableRuntimes.isEmpty && remoteProviders.isEmpty
+    }
+}
+
+/// The person's choice on screen 5. A fresh draft has no choice and no provider: nothing is
+/// preselected, and Continue stays disabled until a choice — including "Skip for now" — is made.
+struct ChooseAiDraft: Equatable, Sendable, CustomStringConvertible {
+    enum Choice: Hashable, Sendable {
+        case skip
+        case localRuntime(LocalAiRuntime)
+        case ownApiKey
+    }
+
+    var choice: Choice?
+    var provider: AiProviderID?
+    /// Travels on into a `TransientSecret` at submission and nowhere else.
+    var apiKey = ""
+
+    init(choice: Choice? = nil, provider: AiProviderID? = nil) {
+        self.choice = choice
+        self.provider = provider
+    }
+
+    var canContinue: Bool {
+        choice != nil
+    }
+
+    var needsProvider: Bool {
+        choice == .ownApiKey && provider == nil
+    }
+
+    var needsApiKey: Bool {
+        choice == .ownApiKey && TransientSecret(apiKey) == nil
+    }
+
+    /// Nil until the choice is complete (own key needs a provider and a key).
+    func submission() -> AiSelectionSubmission? {
+        switch choice {
+        case nil:
+            return nil
+        case .skip:
+            return AiSelectionSubmission(selection: .skip)
+        case .localRuntime(let runtime):
+            return AiSelectionSubmission(selection: .detectedLocalRuntime(runtime))
+        case .ownApiKey:
+            guard let provider, let key = TransientSecret(apiKey) else {
+                return nil
+            }
+
+            return AiSelectionSubmission(selection: .ownApiKey(provider), apiKey: key)
+        }
+    }
+
+    var description: String {
+        "ChooseAiDraft(choice: \(choice.map { String(describing: $0) } ?? "nil"), provider: \(provider?.rawValue ?? "nil"), apiKey: <redacted>)"
+    }
+}

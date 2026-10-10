@@ -251,46 +251,60 @@ struct CreateOwnerScreen: View {
     }
 }
 
-// MARK: - 5. Choose AI
+// MARK: - 5. Choose AI (S1-11; §12.3 screen 5, §1.1)
 
 struct ChooseAiScreen: View {
-    private enum Choice: Hashable {
-        case skip
-        case local(LocalAiRuntime)
-        case ownKey
+    @Bindable var machine: InstallStateMachine
+    @State private var draft: ChooseAiDraft
+    @State private var showErrors = false
+
+    /// `draft` is for the documentation renderer only; the live screen always starts empty.
+    init(machine: InstallStateMachine, draft: ChooseAiDraft = ChooseAiDraft()) {
+        _machine = Bindable(machine)
+        _draft = State(initialValue: draft)
     }
 
-    @Bindable var machine: InstallStateMachine
-    @State private var choice: Choice? = nil
-    @State private var provider: AiProviderID = .openAI
-    @State private var keyText = ""
-    @State private var showErrors = false
+    private var options: ChooseAiOptions {
+        ChooseAiOptions(detected: machine.detectedRuntimes)
+    }
 
     var body: some View {
         InstallScreen(
             step: 5,
             title: "Choose AI",
-            lead: "Pick what the assistant thinks with. You can change this later, and nothing here is required to use the CRM or read briefs."
+            lead: "Pick what the assistant thinks with. Nothing is chosen for you, you can change it later, and nothing here is required to use the CRM or read briefs."
         ) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
-                    option(.skip, title: "Skip for now", detail: "Install without AI. The app shows “AI setup required” until you choose one.")
+            // InstallScreen already scrolls its content; a nested ScrollView would collapse in ImageRenderer.
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
+                option(.skip, title: "Skip for now", detail: "Install without AI. The app shows a setup banner until you choose one; the CRM and earlier briefs work meanwhile.")
 
-                    ForEach(machine.detectedRuntimes) { runtime in
-                        option(.local(runtime), title: "Use \(runtime.displayName) on this Mac", detail: "Already installed here. Models run locally; nothing is sent to a provider.")
-                    }
+                ForEach(options.selectableRuntimes) { runtime in
+                    option(.localRuntime(runtime), title: "Use \(runtime.displayName) on this Mac", detail: "Detected here. Models run locally; nothing is sent to a provider.", tag: "Detected")
+                }
 
-                    if machine.detectedRuntimes.isEmpty {
-                        Text("No local inference runtime was found on this Mac. You can install one later and switch.")
-                            .font(Tokens.Typography.footnote)
-                            .foregroundStyle(Tokens.Colors.textMuted.dynamic)
-                    }
+                ForEach(options.suggestedRuntimes) { runtime in
+                    suggestion(runtime)
+                }
 
-                    option(.ownKey, title: "Use my own API key", detail: "Your key is stored in the macOS Keychain by the background service, never in a file.")
+                if machine.detectedRuntimes.isEmpty {
+                    Text("No local inference runtime was found on this Mac. You can install one later and switch.")
+                        .font(Tokens.Typography.footnote)
+                        .foregroundStyle(Tokens.Colors.textMuted.dynamic)
+                }
 
-                    if choice == .ownKey {
+                if options.offersOwnKey {
+                    option(.ownApiKey, title: "Use my own API key", detail: "Your key is stored in the macOS Keychain by the background service, never in a file.")
+
+                    if draft.choice == .ownApiKey {
                         keyFields
                     }
+                }
+
+                if options.onlySkipIsSelectable {
+                    Text("This build has no AI adapter yet, so the only choice today is to continue without AI. Providers appear here as their adapters land; nothing is ever preselected.")
+                        .font(Tokens.Typography.footnote)
+                        .foregroundStyle(Tokens.Colors.textSecondary.dynamic)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         } footer: {
@@ -298,10 +312,10 @@ struct ChooseAiScreen: View {
                 Task { await machine.cancel() }
             }
 
-            PrimaryInstallButton(title: "Continue", enabled: machine.status == .waitingForPerson && choice != nil) {
+            PrimaryInstallButton(title: "Continue", enabled: machine.status == .waitingForPerson && draft.canContinue) {
                 showErrors = true
 
-                guard let submission else {
+                guard let submission = draft.submission() else {
                     return
                 }
 
@@ -310,39 +324,30 @@ struct ChooseAiScreen: View {
         }
     }
 
-    private var submission: AiSelectionSubmission? {
-        switch choice {
-        case nil:
-            return nil
-        case .skip:
-            return AiSelectionSubmission(selection: .skip)
-        case .local(let runtime):
-            return AiSelectionSubmission(selection: .detectedLocalRuntime(runtime))
-        case .ownKey:
-            guard let key = TransientSecret(keyText) else {
-                return nil
-            }
-
-            return AiSelectionSubmission(selection: .ownApiKey(provider), apiKey: key)
-        }
-    }
-
     @ViewBuilder
     private var keyFields: some View {
         InstallCard {
-            Picker("Provider", selection: $provider) {
-                ForEach(AiProviderID.allCases, id: \.self) { provider in
-                    Text(provider.displayName).tag(provider)
+            Picker("Provider", selection: $draft.provider) {
+                Text("Choose a provider").tag(AiProviderID?.none)
+
+                ForEach(options.remoteProviders, id: \.self) { provider in
+                    Text(provider.displayName).tag(Optional(provider))
                 }
             }
             .pickerStyle(.menu)
             .font(Tokens.Typography.body)
 
-            SecureField("API key", text: $keyText, prompt: Text("Paste the key"))
+            SecureField("API key", text: $draft.apiKey, prompt: Text("Paste the key"))
                 .textFieldStyle(.roundedBorder)
                 .font(Tokens.Typography.mono)
 
-            if showErrors, TransientSecret(keyText) == nil {
+            if showErrors, draft.needsProvider {
+                Text("Choose a provider.")
+                    .font(Tokens.Typography.footnote)
+                    .foregroundStyle(Tokens.Colors.dangerText.dynamic)
+            }
+
+            if showErrors, draft.needsApiKey {
                 Text("Paste the key, or choose another option.")
                     .font(Tokens.Typography.footnote)
                     .foregroundStyle(Tokens.Colors.dangerText.dynamic)
@@ -350,12 +355,28 @@ struct ChooseAiScreen: View {
         }
     }
 
+    /// A detected runtime this build cannot use yet: shown, suggested, never selectable (§12.3).
+    private func suggestion(_ runtime: LocalAiRuntime) -> some View {
+        InstallCard(tint: Tokens.Colors.infoSurface, border: Tokens.Colors.info) {
+            Label("Detected: \(runtime.displayName)", systemImage: "magnifyingglass")
+                .font(Tokens.Typography.headline)
+                .foregroundStyle(Tokens.Colors.infoText.dynamic)
+
+            Text("Found on this Mac and suggested, not selected. It becomes a choice when this build ships its adapter.")
+                .font(Tokens.Typography.footnote)
+                .foregroundStyle(Tokens.Colors.textPrimary.dynamic)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Suggestion only, not selected")
+    }
+
     @ViewBuilder
-    private func option(_ value: Choice, title: String, detail: String) -> some View {
-        let selected = choice == value
+    private func option(_ value: ChooseAiDraft.Choice, title: String, detail: String, tag: String? = nil) -> some View {
+        let selected = draft.choice == value
 
         Button {
-            choice = value
+            draft.choice = value
         } label: {
             HStack(alignment: .top, spacing: Tokens.Spacing.s3) {
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
@@ -363,9 +384,20 @@ struct ChooseAiScreen: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: Tokens.Spacing.s1) {
-                    Text(title)
-                        .font(Tokens.Typography.bodyEmphasis)
-                        .foregroundStyle(Tokens.Colors.textPrimary.dynamic)
+                    HStack(spacing: Tokens.Spacing.s2) {
+                        Text(title)
+                            .font(Tokens.Typography.bodyEmphasis)
+                            .foregroundStyle(Tokens.Colors.textPrimary.dynamic)
+
+                        if let tag {
+                            Text(tag)
+                                .font(Tokens.Typography.caption)
+                                .foregroundStyle(Tokens.Colors.infoText.dynamic)
+                                .padding(.horizontal, Tokens.Spacing.s2)
+                                .padding(.vertical, 1)
+                                .background(Tokens.Colors.infoSurface.dynamic, in: Capsule())
+                        }
+                    }
 
                     Text(detail)
                         .font(Tokens.Typography.footnote)

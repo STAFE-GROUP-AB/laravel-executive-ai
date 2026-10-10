@@ -38,6 +38,7 @@ const SHELL_ALLOWLIST = [
 const NEVER_CACHE = [
     "/briefs",
     "/home",
+    "/settings",
     "/login",
     "/logout",
     "/auth",

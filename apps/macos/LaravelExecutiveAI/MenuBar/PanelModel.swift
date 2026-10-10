@@ -84,6 +84,20 @@ enum PanelState: Hashable, Sendable {
     }
 }
 
+/// The AI row's one action (menubar.md §8, health contract §7): "Set up AI" while setup is
+/// required, "Reconfigure AI" after an error, nothing while AI is ready.
+enum AiRowAction: Hashable, Sendable {
+    case setUp
+    case reconfigure
+
+    var title: String {
+        switch self {
+        case .setUp: MenuBarCopy.setUpAI
+        case .reconfigure: MenuBarCopy.reconfigureAI
+        }
+    }
+}
+
 enum Reachability: Equatable, Sendable {
     case unknown
     case reachable
@@ -195,6 +209,50 @@ final class PanelModel {
             return MenuBarCopy.aiReady
         case .ready, .notConfigured, .configuredUntested, .unknown:
             return MenuBarCopy.stateAiSetupRequired
+        }
+    }
+
+    /// `ai_provider` as the catalogue names it (packaging/fixtures/ai-providers), else the raw id.
+    /// Shown in every AI state that has a provider; it never implies readiness on its own.
+    var aiProviderText: String? {
+        guard let id = health?.aiProvider, !id.isEmpty else {
+            return nil
+        }
+
+        return AiProviderCatalog.displayName(for: id) ?? id
+    }
+
+    /// `ai_last_success_at`, shown only while `ai_ready == true` (health contract §3: the timestamp
+    /// is the recorded completion that made the install AI ready, so it has no meaning otherwise).
+    var aiLastSuccessText: String? {
+        guard let health, health.aiReady, health.aiState == .ready, let at = health.aiLastSuccessAt else {
+            return nil
+        }
+
+        return RFC3339.display(at)
+    }
+
+    /// Provider line detail for the configured-but-untested state; nil otherwise.
+    var aiProviderNote: String? {
+        guard let health, health.aiState == .configuredUntested else {
+            return nil
+        }
+
+        return MenuBarCopy.aiNoCompletionYet
+    }
+
+    var aiAction: AiRowAction? {
+        guard let health else {
+            return .setUp
+        }
+
+        switch health.aiState {
+        case .error:
+            return .reconfigure
+        case .ready where health.aiReady:
+            return nil
+        case .ready, .notConfigured, .configuredUntested, .unknown:
+            return .setUp
         }
     }
 
@@ -405,6 +463,12 @@ final class PanelModel {
 
     func openSettings() {
         ports.settings.presentSettings()
+    }
+
+    /// The AI row's deep link (menubar.md §8). It lands in Settings until the Local Models pane
+    /// and the SELECT_AI re-entry exist; nothing here selects a provider or stores a key.
+    func reconfigureAI() {
+        openSettings()
     }
 
     func restartServices() async {

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Pwa\AiSettingsController;
 use App\Http\Controllers\Pwa\BriefsController;
 use App\Http\Controllers\Pwa\HomeController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -33,6 +34,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/briefs', [BriefsController::class, 'index'])->name('briefs');
     Route::get('/briefs/{brief}', [BriefsController::class, 'show'])->name('briefs.show');
     Route::get('/briefs/{brief}/parity.json', [BriefsController::class, 'parity'])->name('briefs.parity');
+    // S1-11: the "Select AI" banner's target until the deep link into the Mac's SELECT_AI exists.
+    Route::get('/settings/ai', AiSettingsController::class)->name('settings.ai');
 });
 
 // The one page the service worker precaches. No session, so the response never
