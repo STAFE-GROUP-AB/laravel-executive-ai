@@ -158,3 +158,10 @@ Two findings for the ADR owners, both found by building rather than reading:
    used `LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT=1`. Options for S1-12/ADR-007: patch spc's libxml2
    recipe to use the macOS system iconv, drop `iconv`+`libxml2` (impossible — `dom`/`xml` need
    libxml2), or obtain the L-1 opinion on LGPL §6 for a static link. Decided by Andreas, not here.
+
+**S1-12 status (2026-10-10):** the CI disk image (`.github/workflows/build-macos.yml`,
+[`docs/operations/release-build.md`](../operations/release-build.md)) ships **without** this
+directory until A23 is decided — app + Supervisor only, `runtime.json` unchanged at `unbuilt`. The
+signing order and the `--status signed` re-assembly are written down in
+`packaging/signing/README.md` §4 so the runtime can be added to the bundle without touching the
+pipeline's structure.

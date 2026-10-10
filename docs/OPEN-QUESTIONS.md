@@ -291,6 +291,14 @@ or personal) owns the app, plus the certificate and CI secrets. Blocks S1-12.
 `com.stafe.laravelexecutiveai`, the release policy example `se.stafegroup.laravel-executive-ai`,
 ADR-003 and ADR-006 `se.stafe.executive-ai.<service>`. One prefix, tied to the Team ID, before S1-06;
 ADR-003's `se.stafe.executive-ai` is the recommended default since two ADRs already build on it.
+**Status (S1-12, 2026-10-10):** the pipeline is built and waits only for the identity. Exactly three
+repository secrets switch `.github/workflows/build-macos.yml` from unsigned to Developer-ID-signed
+images on `main`: **`APPLE_TEAM_ID`** (the 10-character Team ID), **`APPLE_CERTIFICATE_P12`** (base64 of a
+*Developer ID Application* certificate exported with its private key) and
+**`APPLE_CERTIFICATE_PASSWORD`**; optional `APPLE_KEYCHAIN_PASSWORD`. Step-by-step in
+`packaging/signing/README.md` §2. Pull requests never sign. Until the secrets exist every run produces
+`*-unsigned.dmg` and says so; nothing else in the repo changes when they are added — the Team ID is
+read at signing time and never committed.
 
 ### A13 — Third-party penetration test before v1.0
 §11 makes it a blocking gate and §13 requires H to sign a risk acceptance. Vendor selection, budget
@@ -413,6 +421,13 @@ things the ADRs do not cover (`docs/architecture/runtime-layout.md` §5):
    system iconv, or obtain the L-1 opinion on LGPL §6 for a static link. **Needs:** `DECISION` —
    Andreas (with L-1); blocks S1-12 (the signed artefact).
 
+**Status (S1-12, 2026-10-10):** S1-12 shipped the DMG pipeline **without a runtime** rather than wait:
+the image is app + Supervisor only, `Contents/Resources/runtime/` is absent, `runtime.json` stays
+`status: unbuilt`, and the image's `README.txt` says so. The installer stops at `PACKAGE_VERIFY` on
+that build. Both findings remain open; the steps that follow the decision (sign `frankenphp` with
+`allow-jit` only, re-assemble `--status signed`, copy into the bundle) are listed in
+`packaging/signing/README.md` §4 and `docs/operations/release-build.md` §5.
+
 ### A24 — The Supervisor's container: bare tool (ADR-001 D3) or helper bundle (ADR-003 D5)
 ADR-001 D3 places the Supervisor at `Contents/MacOS/LaravelExecutiveAISupervisor` (a bare Mach-O,
 `BundleProgram` points straight at it); ADR-003 D5 says it "must be packaged as a bundle
@@ -423,3 +438,23 @@ a `com.apple.product-type.tool` target embedded by the app. If the data-protecti
 bare tool on the signed build, the fix is a product-type change and a one-line `BundleProgram` change,
 nothing in the code. **Needs:** `ENG` — A with H, decided by the S1-12 signing prototype; whichever
 ADR is wrong gets amended in the same PR.
+**Findings (S1-12, 2026-10-10) — still open, because the prototype cannot run without A12:**
+1. The signing step (`packaging/signing/sign.sh`) signs the bare tool as ADR-001 D3 built it, with
+   `LaravelExecutiveAISupervisor.entitlements` and `$(AppIdentifierPrefix)` expanded to `<TEAM ID>.`;
+   `codesign` accepts a restricted entitlement on a bare Mach-O without a provisioning profile and
+   `codesign --verify` passes. So a **green CI signing report is not evidence either way** — `codesign`
+   does not validate restricted entitlements; AMFI does, at launch, on a real Mac.
+2. Apple's documented rule still favours ADR-003 D5: restricted entitlements
+   (`keychain-access-groups`, `com.apple.application-identifier`) are authorised by a provisioning
+   profile, a bare Mach-O cannot carry `embedded.provisionprofile`, and Developer ID profiles do
+   include `keychain-access-groups: [<TEAM ID>.*]`. The expected outcome of the first signed launch is
+   therefore `Killed: 9` with *restricted entitlements not validated* in the `amfid` log, and the fix
+   is the one services.md §1 names (product type → application bundle under `Contents/Helpers/`,
+   profile embedded, `BundleProgram` path) plus an **ADR-001 D3** amendment. If the tool launches and
+   `SecItemAdd` into the access group succeeds instead, **ADR-003 D5** loses its "must be a bundle"
+   sentence.
+3. The pipeline is structurally ready for both: a helper bundle is nested code and slots into the
+   inside-out order before the app with its own entitlements file; the `$(AppIdentifierPrefix)`
+   expansion then moves back to Xcode. The exact commands and the pass/fail criteria for the lab run
+   are the checklist in `packaging/signing/README.md` §5; the verdict is recorded here and in
+   services.md §1 in the same PR as the ADR amendment (S1-14 lab Mac).
