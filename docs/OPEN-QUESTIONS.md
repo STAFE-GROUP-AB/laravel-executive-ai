@@ -280,6 +280,10 @@ accounts and budget, before Sprint 3 starts.
 §16 step 5, §12.1 and §14 all depend on a signing identity and, eventually, notarization. No
 engineering work can produce one. **Needs:** `ANDREAS` — which Apple Developer team (STAFE GROUP AB
 or personal) owns the app, plus the certificate and CI secrets. Blocks S1-12.
+**Also decide the bundle-id / Keychain prefix (2026-10-10):** ADR-001 uses the placeholder
+`com.stafe.laravelexecutiveai`, the release policy example `se.stafegroup.laravel-executive-ai`,
+ADR-003 and ADR-006 `se.stafe.executive-ai.<service>`. One prefix, tied to the Team ID, before S1-06;
+ADR-003's `se.stafe.executive-ai` is the recommended default since two ADRs already build on it.
 
 ### A13 — Third-party penetration test before v1.0
 §11 makes it a blocking gate and §13 requires H to sign a risk acceptance. Vendor selection, budget
