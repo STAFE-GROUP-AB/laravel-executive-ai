@@ -213,17 +213,23 @@ Sprint 3 rather than Sprint 0. **Needs:** `ENG+ANDREAS` (scope approval).
 Two table sets model the same objects at different layers, and the blueprint never says whether email
 messages normalize **into** `communications` or sit beside it with a join. Picking wrong is a
 migration across the whole CRM timeline. **Needs:** `ENG` decision recorded in ADR-002 or a schema
-ADR, before Sprint 2's E2-2 lands.
+ADR, before Sprint 2's E2-2 lands. **Proposed 2026-10-10 in ADR-002 D9:** `email_messages`/
+`email_threads` are the provider system of record; `communications` is the CRM timeline projection
+linked by `source_type`/`source_id` with correctable matching; no separate `messages`/`threads`
+tables. Final when E2-2 writes the schema.
 
 ### A4 — `connected_email_accounts` versus `email_connections`
 §5.6 names the table `connected_email_accounts` in its security model and `email_connections` in its
 data model, three paragraphs apart. **Recommendation:** `email_connections`, since it matches the
 `email_*` family and the `EmailConnection` DTO in the §5.6 adapter contract. **Needs:** `ENG`.
+**Resolved 2026-10-10 (ENG, ADR-002 D8): `email_connections`.**
 
 ### A5 — "macOS 15/26" in §15.1
 It is unclear whether this means "macOS 15 through macOS 26" (a supported range), "macOS 15 or
 macOS 26", or a typo. §2 separately says "macOS 15+". The support matrix needs an unambiguous floor
-and a highest-tested version. **Needs:** `ENG`, recorded in S0-22.
+and a highest-tested version. **Needs:** `ENG`, recorded in S0-22. **Proposed 2026-10-10 (ADR-001
+D5):** read as the range macOS 15 through 26 — floor 15.0, highest tested 26.x; Apple Silicon only,
+Intel explicitly unsupported. S0-22 confirms with measurements.
 
 ### A6 — No `docs` label exists
 §16 step 1 lists ten labels; the repo has eleven (`adr` was added). Workstream J (docs/community) has
@@ -248,6 +254,12 @@ only one writer, so eight sync workers plus the brief generator plus the schedul
 single write lock. This is the most likely place the §2 decision gets reopened, and §2 anticipates it
 by requiring a dual-profile migration path. **Needs:** `ENG` — a measured write-throughput prototype
 in Sprint 0 or early Sprint 2, before the Sprint 3 adapters are built on an assumption.
+**Measured 2026-10-10 (ADR-002 E1):** 100 000 rows in 500-row transactions, 1–12 concurrent writer
+processes plus a reader, `busy_timeout` 5 s: ~100 000 inserts/s at every writer count, **zero**
+`SQLITE_BUSY`, p95 batch latency 6 ms (1 writer) → 102 ms (8) → 172 ms (12). Contention costs tail
+latency only; the reopen condition is not met. ADR-002 D3 sets the write-path rules (no network I/O
+in a transaction, batched upserts, `BEGIN IMMEDIATE`, default 2 / max 8 sync workers). Re-run on the
+ADR-001 minimum machine before Accepted.
 
 ### A10 — §17 requires "at least two optional external AI adapters" without naming them
 §4 lists six candidate providers. Shipping all six in v1 multiplies the contract-test surface for no
@@ -268,6 +280,10 @@ accounts and budget, before Sprint 3 starts.
 §16 step 5, §12.1 and §14 all depend on a signing identity and, eventually, notarization. No
 engineering work can produce one. **Needs:** `ANDREAS` — which Apple Developer team (STAFE GROUP AB
 or personal) owns the app, plus the certificate and CI secrets. Blocks S1-12.
+**Also decide the bundle-id / Keychain prefix (2026-10-10):** ADR-001 uses the placeholder
+`com.stafe.laravelexecutiveai`, the release policy example `se.stafegroup.laravel-executive-ai`,
+ADR-003 and ADR-006 `se.stafe.executive-ai.<service>`. One prefix, tied to the Team ID, before S1-06;
+ADR-003's `se.stafe.executive-ai` is the recommended default since two ADRs already build on it.
 
 ### A13 — Third-party penetration test before v1.0
 §11 makes it a blocking gate and §13 requires H to sign a risk acceptance. Vendor selection, budget

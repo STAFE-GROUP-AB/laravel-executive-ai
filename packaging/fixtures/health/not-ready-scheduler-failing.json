@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "ready": false,
+  "checks": [
+    {
+      "name": "http",
+      "status": "ok",
+      "detail": "loopback HTTP responding",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 1
+    },
+    {
+      "name": "database_migrations",
+      "status": "ok",
+      "detail": "schema at 2026_10_01_000000_create_briefs_table; 0 pending",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 4
+    },
+    {
+      "name": "auth_login",
+      "status": "ok",
+      "detail": "owner account exists; login self-test passed 2026-10-10T11:04:00+02:00",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 2
+    },
+    {
+      "name": "menubar_integration",
+      "status": "ok",
+      "detail": "last IPC heartbeat 4s ago",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 0,
+      "age_seconds": 4,
+      "threshold_seconds": 120
+    },
+    {
+      "name": "brief_placeholder",
+      "status": "ok",
+      "detail": "placeholder brief 01M4FJ7GY0PZH6YA3D9574XN5K v1 present",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 1
+    },
+    {
+      "name": "queue_worker",
+      "status": "ok",
+      "detail": "worker heartbeat 6s ago",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 0,
+      "age_seconds": 6,
+      "threshold_seconds": 90
+    },
+    {
+      "name": "scheduler_selftest",
+      "status": "fail",
+      "detail": "health:selftest last ran 1 412s ago (threshold 180s); launchd job com.laravelexecutiveai.scheduler not running",
+      "checked_at": "2026-10-10T11:05:00+02:00",
+      "duration_ms": 0,
+      "age_seconds": 1412,
+      "threshold_seconds": 180
+    }
+  ],
+  "ai_ready": false,
+  "ai_state": "configured_untested",
+  "ai_provider": "openai",
+  "ai_last_success_at": null,
+  "brief_state": "error",
+  "latest_brief": {
+    "id": "01M4FJ7GY0PZH6YA3D9574XN5K",
+    "version": 1,
+    "generated_at": "2026-10-10T09:10:30+02:00",
+    "stale_after": "2026-10-11T09:10:30+02:00"
+  },
+  "connectivity": "degraded",
+  "privacy_mode": "EU_RESTRICTED",
+  "pending_approvals": 0,
+  "checked_at": "2026-10-10T11:05:00+02:00",
+  "duration_ms": 8
+}

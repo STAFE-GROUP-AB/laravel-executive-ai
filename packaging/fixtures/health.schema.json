@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/health.schema.json",
+  "$comment": "Health contract 1.0.0 (S0-14). Response bodies of GET /health/live and GET /health/ready. See docs/architecture/health-contract.md. Blueprint §1.1, §12.2, §14.",
+  "title": "Health contract",
+  "oneOf": [
+    { "$ref": "#/$defs/live" },
+    { "$ref": "#/$defs/ready" }
+  ],
+  "$defs": {
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "live": {
+      "description": "GET /health/live. Process is up and can serve a request. No database, no cache, no I/O.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "ok"
+        }
+      }
+    },
+    "checkName": {
+      "type": "string",
+      "enum": [
+        "http",
+        "database_migrations",
+        "auth_login",
+        "menubar_integration",
+        "brief_placeholder",
+        "queue_worker",
+        "scheduler_selftest"
+      ]
+    },
+    "check": {
+      "description": "One §12.2 subcheck. fail includes timeouts; skip means the check was not evaluated because a check it depends on failed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "detail", "checked_at", "duration_ms"],
+      "properties": {
+        "name": { "$ref": "#/$defs/checkName" },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "fail", "skip"]
+        },
+        "detail": {
+          "description": "Human-readable, sanitised. Never contains tokens, credentials, mail content or stack traces.",
+          "type": "string",
+          "maxLength": 500
+        },
+        "checked_at": { "$ref": "#/$defs/dateTime" },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "age_seconds": {
+          "description": "For heartbeat-based checks: seconds since the last successful heartbeat.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "threshold_seconds": {
+          "description": "For heartbeat-based checks: the maximum age that still counts as ok.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "latestBrief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "generated_at", "stale_after"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "version": { "type": "integer", "minimum": 1 },
+        "generated_at": { "$ref": "#/$defs/dateTime" },
+        "stale_after": { "$ref": "#/$defs/dateTime" }
+      }
+    },
+    "ready": {
+      "description": "GET /health/ready. HTTP 200 when ready is true, 503 otherwise. The body shape is identical in both cases.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "ready",
+        "checks",
+        "ai_ready",
+        "ai_state",
+        "ai_provider",
+        "ai_last_success_at",
+        "brief_state",
+        "latest_brief",
+        "connectivity",
+        "privacy_mode",
+        "pending_approvals",
+        "checked_at",
+        "duration_ms"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "ready": {
+          "description": "True if and only if every check has status ok (§12.2 core-ready). Independent of ai_ready.",
+          "type": "boolean"
+        },
+        "checks": {
+          "description": "Exactly the seven §12.2 subchecks, each present once.",
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": { "$ref": "#/$defs/check" },
+          "allOf": [
+            { "contains": { "type": "object", "properties": { "name": { "const": "http" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "database_migrations" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "auth_login" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "menubar_integration" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "brief_placeholder" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "queue_worker" } } } },
+            { "contains": { "type": "object", "properties": { "name": { "const": "scheduler_selftest" } } } }
+          ]
+        },
+        "ai_ready": {
+          "description": "True only after a recorded successful model completion (ai_runs) with the currently selected provider. Never derived from configuration being present.",
+          "type": "boolean"
+        },
+        "ai_state": {
+          "type": "string",
+          "enum": ["not_configured", "configured_untested", "ready", "error"]
+        },
+        "ai_provider": {
+          "description": "Selected adapter identifier, or null when not configured. Never a key or endpoint secret.",
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" },
+            { "type": "null" }
+          ]
+        },
+        "ai_last_success_at": {
+          "description": "Timestamp of the recorded successful completion that ai_ready is based on, or null.",
+          "oneOf": [
+            { "$ref": "#/$defs/dateTime" },
+            { "type": "null" }
+          ]
+        },
+        "brief_state": {
+          "description": "none: no brief and no placeholder; fresh: latest brief exists and now < stale_after; stale: now >= stale_after; error: the last scheduled generation failed.",
+          "type": "string",
+          "enum": ["none", "fresh", "stale", "error"]
+        },
+        "latest_brief": {
+          "oneOf": [
+            { "$ref": "#/$defs/latestBrief" },
+            { "type": "null" }
+          ]
+        },
+        "connectivity": {
+          "description": "Internet reachability as last measured by the sync layer (cached). online: all enabled external providers reachable; degraded: some; offline: none or no route.",
+          "type": "string",
+          "enum": ["online", "offline", "degraded"]
+        },
+        "privacy_mode": {
+          "type": "string",
+          "enum": ["LOCAL_ONLY", "EU_RESTRICTED", "CUSTOM"]
+        },
+        "pending_approvals": {
+          "description": "Number of action proposals awaiting the owner. The only field allowed to drive a notification badge (§1.1).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "checked_at": { "$ref": "#/$defs/dateTime" },
+        "duration_ms": {
+          "description": "Total time spent producing this response.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "ready": { "const": true } } },
+          "then": {
+            "type": "object",
+            "properties": {
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": { "status": { "const": "ok" } }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "type": "object", "properties": { "ai_ready": { "const": true } } },
+          "then": {
+            "type": "object",
+            "properties": {
+              "ai_state": { "const": "ready" },
+              "ai_provider": { "type": "string" },
+              "ai_last_success_at": { "type": "string" }
+            }
+          },
+          "else": {
+            "properties": { "ai_state": { "enum": ["not_configured", "configured_untested", "error"] } }
+          }
+        },
+        {
+          "if": { "type": "object", "properties": { "ai_state": { "const": "not_configured" } } },
+          "then": { "type": "object", "properties": { "ai_provider": { "type": "null" } } },
+          "else": { "type": "object", "properties": { "ai_provider": { "type": "string" } } }
+        },
+        {
+          "if": { "type": "object", "properties": { "brief_state": { "const": "none" } } },
+          "then": { "type": "object", "properties": { "latest_brief": { "type": "null" } } },
+          "else": { "type": "object", "properties": { "latest_brief": { "type": "object" } } }
+        }
+      ]
+    }
+  }
+}

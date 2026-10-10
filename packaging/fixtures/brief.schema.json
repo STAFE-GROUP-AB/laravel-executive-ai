@@ -1,0 +1,371 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/brief.schema.json",
+  "$comment": "Executive Brief schema 1.0.0 (S0-13). Frozen: see docs/architecture/brief-schema.md for the compatibility and freeze rules. Blueprint §1.3, §4.2, §5.6, §11.",
+  "title": "Executive Brief",
+  "description": "One versioned Executive Brief. The same document is rendered by the SwiftUI menu bar, the Blade HTML mail and the PWA; renderers must not diverge in semantic content (§1.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "generated_at",
+    "period_start",
+    "period_end",
+    "language",
+    "subject",
+    "summary",
+    "items",
+    "sources",
+    "action_ids",
+    "model_provenance",
+    "content_hash",
+    "delivery_state",
+    "idempotency_key",
+    "deliveries",
+    "stale_after"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this schema the document conforms to (semver). Renderers compare it with the maximum they support; see compatibility rule.",
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "id": {
+      "description": "Stable identity of the brief across all of its versions (ULID).",
+      "$ref": "#/$defs/ulid"
+    },
+    "version": {
+      "description": "Monotonically increasing per brief id, starting at 1. A frozen brief is never edited; a regeneration produces version + 1.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "generated_at": {
+      "description": "When the brief was assembled and frozen (RFC 3339, with offset).",
+      "$ref": "#/$defs/dateTime"
+    },
+    "period_start": {
+      "description": "Start of the period the brief covers, inclusive (RFC 3339).",
+      "$ref": "#/$defs/dateTime"
+    },
+    "period_end": {
+      "description": "End of the period the brief covers, exclusive (RFC 3339). Must be greater than or equal to period_start; an empty period is representable (equal values).",
+      "$ref": "#/$defs/dateTime"
+    },
+    "language": {
+      "description": "Language of subject, summary and item prose as a BCP-47 tag (§4.2 requires sv, en, it and de to be evaluated). Quoted source excerpts may be in any language.",
+      "$ref": "#/$defs/bcp47"
+    },
+    "subject": {
+      "description": "Rendered as the mail subject and the menu bar headline. Plain text, single line.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\r\\n]+$"
+    },
+    "summary": {
+      "description": "Short executive summary. Plain text; renderers must not truncate.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "items": {
+      "description": "Ordered list of brief items. Order is semantic and must be preserved by every renderer.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "sources": {
+      "description": "Every source referenced by any item. Each source names the connected account it came from (§5.6).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "action_ids": {
+      "description": "Ids of action proposals (§11 approvals) created from this brief. Proposals are frozen, immutable objects owned by the approval module; this list is the link, not the proposal.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ulid" }
+    },
+    "model_provenance": { "$ref": "#/$defs/modelProvenance" },
+    "content_hash": {
+      "description": "SHA-256 over the RFC 8785 (JCS) canonical JSON of the content envelope: every top-level field except delivery_state, deliveries and content_hash itself. Renderers and parity tests use it to prove they rendered the same frozen content.",
+      "$ref": "#/$defs/sha256"
+    },
+    "delivery_state": {
+      "description": "Lifecycle state. Ordered: draft < frozen < queued < sent | failed | skipped. From frozen onwards the content envelope is immutable.",
+      "type": "string",
+      "enum": ["draft", "frozen", "queued", "sent", "failed", "skipped"]
+    },
+    "idempotency_key": {
+      "description": "Assigned once at freeze time (ULID). Every delivery attempt of this version carries it; a retry must find an existing sent delivery with the same key, channel and recipient and skip sending (§1.3).",
+      "$ref": "#/$defs/ulid"
+    },
+    "deliveries": {
+      "description": "Append-only log of delivery attempts per channel and recipient. At most one entry per (channel, recipient) may have status sent.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/delivery" }
+    },
+    "stale_after": {
+      "description": "After this instant the menu bar must show the brief as stale (§1.1). Must be greater than generated_at.",
+      "$ref": "#/$defs/dateTime"
+    }
+  },
+  "$defs": {
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "bcp47": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z]{4})?(-([A-Za-z]{2}|[0-9]{3}))?(-([A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$",
+      "examples": ["sv", "en", "it", "de", "sv-SE", "de-CH"]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "body", "priority"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "kind": {
+          "description": "action: the owner should do something; followup: a promised or expected follow-up; risk: something that may go wrong; info: context with no expected action; commitment: a commitment extracted from communication (§3.1 commitments).",
+          "type": "string",
+          "enum": ["action", "followup", "risk", "info", "commitment"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\r\\n]+$"
+        },
+        "body": {
+          "description": "Plain text. Quoted excerpts from sources are part of the body and may be in another language than the brief.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "normal", "low"]
+        },
+        "due_at": {
+          "description": "Only allowed when the deadline is present in a referenced source. Never inferred (§4.2: no invented deadlines).",
+          "$ref": "#/$defs/dateTime"
+        },
+        "source_refs": {
+          "description": "Ids of entries in the top-level sources array that substantiate this item.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/ulid" }
+        },
+        "uncertainty": { "$ref": "#/$defs/uncertainty" },
+        "action_ids": {
+          "description": "Subset of the top-level action_ids that originate from this item.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/ulid" }
+        },
+        "dedupe_key": {
+          "description": "Stable key for the underlying matter across email, CRM and GitHub so the same matter appears once (§4.2).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "anyOf": [
+        {
+          "$comment": "Sourced claim (§4.2).",
+          "type": "object",
+          "properties": { "source_refs": { "type": "array" } },
+          "required": ["source_refs"]
+        },
+        {
+          "$comment": "Explicitly uncertain claim (§4.2).",
+          "type": "object",
+          "properties": { "uncertainty": { "type": "object" } },
+          "required": ["uncertainty"]
+        }
+      ],
+      "if": {
+        "type": "object",
+        "properties": { "due_at": { "type": "string" } },
+        "required": ["due_at"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "source_refs": { "type": "array" } },
+        "required": ["source_refs"]
+      }
+    },
+    "uncertainty": {
+      "description": "Explicit uncertainty marker for a material claim that has no source (§4.2). Renderers must display it visibly next to the item.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "confidence"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "confidence": {
+          "description": "Model-reported confidence in [0, 1]. Informational; it never upgrades an unsourced claim to a sourced one.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "uri", "account_id", "captured_at", "excerpt_hash"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "type": {
+          "type": "string",
+          "enum": ["email", "crm", "github", "calendar", "manual", "ai_inference"]
+        },
+        "uri": {
+          "description": "Locator of the original record. Resolvable inside the product (e.g. a message, CRM object or GitHub URL); never contains credentials.",
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000
+        },
+        "account_id": {
+          "description": "The connected account (external_accounts id) the record was read from. Required for email, github and calendar; null for crm (local system of record), manual and ai_inference (§5.6: every action shows its source account).",
+          "oneOf": [
+            { "$ref": "#/$defs/ulid" },
+            { "type": "null" }
+          ]
+        },
+        "account_label": {
+          "description": "Display label for the account, e.g. the mailbox address or GitHub org. Required by renderers whenever account_id is set; never a secret.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "description": "Human-readable title of the source record (mail subject, issue title, CRM object name).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "captured_at": {
+          "description": "When the source record was read for this brief (RFC 3339).",
+          "$ref": "#/$defs/dateTime"
+        },
+        "excerpt_hash": {
+          "description": "SHA-256 of the exact excerpt used, so a reviewer can detect that the source changed after the brief was frozen.",
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "if": {
+        "$comment": "Sources read from a connected external account must name that account (§5.6). crm is the local system of record and has no account; manual and ai_inference have none either.",
+        "type": "object",
+        "properties": { "type": { "enum": ["email", "github", "calendar"] } }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "account_id": { "$ref": "#/$defs/ulid" },
+          "account_label": { "type": "string" }
+        },
+        "required": ["account_label"]
+      }
+    },
+    "modelProvenance": {
+      "description": "Which model produced the brief under which privacy mode. provider is none for a placeholder brief that was produced without any model.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "privacy_mode", "prompt_hash", "trace_id"],
+      "properties": {
+        "provider": {
+          "description": "Adapter identifier (lowercase). none means no model was involved.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "examples": ["ollama", "lm_studio", "mlx", "openai", "anthropic", "gemini", "openrouter", "custom", "none"]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "privacy_mode": {
+          "type": "string",
+          "enum": ["LOCAL_ONLY", "EU_RESTRICTED", "CUSTOM"]
+        },
+        "prompt_hash": {
+          "description": "SHA-256 of the full prompt (after redaction) so a run can be replayed against fixtures (§4 replay).",
+          "$ref": "#/$defs/sha256"
+        },
+        "trace_id": {
+          "description": "Trace id of the ai_runs record that produced this version.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "recipient", "attempt", "status", "message_id", "sent_at"],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["menubar", "pwa", "email"]
+        },
+        "recipient": {
+          "description": "email: the approved recipient address (§5.5). menubar and pwa: the local surface identifier, e.g. menubar:local or pwa:local.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "sent", "failed", "skipped"]
+        },
+        "message_id": {
+          "description": "Provider or SMTP Message-ID for email, derived deterministically from idempotency_key, channel and recipient. Null until sent.",
+          "type": ["string", "null"],
+          "maxLength": 998
+        },
+        "sent_at": {
+          "oneOf": [
+            { "$ref": "#/$defs/dateTime" },
+            { "type": "null" }
+          ]
+        },
+        "error": {
+          "description": "Sanitised error summary for failed attempts. Never contains credentials or message content.",
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "if": {
+        "type": "object",
+        "properties": { "status": { "const": "sent" } }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "message_id": { "type": "string", "minLength": 1 },
+          "sent_at": { "$ref": "#/$defs/dateTime" }
+        }
+      }
+    }
+  }
+}
