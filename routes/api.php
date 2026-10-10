@@ -19,6 +19,7 @@ use App\Http\Middleware\LoopbackOnly;
 use App\Security\Ipc\Middleware\IpcAuthenticate;
 use App\Security\Ipc\Middleware\IpcRequireElevation;
 use App\Security\Ipc\Middleware\IpcThrottle;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,16 +38,23 @@ use Illuminate\Support\Facades\Route;
 | tests/Security/IpcPolicyArchTest.php fails CI for a route that breaks
 | this shape.
 |
+| The stock `api` group adds no throttle in this app (throttleApi() is never
+| called), and it must stay that way: the contract's §9 budgets are per
+| session, the framework's would be per IP, and a framework 429 is not the
+| `rate_limited` envelope. withoutMiddleware() makes that explicit and
+| IpcPolicyArchTest fails CI if a framework ThrottleRequests ever appears.
+|
 */
 
 Route::middleware(LoopbackOnly::class)->prefix('health')->name('health.')->group(function (): void {
     Route::get('live', LiveController::class)->name('live');
     Route::get('ready', ReadyController::class)
         ->middleware(IpcAuthenticate::class.':menubar,supervisor')
+        ->withoutMiddleware(ThrottleRequests::class)
         ->name('ready');
 });
 
-Route::prefix('ipc/v1')->name('ipc.')->group(function (): void {
+Route::prefix('ipc/v1')->name('ipc.')->withoutMiddleware(ThrottleRequests::class)->group(function (): void {
     Route::get('health', HealthController::class)
         ->middleware([IpcAuthenticate::class.':menubar,supervisor', IpcThrottle::class.':health'])
         ->name('health');

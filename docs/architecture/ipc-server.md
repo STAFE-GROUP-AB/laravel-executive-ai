@@ -51,6 +51,20 @@ request ─► TrustLoopbackHosts (global, S1-04)
 | `POST /ipc/v1/remote-access/disable` | `menubar` | `remote-access-disable` | `disableRemoteAccess` | `TunnelProvider::disable` |
 | `ANY /ipc/v1/{anything else}` | `menubar` | — | — | signed `404 / not_found` |
 
+**Port.** `config('ipc.port')` is `LEA_HTTP_PORT` (default 8787), the one port variable of the
+Supervisor's runtime env contract ([runtime-layout.md](runtime-layout.md) §3). It drives the §5.2 `Host`
+check and the `X-Lxai-Origin` header, so a fallback port (8788–8799) works unchanged; `IpcOriginTest`
+proves `Host: 127.0.0.1:8792` is accepted and `:8787` rejected once the config says 8792.
+`runtime_version` in the heartbeat response is `basename(LEA_RUNTIME_DIR)` (the directory is
+`runtime/<version>`), falling back to the PHP version in a developer checkout.
+
+**Framework throttle.** The stock `api` middleware group contains only `SubstituteBindings` in this app
+(`throttleApi()` is never called), so no per-IP framework limit sits in front of the per-session §9
+budgets. The `/ipc/v1` group and `/health/ready` nevertheless declare
+`withoutMiddleware(ThrottleRequests::class)`, `IpcPolicyArchTest` fails CI if a framework
+`ThrottleRequests` ever resolves on an IPC route, and `IpcOperationsTest` sends 70 health requests
+from `127.0.0.1` in one minute and expects 70 × 200.
+
 `/health/live` keeps no token and no version header (health contract §6). `tests/Security/IpcPolicyArchTest.php`
 pins this table: a new route under `/ipc/` without `IpcAuthenticate`, a throttle and a named ability fails CI,
 as does any approval-mutating route or an IPC controller importing a model provider, the mailer, the CRM,

@@ -432,6 +432,18 @@ describe('request hygiene after authentication', function (): void {
         IpcClient::send('GET', '/ipc/v1/health', null, ['session_id' => '01M4G0R2Y3K8F6V1N7T5B9D4HA'])->assertOk();
     });
 
+    it('is never throttled per IP by the framework: 70 health requests in a minute all pass', function (): void {
+        config(['ipc.rate_limits.all' => 200, 'ipc.rate_limits.health' => 200]);
+
+        for ($i = 0; $i < 70; $i++) {
+            $response = IpcClient::send('GET', '/ipc/v1/health');
+
+            expect($response->getStatusCode())->toBe(200, "request {$i}: ".$response->getContent());
+        }
+
+        expect(true)->toBeTrue();
+    });
+
     it('rewrites a framework exception into the signed error envelope', function (): void {
         Route::middleware(IpcAuthenticate::class.':menubar')->get('/ipc/_boom', function (): never {
             throw new RuntimeException('provider said something it should not');

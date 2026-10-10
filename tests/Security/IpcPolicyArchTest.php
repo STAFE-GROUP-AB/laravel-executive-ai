@@ -11,6 +11,7 @@ use App\Security\Ipc\Middleware\IpcAuthenticate;
 use App\Security\Ipc\Middleware\IpcRequireElevation;
 use App\Security\Ipc\Middleware\IpcThrottle;
 use Illuminate\Contracts\Auth\Access\Gate;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
 
@@ -160,6 +161,20 @@ it('requires elevation for exactly the contract\'s elevated operations', functio
         $key === 'POST ipc/v1/remote-access/enable'
             ? expect($elevated)->toBe([IpcRequireElevation::class.':remote-access-enable'])
             : expect($elevated)->toBe([], "{$key} must not be elevated");
+    }
+});
+
+it('carries no framework ThrottleRequests on any IPC or health route — only IpcThrottle', function (): void {
+    foreach (ipcRoutes() as $key => $route) {
+        $resolved = app('router')->gatherRouteMiddleware($route);
+
+        foreach ($resolved as $middleware) {
+            $class = is_string($middleware) ? explode(':', $middleware, 2)[0] : $middleware::class;
+
+            expect(is_a($class, ThrottleRequests::class, true))->toBeFalse("{$key} carries the framework throttle {$class}");
+        }
+
+        expect(in_array(ThrottleRequests::class, $route->excludedMiddleware(), true))->toBeTrue("{$key} must exclude ThrottleRequests explicitly");
     }
 });
 

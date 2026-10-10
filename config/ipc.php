@@ -9,12 +9,14 @@ return [
     |
     | The fixed loopback port chosen at preflight. The core binds 127.0.0.1
     | only (the Caddyfile, S1-06); PHP needs the number to enforce the §5.2
-    | rule that `Host` is exactly `127.0.0.1:<port>`. 8787 is the placeholder
-    | the contract and the fixtures use.
+    | rule that `Host` is exactly `127.0.0.1:<port>` and to answer
+    | `X-Lxai-Origin`. The Supervisor passes it as LEA_HTTP_PORT, the one
+    | port variable of the runtime env contract (runtime-layout.md §3); 8787
+    | is the placeholder the contract and the fixtures use.
     |
     */
 
-    'port' => (int) env('LEA_IPC_PORT', 8787),
+    'port' => (int) env('LEA_HTTP_PORT', 8787),
 
     /*
     |--------------------------------------------------------------------------
@@ -87,8 +89,15 @@ return [
         'next_in_seconds' => 30,
     ],
 
+    /*
+    | The runtime version reported in the heartbeat response (§6.5). The
+    | Supervisor passes LEA_RUNTIME_DIR = …/runtime/<version>
+    | (runtime-layout.md §3), so the version is that directory's name; a
+    | developer checkout without it reports the PHP version.
+    */
+
     'server' => [
-        'runtime_version' => env('LEA_RUNTIME_VERSION', PHP_VERSION),
+        'runtime_version' => basename((string) env('LEA_RUNTIME_DIR', '')) ?: PHP_VERSION,
     ],
 
 ];

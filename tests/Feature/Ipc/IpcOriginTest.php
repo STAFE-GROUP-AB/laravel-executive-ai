@@ -38,6 +38,31 @@ it('rejects a Host other than 127.0.0.1:<port> even though TrustHosts admits it'
     expectOriginRejected(IpcClient::send('GET', '/ipc/v1/health', null, ['host' => $host]));
 })->with(['localhost:8787', '[::1]:8787', '127.0.0.1:9999', '127.0.0.1']);
 
+it('derives the expected Host from the configured LEA_HTTP_PORT, not a constant', function (): void {
+    config(['ipc.port' => 8792]);
+
+    $accepted = IpcClient::send('GET', '/ipc/v1/health', null, ['host' => '127.0.0.1:8792']);
+
+    $accepted->assertOk();
+    expect($accepted->headers->get('X-Lxai-Origin'))->toBe('127.0.0.1:8792');
+
+    $rejected = IpcClient::send('GET', '/ipc/v1/health', null, ['host' => '127.0.0.1:8787']);
+
+    $rejected->assertStatus(403);
+    expect($rejected->json('error.code'))->toBe('origin_rejected')
+        ->and($rejected->headers->get('X-Lxai-Origin'))->toBe('127.0.0.1:8792');
+
+    IpcClient::send('GET', '/health/ready', null, ['host' => '127.0.0.1:8792'])->assertOk();
+    IpcClient::send('GET', '/health/ready', null, ['host' => '127.0.0.1:8787'])->assertStatus(403);
+});
+
+it('reads the port from LEA_HTTP_PORT and nothing else', function (): void {
+    $source = (string) file_get_contents(base_path('config/ipc.php'));
+
+    expect($source)->toContain("env('LEA_HTTP_PORT', 8787)")
+        ->and(str_contains($source, 'LEA_IPC_PORT'))->toBeFalse();
+});
+
 it('rejects proxy headers that only Tailscale Serve sets', function (string $header): void {
     expectOriginRejected(IpcClient::send('GET', '/ipc/v1/health', null, ['headers' => [$header => '100.64.0.7']]));
 })->with(['X-Forwarded-For', 'X-Forwarded-Host', 'X-Forwarded-Proto', 'Forwarded', 'Tailscale-User-Login', 'Tailscale-User-Name']);
