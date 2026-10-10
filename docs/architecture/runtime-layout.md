@@ -95,11 +95,11 @@ reference. Every PHP child (HTTP, `queue:work`, `schedule:work`) gets exactly:
 
 | Variable | Value | Read by |
 |---|---|---|
-| `LEA_RUNTIME_DIR` | `…/runtime/<version>` (the resolved directory, not the `current` link) | Caddyfile `root`; informational for PHP |
+| `LEA_RUNTIME_DIR` | `…/runtime/<version>` (the resolved directory, not the `current` link) | Caddyfile `root`; `config/ipc.php` (`basename` → `runtime_version` in the heartbeat response, ipc-contract §6.5) |
 | `LEA_DATA_DIR` | `…/data` | `RuntimeLayout` (§2) |
 | `LEA_CACHE_DIR` | `~/Library/Caches/<bundle id>` | reserved for GUI/Supervisor caches |
 | `LEA_LOG_DIR` | `~/Library/Logs/<bundle id>` | Supervisor stdout/stderr capture |
-| `LEA_HTTP_PORT` | the port preflight recorded in `install/checkpoint.json` (`preflight.port`) | Caddyfile `http://127.0.0.1:{$LEA_HTTP_PORT}` |
+| `LEA_HTTP_PORT` | the port preflight recorded in `install/checkpoint.json` (`preflight.port`) | Caddyfile `http://127.0.0.1:{$LEA_HTTP_PORT}`; `config/ipc.php` (`Host` must be exactly `127.0.0.1:<port>` on `/ipc/*` and `/health/ready`, and `X-Lxai-Origin` echoes it — ipc-contract §5.2, §4.5) |
 | `PHPRC` | `…/runtime/<version>` — the directory holding `php.ini` | PHP |
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` | Laravel |
 | `APP_URL` | `http://127.0.0.1:<port>` | Laravel |

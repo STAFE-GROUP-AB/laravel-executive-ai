@@ -10,4 +10,9 @@ final class NoPendingApprovals implements PendingApprovals
     {
         return 0;
     }
+
+    public function page(int $limit, ?string $cursor = null): PendingApprovalsPage
+    {
+        return new PendingApprovalsPage([]);
+    }
 }
