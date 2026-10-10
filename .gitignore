@@ -70,3 +70,5 @@ packaging/fixtures/prototypes/**/tmp/
 *.mobileprovision
 *.pem
 *.key
+# Local Claude Code agent worktrees (never part of the repository)
+/.claude/worktrees/
