@@ -12,7 +12,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 | [004](004-provider-neutral-ai.md) | Provider-neutral AI layer on `laravel/ai` 1.2.0 | D (AI/Agents), H + B review | §15.4 (SDK half), §15.6 (runtime; licenses → ADR-007), A10 | Proposed — drafted 2026-10-10, awaits D4 egress test and D2 matrix before Accepted |
 | [005](005-peekaboo-mcp-security.md) | Peekaboo and MCP security model | G (MCP/Automation) + A | §15.4 (MCP), §15.5, A1 | Proposed |
 | [006](006-private-remote-access.md) | Private remote access via Tailscale Serve (never Funnel) | A + C, H reviews | §15.8 | Proposed |
-| [007](007-license-and-compliance.md) | License and compliance boundaries | J (Docs/community) + H | §15.10, §15.6 (licenses) | Proposed |
+| [007](007-license-and-compliance.md) | License and compliance boundaries — MIT, notice-only binaries, no bundled model weights, claim boundaries; inventory in [`docs/compliance/third-party-licenses.md`](../compliance/third-party-licenses.md) | J (Docs/community) + H; Owner for legal items L-1…L-10 | §15.10, §15.6 (licenses) | Proposed — drafted 2026-10-10, awaits legal review before Accepted |
 | 008 | Email account and OAuth strategy | F (Integrations) + H | §15.7, A2 | Planned — Sprint 2, gates Sprint 3 |
 | 009 | Brief scheduling and send consent | D + F + H | §15.9, A2 | Planned — Sprint 2, gates Sprint 3 |
 
