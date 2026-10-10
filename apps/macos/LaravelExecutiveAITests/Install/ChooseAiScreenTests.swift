@@ -157,21 +157,25 @@ final class ChooseAiScreenTests: XCTestCase {
         try render(ChooseAiScreen(machine: machine, draft: ChooseAiDraft(choice: .skip)), name: "05-choose-ai-selected", into: screenshotDirectory)
     }
 
+    /// Draws through an NSHostingView: `InstallScreen` scrolls its content in an NSScrollView-backed
+    /// ScrollView, which `ImageRenderer` leaves blank.
     @MainActor
     private func render(_ screen: ChooseAiScreen, name: String, into directory: URL?) throws {
-        let renderer = ImageRenderer(content: screen.frame(width: 640, height: 640).background(Color(nsColor: .windowBackgroundColor)))
-        renderer.scale = 2
+        let host = NSHostingView(rootView: screen.background(Color(nsColor: .windowBackgroundColor)))
+        host.frame = NSRect(x: 0, y: 0, width: 640, height: 640)
+        host.layoutSubtreeIfNeeded()
 
-        let image = try XCTUnwrap(renderer.nsImage, name)
-        XCTAssertGreaterThan(image.size.height, 400, name)
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds), name)
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+
+        XCTAssertGreaterThan(bitmap.pixelsHigh, 400, name)
 
         guard let directory else {
             return
         }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let tiff = try XCTUnwrap(image.tiffRepresentation)
-        let png = try XCTUnwrap(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try png.write(to: directory.appending(path: "\(name).png"))
     }
 }

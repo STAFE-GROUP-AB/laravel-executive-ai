@@ -274,38 +274,37 @@ struct ChooseAiScreen: View {
             title: "Choose AI",
             lead: "Pick what the assistant thinks with. Nothing is chosen for you, you can change it later, and nothing here is required to use the CRM or read briefs."
         ) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
-                    option(.skip, title: "Skip for now", detail: "Install without AI. The app shows a setup banner until you choose one; the CRM and earlier briefs work meanwhile.")
+            // InstallScreen already scrolls its content; a nested ScrollView would collapse in ImageRenderer.
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
+                option(.skip, title: "Skip for now", detail: "Install without AI. The app shows a setup banner until you choose one; the CRM and earlier briefs work meanwhile.")
 
-                    ForEach(options.selectableRuntimes) { runtime in
-                        option(.localRuntime(runtime), title: "Use \(runtime.displayName) on this Mac", detail: "Detected here. Models run locally; nothing is sent to a provider.", tag: "Detected")
+                ForEach(options.selectableRuntimes) { runtime in
+                    option(.localRuntime(runtime), title: "Use \(runtime.displayName) on this Mac", detail: "Detected here. Models run locally; nothing is sent to a provider.", tag: "Detected")
+                }
+
+                ForEach(options.suggestedRuntimes) { runtime in
+                    suggestion(runtime)
+                }
+
+                if machine.detectedRuntimes.isEmpty {
+                    Text("No local inference runtime was found on this Mac. You can install one later and switch.")
+                        .font(Tokens.Typography.footnote)
+                        .foregroundStyle(Tokens.Colors.textMuted.dynamic)
+                }
+
+                if options.offersOwnKey {
+                    option(.ownApiKey, title: "Use my own API key", detail: "Your key is stored in the macOS Keychain by the background service, never in a file.")
+
+                    if draft.choice == .ownApiKey {
+                        keyFields
                     }
+                }
 
-                    ForEach(options.suggestedRuntimes) { runtime in
-                        suggestion(runtime)
-                    }
-
-                    if machine.detectedRuntimes.isEmpty {
-                        Text("No local inference runtime was found on this Mac. You can install one later and switch.")
-                            .font(Tokens.Typography.footnote)
-                            .foregroundStyle(Tokens.Colors.textMuted.dynamic)
-                    }
-
-                    if options.offersOwnKey {
-                        option(.ownApiKey, title: "Use my own API key", detail: "Your key is stored in the macOS Keychain by the background service, never in a file.")
-
-                        if draft.choice == .ownApiKey {
-                            keyFields
-                        }
-                    }
-
-                    if options.onlySkipIsSelectable {
-                        Text("This build has no AI adapter yet, so the only choice today is to continue without AI. Providers appear here as their adapters land; nothing is ever preselected.")
-                            .font(Tokens.Typography.footnote)
-                            .foregroundStyle(Tokens.Colors.textSecondary.dynamic)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                if options.onlySkipIsSelectable {
+                    Text("This build has no AI adapter yet, so the only choice today is to continue without AI. Providers appear here as their adapters land; nothing is ever preselected.")
+                        .font(Tokens.Typography.footnote)
+                        .foregroundStyle(Tokens.Colors.textSecondary.dynamic)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         } footer: {

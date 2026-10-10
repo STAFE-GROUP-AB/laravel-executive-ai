@@ -103,6 +103,12 @@ wording from `MenuBarCopy` (`MenuBarStrings.en` / `.sv`, chosen by `Locale.curre
 The "Select AI" / "Reconfigure AI" affordances open `/settings/ai` (PWA) and `openSettings()` (menu
 bar) until the deep link into the Mac's SELECT_AI re-entry exists (S1-07 Settings › Local Models).
 
+Captures (fixture data only): PWA [home banner](images/pwa/home-ai-setup-required-desktop-1400.jpg)
+and [`/settings/ai`](images/pwa/settings-ai-desktop-1400.jpg); menu bar
+[AI setup required](images/menubar/05-ai-setup-required.png) and [AI ready](images/menubar/01-fresh.png)
+with the provider and last-success lines; installer [Choose AI](images/installer/05-choose-ai.png)
+with the suggested-not-selected Ollama card.
+
 ## 4. SELECT_AI (installer screen 5)
 
 `ChooseAiOptions` derives what the screen may show from the catalogue and
