@@ -1,0 +1,12 @@
+# gitleaks configuration (CI job `secrets-scan`, blueprint §11).
+# Extends the built-in rules; adds precise allowlists only. Never allowlist by path.
+
+title = "Laravel Executive AI"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "ULIDs are identifiers, not secrets (brief/health fixtures use them in *_key fields)"
+regexTarget = "secret"
+regexes = ['''^[0-7][0-9A-HJKMNP-TV-Z]{25}$''']
