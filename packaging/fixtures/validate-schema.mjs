@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-15 IPC contract,
-// S0-18 CRM fixture pack, S0-20 install-timer record) and every committed fixture against them.
-// CI step: `node packaging/fixtures/validate-schema.mjs` (see S0-05).
+// S0-18 CRM fixture pack, S0-19 security corpora, S0-20 install-timer record) and every committed
+// fixture against them. CI step: `node packaging/fixtures/validate-schema.mjs` (see S0-05).
 //
 // Exit code 0 when everything passes, 1 on any failure. No network access.
 
@@ -24,7 +24,8 @@ import {
     signingKey,
     tokenMac,
 } from './ipc-signing.mjs';
-import { briefContentHash } from './lib/jcs.mjs';
+import { briefContentHash, canonicalize } from './lib/jcs.mjs';
+import { toolsSchemaHash } from './lib/mcp-tools.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -64,14 +65,38 @@ const suites = [
         extraChecks: [checkIpcSignatures, checkIpcEmbeddedBrief],
     },
     {
-        // Last: commitments[].brief_item_id must resolve to an item of a brief validated above
+        // commitments[].brief_item_id must resolve to an item of a brief validated above
         // (briefs/ and the brief embedded in the ipc briefs.latest exchange both count).
         schema: join(here, 'crm', 'crm.schema.json'),
         fixturesDir: join(here, 'crm'),
         mode: 'pack',
         extraChecks: [checkCrmReferentialIntegrity],
     },
+    {
+        // S0-19 prompt-injection corpus. After the CRM pack, because every case's `context.ref`
+        // must resolve into the S0-18 world.
+        schema: join(here, 'security', 'prompt-injection', 'injection.schema.json'),
+        fixturesDir: join(here, 'security', 'prompt-injection'),
+        mode: 'pack',
+        extraChecks: [checkInjectionCorpus],
+    },
+    {
+        // Last: hostile-mcp.schema.json $refs the injection schema's effect vocabulary by $id, and
+        // checkHostileMcpCorpus resolves the tool names the injection corpus referenced.
+        schema: join(here, 'security', 'hostile-mcp', 'hostile-mcp.schema.json'),
+        fixturesDir: join(here, 'security', 'hostile-mcp'),
+        mode: 'pack',
+        extraChecks: [checkHostileMcpCorpus],
+    },
 ];
+
+// The frozen fixture clock (packaging/fixtures/README.md "Fixture clock"). Security payloads must
+// arrive at or before it, so a test can place them on the timeline without reading the wall clock.
+const FIXTURE_NOW = Date.parse('2026-10-09T12:00:00+02:00');
+
+// ADR-005 D4.10: the only tools we expose ourselves. A T0 name may be referenced by the injection
+// corpus without a hostile-MCP fixture defining it.
+const BUILTIN_TOOLS = ['brief.read', 'crm.search', 'tasks.list'];
 
 const ajv = new Ajv2020({ strict: true, allErrors: true, allowUnionTypes: true });
 addFormats(ajv);
@@ -81,6 +106,17 @@ let validated = 0;
 
 // Item ids seen in validated briefs; CRM commitments may point at them (brief_item_id).
 const knownBriefItemIds = new Set();
+
+// Collected while the earlier suites run, consumed by the S0-19 security suites.
+const knownBriefIds = new Set();
+const knownCrmIds = new Map();
+const knownAccountIds = new Set();
+
+// Every id in the security corpora must be unique across both of them: id -> where it was seen.
+const securityCaseIds = new Map();
+
+// MCP tool names the injection corpus referenced, resolved once the hostile-MCP pack is read.
+const referencedMcpTools = new Map();
 
 function fail(subject, message) {
     failures += 1;
@@ -115,6 +151,8 @@ function checkBriefContentHash(subject, brief) {
 }
 
 function checkBriefReferentialIntegrity(subject, brief) {
+    knownBriefIds.add(brief.id);
+
     const sourceIds = new Set(brief.sources.map((s) => s.id));
     const actionIds = new Set(brief.action_ids);
     const itemIds = new Set();
@@ -339,6 +377,11 @@ function checkCrmReferentialIntegrity(subject, pack) {
             }
 
             byId.set(record.id, file);
+            knownCrmIds.set(record.id, file);
+
+            if (record.account_id) {
+                knownAccountIds.add(record.account_id);
+            }
 
             if (Date.parse(record.updated_at) < Date.parse(record.created_at)) {
                 problems.push(`${file} ${record.id}: updated_at is before created_at`);
@@ -500,6 +543,366 @@ function checkCrmReferentialIntegrity(subject, pack) {
 
         return false;
     }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------
+// S0-19 security corpora
+// ---------------------------------------------------------------------------------------------
+
+// No real hostnames, no real addresses, no real paths (S0-19 rule, README "No real data"). Only
+// example.* / *.example domains, the RFC 5737 documentation IP ranges, loopback and the
+// link-local metadata address the SSRF fixtures have to name.
+const SAFE_DOMAIN = /(^|\.)example(\.[a-z]{2,3})?$/i;
+const SAFE_LITERAL_HOSTS = new Set(['localhost', '::1']);
+const SAFE_IP_PREFIXES = ['127.', '169.254.', '192.0.2.', '198.51.100.', '203.0.113.'];
+const FORBIDDEN_SUBSTRINGS = ['/Users/', '/home/', '.ts.net'];
+
+function hostIsFixtureSafe(host) {
+    const bare = host.replace(/^\[|\]$/g, '').replace(/:\d+$/, '').toLowerCase();
+
+    if (SAFE_LITERAL_HOSTS.has(bare)) {
+        return true;
+    }
+
+    if (SAFE_IP_PREFIXES.some((prefix) => bare.startsWith(prefix))) {
+        return true;
+    }
+
+    return SAFE_DOMAIN.test(bare);
+}
+
+// `hosts: false` skips the host checks for a homoglyph payload: its lookalike domain is deliberately
+// not ASCII, so an ASCII host pattern truncates it at the confusable character and reports a
+// non-existent domain. The forbidden-substring checks still run.
+function checkFixtureSafety(problems, where, text, { decodeBase64 = false, hosts = true } = {}) {
+    for (const forbidden of FORBIDDEN_SUBSTRINGS) {
+        if (text.includes(forbidden)) {
+            problems.push(`${where}: contains "${forbidden}"; fixtures carry no real paths or tailnet names`);
+        }
+    }
+
+    if (! hosts) {
+        return;
+    }
+
+    for (const [, domain] of text.matchAll(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g)) {
+        if (! hostIsFixtureSafe(domain)) {
+            problems.push(`${where}: email domain ${domain} is not a fixture domain (example.* only)`);
+        }
+    }
+
+    for (const [, host] of text.matchAll(/\bhttps?:\/\/([^\s/"'<>)\]\\]+)/gi)) {
+        if (! hostIsFixtureSafe(host)) {
+            problems.push(`${where}: URL host ${host} is not a fixture host (example.* only)`);
+        }
+    }
+
+    for (const [ip] of text.matchAll(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g)) {
+        if (! hostIsFixtureSafe(ip)) {
+            problems.push(`${where}: bare IP ${ip} is outside loopback, link-local and the RFC 5737 documentation ranges`);
+        }
+    }
+
+    if (! decodeBase64) {
+        return;
+    }
+
+    // A payload may hide its instruction in base64; what it decodes to must be fixture-safe too.
+    for (const [token] of text.matchAll(/[A-Za-z0-9+/]{32,}={0,2}/g)) {
+        const decoded = Buffer.from(token, 'base64').toString('utf8');
+
+        if (! /^[\t\n\r\u0020-\u007e\u00a0-\uffff]*$/.test(decoded)) {
+            continue;
+        }
+
+        checkFixtureSafety(problems, `${where} (base64 decoded)`, decoded);
+    }
+}
+
+function registerSecurityId(problems, id, where) {
+    if (securityCaseIds.has(id)) {
+        problems.push(`${where}: id ${id} is also used by ${securityCaseIds.get(id)}; security corpus ids are unique across both corpora`);
+
+        return;
+    }
+
+    securityCaseIds.set(id, where);
+}
+
+// Blueprint §4.2 requires sv, en, it and de. These carrier/attack-class combinations are the ones
+// issue #19 names explicitly, so each must exist in all four languages; every corpus file must
+// additionally contain all four languages somewhere.
+const REQUIRED_LANGUAGE_COVERAGE = [
+    ['email_body', 'instruction_override'],
+    ['email_body', 'exfiltration'],
+    ['email_body', 'identity_spoof'],
+    ['email_body', 'privilege_escalation'],
+    ['mcp_tool_description', 'tool_poisoning'],
+    ['web_content', 'instruction_override'],
+];
+
+const CARRIERS_BY_FILE = {
+    'email-body': ['email_body', 'email_subject', 'email_attachment_name'],
+    'mcp-tool-description': ['mcp_tool_description', 'mcp_tool_result'],
+    'web-content': ['web_content'],
+    'calendar-and-crm-notes': ['calendar_event', 'crm_note', 'crm_task_title'],
+    'screen-text': ['screen_text'],
+};
+
+function checkInjectionCorpus(subject, pack) {
+    const problems = [];
+    const schema = readJson(join(here, 'security', 'prompt-injection', 'injection.schema.json'));
+    const caseSchema = schema.$defs.case.properties;
+    const allLanguages = caseSchema.language.enum.filter((l) => l !== 'n/a');
+    const seen = { attack_class: new Set(), encoding: new Set(), language: new Set() };
+    const coverage = new Map();
+
+    const refResolves = {
+        crm_communication: (ref) => knownCrmIds.get(ref) === 'communications',
+        crm_task: (ref) => knownCrmIds.get(ref) === 'tasks',
+        crm_contact: (ref) => knownCrmIds.get(ref) === 'contacts',
+        crm_customer: (ref) => knownCrmIds.get(ref) === 'customers',
+        brief: (ref) => knownBriefIds.has(ref),
+        brief_item: (ref) => knownBriefItemIds.has(ref),
+        mcp_tool: () => true,
+        web_page: (ref) => /^https:\/\/\S+$/.test(ref),
+        calendar_event: (ref) => /^cal-[a-z0-9-]+$/.test(ref),
+        screen_region: (ref) => /^screen-[a-z0-9-]+$/.test(ref),
+    };
+
+    for (const [file, cases] of Object.entries(pack)) {
+        const languagesInFile = new Set();
+
+        for (const testCase of cases) {
+            const where = `${file} ${testCase.id}`;
+
+            registerSecurityId(problems, testCase.id, where);
+
+            if (! (CARRIERS_BY_FILE[file] ?? []).includes(testCase.carrier)) {
+                problems.push(`${where}: carrier ${testCase.carrier} does not belong in ${file}.json (allowed: ${(CARRIERS_BY_FILE[file] ?? []).join(', ')})`);
+            }
+
+            seen.attack_class.add(testCase.attack_class);
+            seen.language.add(testCase.language);
+            testCase.encoding.forEach((e) => seen.encoding.add(e));
+            languagesInFile.add(testCase.language);
+
+            const key = `${testCase.carrier}|${testCase.attack_class}`;
+            coverage.set(key, (coverage.get(key) ?? new Set()).add(testCase.language));
+
+            if (testCase.encoding.length > 1 && testCase.encoding.includes('plain')) {
+                problems.push(`${where}: "plain" cannot be combined with an obfuscation`);
+            }
+
+            if (testCase.expected.must_not.length === 0) {
+                problems.push(`${where}: expected.must_not is empty; a case without a forbidden effect is not an attack`);
+            }
+
+            if (Date.parse(testCase.context.arrives_at) > FIXTURE_NOW) {
+                problems.push(`${where}: context.arrives_at is later than FIXTURE_NOW (2026-10-09T12:00:00+02:00)`);
+            }
+
+            const { rides_on: ridesOn, ref } = testCase.context;
+
+            if (! refResolves[ridesOn](ref)) {
+                problems.push(`${where}: context.ref ${ref} does not resolve as ${ridesOn} in the S0-18 fixture pack`);
+            }
+
+            if (ridesOn === 'mcp_tool') {
+                referencedMcpTools.set(ref, where);
+            }
+
+            if (testCase.context.account_id !== null && ! knownAccountIds.has(testCase.context.account_id)) {
+                problems.push(`${where}: context.account_id ${testCase.context.account_id} is not an account used by the S0-18 CRM pack`);
+            }
+
+            checkFixtureSafety(problems, `${where} payload`, testCase.payload, {
+                decodeBase64: testCase.encoding.includes('base64'),
+                hosts: ! testCase.encoding.includes('homoglyph'),
+            });
+            checkFixtureSafety(problems, `${where} notes`, `${testCase.title}\n${testCase.notes}\n${ref}`, {
+                hosts: ! testCase.encoding.includes('homoglyph'),
+            });
+        }
+
+        for (const language of allLanguages) {
+            if (! languagesInFile.has(language)) {
+                problems.push(`${file}.json: no case in ${language}; §4.2 requires sv, en, it and de in every carrier file`);
+            }
+        }
+    }
+
+    for (const [carrier, attackClass] of REQUIRED_LANGUAGE_COVERAGE) {
+        const present = coverage.get(`${carrier}|${attackClass}`) ?? new Set();
+
+        for (const language of allLanguages) {
+            if (! present.has(language)) {
+                problems.push(`${carrier} / ${attackClass}: missing a ${language} case (issue #19: in all four languages where language matters)`);
+            }
+        }
+    }
+
+    for (const [field, values] of Object.entries(seen)) {
+        for (const value of caseSchema[field].enum ?? caseSchema[field].items.enum) {
+            if (! values.has(value)) {
+                problems.push(`no case exercises ${field} "${value}"; every value in the schema enum must be covered or removed`);
+            }
+        }
+    }
+
+    if (problems.length > 0) {
+        fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    console.log(`      ${Object.values(pack).flat().length} injection cases: carriers, languages, encodings, context refs and expected refusals checked`);
+
+    return true;
+}
+
+// Hostile MCP servers (§7, §11, §14; ADR-005 D4). The schema checks the JSON-RPC and expectation
+// shapes; this checks that each recording really contains the attack it claims, that the required
+// three families are present, and that every tools/list snapshot hashes to its recorded
+// schema_hash.
+function checkHostileMcpCorpus(subject, pack) {
+    const problems = [];
+    const families = new Set();
+    const toolNames = new Set(BUILTIN_TOOLS);
+
+    for (const [file, fixture] of Object.entries(pack)) {
+        const { server, exchanges } = fixture;
+        const where = `${file} ${server.name}`;
+
+        registerSecurityId(problems, server.id, `${where} (server)`);
+        families.add(server.attack_family);
+        checkFixtureSafety(problems, where, JSON.stringify(fixture));
+
+        if (server.transport === 'streamable-http' && ! server.endpoint.startsWith('https://')) {
+            problems.push(`${where}: a streamable-http fixture endpoint must be https (ADR-005 D4.2a)`);
+        }
+
+        if (server.transport === 'stdio' && ! server.endpoint.startsWith('bundle:')) {
+            problems.push(`${where}: a stdio fixture endpoint must be a bundle: path, never a real filesystem path`);
+        }
+
+        const actions = new Set();
+        const toolsListSnapshots = [];
+        let previousStep = 0;
+
+        for (const exchange of exchanges) {
+            const at = `${where} step ${exchange.step}`;
+
+            registerSecurityId(problems, exchange.id, at);
+
+            if (exchange.step <= previousStep) {
+                problems.push(`${at}: step numbers must increase strictly within a file`);
+            }
+
+            previousStep = exchange.step;
+            actions.add(exchange.expected.registry_action);
+
+            if (exchange.request === null && exchange.response === null) {
+                problems.push(`${at}: an exchange with neither a request nor a response records nothing`);
+            }
+
+            if (exchange.request?.id !== undefined && exchange.response !== null && exchange.response.id !== exchange.request.id) {
+                problems.push(`${at}: JSON-RPC response id ${exchange.response.id} does not match request id ${exchange.request.id}`);
+            }
+
+            if (exchange.expected.registry_action === 'allow_and_record' && exchange.observed.mutations.length > 0) {
+                problems.push(`${at}: an exchange with observed mutations cannot be allow_and_record`);
+            }
+
+            const status = exchange.transport.http_status;
+
+            if (status >= 300 && status < 400) {
+                if (exchange.expected.registry_action !== 'block') {
+                    problems.push(`${at}: a ${status} must be blocked, not ${exchange.expected.registry_action} (ADR-005 D4.2c: any 3xx is an error)`);
+                }
+
+                if (! exchange.expected.must_not.includes('redirect_followed')) {
+                    problems.push(`${at}: a ${status} exchange must forbid redirect_followed`);
+                }
+
+                if (exchange.transport.headers.Location === undefined) {
+                    problems.push(`${at}: a ${status} exchange must record the Location header the client refused`);
+                }
+            }
+
+            if (server.transport === 'stdio' && status !== 0) {
+                problems.push(`${at}: a stdio exchange has no HTTP status; use 0`);
+            }
+
+            const { resolved_ip: checked, resolved_ip_at_use: atUse } = exchange.transport;
+
+            if (checked && atUse && checked !== atUse) {
+                if (! exchange.expected.must.includes('resolved_ip_pinned')) {
+                    problems.push(`${at}: the resolved IP changed between check and use, so expected.must needs resolved_ip_pinned`);
+                }
+
+                if (! exchange.expected.must_not.includes('dns_rebind_accepted')) {
+                    problems.push(`${at}: the resolved IP changed between check and use, so expected.must_not needs dns_rebind_accepted`);
+                }
+            }
+
+            if (exchange.transport.body_elided && exchange.transport.declared_bytes === null && exchange.transport.nesting_depth === null && exchange.transport.elapsed_ms === null) {
+                problems.push(`${at}: body_elided needs declared_bytes, nesting_depth or elapsed_ms so a test can synthesise the body`);
+            }
+
+            for (const tool of exchange.response?.result?.tools ?? []) {
+                toolNames.add(tool.name);
+            }
+
+            if (exchange.request?.method === 'tools/list' && Array.isArray(exchange.response?.result?.tools)) {
+                const expectedHash = toolsSchemaHash(exchange.response.result.tools);
+
+                if (exchange.schema_hash !== expectedHash) {
+                    problems.push(`${at}: schema_hash mismatch: fixture ${exchange.schema_hash}, tools hash to ${expectedHash} (run tools/hash-mcp-tools.mjs --write)`);
+                }
+
+                if (! exchange.expected.must.includes('schema_hash_recorded')) {
+                    problems.push(`${at}: a tools/list exchange must require schema_hash_recorded (ADR-005 D4.6)`);
+                }
+
+                toolsListSnapshots.push(canonicalize(exchange.response.result.tools));
+            } else if (exchange.schema_hash !== undefined) {
+                problems.push(`${at}: schema_hash belongs only on a tools/list exchange that returned tools`);
+            }
+        }
+
+        if (! actions.has('quarantine') && ! actions.has('block') && ! actions.has('require_review')) {
+            problems.push(`${where}: no exchange reaches quarantine, block or require_review, so the fixture records no refusal`);
+        }
+
+        if (server.attack_family === 'schema_mutation' && new Set(toolsListSnapshots).size < 2) {
+            problems.push(`${where}: a schema_mutation fixture needs at least two tools/list snapshots whose canonical tool JSON differs, found ${new Set(toolsListSnapshots).size}`);
+        }
+    }
+
+    for (const required of ['capability_lie', 'schema_mutation', 'unexpected_redirect']) {
+        if (! families.has(required)) {
+            problems.push(`issue #19 requires a ${required} server fixture; none found`);
+        }
+    }
+
+    for (const [tool, origin] of referencedMcpTools) {
+        if (! toolNames.has(tool)) {
+            problems.push(`${origin}: context.ref ${tool} is neither a built-in T0 tool nor advertised by any hostile-MCP fixture`);
+        }
+    }
+
+    if (problems.length > 0) {
+        fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    const exchangeCount = Object.values(pack).reduce((total, fixture) => total + fixture.exchanges.length, 0);
+
+    console.log(`      ${Object.keys(pack).length} hostile servers in ${families.size} attack families, ${exchangeCount} exchanges: JSON-RPC pairing, redirects, schema hashes and expected refusals checked`);
 
     return true;
 }
