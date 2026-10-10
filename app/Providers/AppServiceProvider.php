@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\View\Composers\ShellStateComposer;
 use App\Security\Authorization\Otp\OtpHasher;
 use App\Security\Authorization\Passkeys\NotYetAvailable;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
@@ -19,6 +20,7 @@ use Illuminate\Queue\Events\Looping;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -60,6 +62,8 @@ class AppServiceProvider extends ServiceProvider
         $this->ensureSqliteDatabaseFileExists();
 
         Event::listen(Looping::class, QueueWorkerHeartbeat::class);
+
+        View::composer(['layouts.app', 'home.*', 'briefs.*'], ShellStateComposer::class);
     }
 
     /**

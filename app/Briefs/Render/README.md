@@ -11,7 +11,12 @@ Renders one frozen brief to Blade HTML mail and plaintext; semantic parity with 
 | `BriefMailable` | The Mailable Sprint 2 will send: `htmlString` + text part from `RenderedBrief`, subject, deterministic `Message-ID`, no `List-Unsubscribe`. Not sent anywhere in Sprint 1. |
 | `BriefMessageId` | `<idempotency_key.channel.recipient@domain>` (brief schema §2, data-model §2). |
 | `RenderedBrief` | Value object with both parts, the payload and `parityJson()`. |
+| `BriefPage` | PWA (S1-04): document → `BriefParityPayload` → the same `BriefViewModel::build()` → `briefs/show.blade.php`; adds the renderer-time extras (row id, fresh/stale, delivery state, provider, placeholder) and `parityJson()` for `GET /briefs/{brief}/parity.json`. |
+| `BriefCatalog` | PWA list side of `BriefPolicy::view`: the versions a user may list, and `resolve()` of a row id or a document id (newest version). |
+| `BriefTime` | Stored UTC instant → RFC 3339 in the brief's own offset, as the mapper exports it (list rows without a full export). |
+| `ItemPresentation` | PWA badge tones and the delivery-state labels the mail does not print. |
 
-Views: `resources/views/mail/brief.blade.php`, `resources/views/mail/brief-text.blade.php`.
+Views: `resources/views/mail/brief.blade.php`, `resources/views/mail/brief-text.blade.php`; PWA:
+`resources/views/briefs/`, `resources/views/components/brief-item.blade.php` (docs/architecture/pwa.md).
 Labels: `lang/{sv,en,it,de}/brief.php`. Preview: `GET /briefs/{brief}/preview/{mail,text}` (auth +
 `BriefPolicy`), `php artisan lea:brief:preview`. Tests: `tests/Feature/Briefs/Mail/`.

@@ -72,7 +72,7 @@ it('puts the per-request nonce on every script tag it renders and rotates it per
 });
 
 it('hardens every web response, not only the auth pages', function (): void {
-    $response = get('/')->assertOk();
+    $response = get('/offline')->assertOk();
 
     expect($response->headers->get('X-Frame-Options'))->toBe('DENY')
         ->and((string) $response->headers->get('Content-Security-Policy'))->toContain("frame-ancestors 'none'")

@@ -9,8 +9,8 @@ use function Pest\Laravel\get;
 
 uses(DatabaseTransactions::class);
 
-it('serves the root route', function (): void {
-    get('/')->assertOk();
+it('sends the root route to the PWA home', function (): void {
+    get('/')->assertRedirect('/home');
 });
 
 it('runs on the ADR-002 local backend profile', function (): void {
