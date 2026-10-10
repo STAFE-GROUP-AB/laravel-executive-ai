@@ -39,7 +39,9 @@ Only loopback host names are trusted (`App\Http\Middleware\TrustLoopbackHosts`, 
 global stack in `bootstrap/app.php`; ADR-006 D3): a request carrying any other `Host` is refused
 before `ResolveRequestOrigin` derives the URL root from it (`tests/Feature/Pwa/TrustedHostsTest.php`,
 threat model T-18). It is our own subclass because Laravel's stock `TrustHosts` disables itself in
-the `local` environment the installed core runs in. The exact tailnet DNS name joins the list through
+the `local` environment and under tests, and the guarantee must not depend on `APP_ENV` (the packaged
+core runs as `production`, runtime-layout.md §3; development runs as `local`). The exact tailnet DNS
+name joins the list through
 `config('remote.trusted_hosts')` with remote access (E4-1). Consequence for development: use
 `php artisan serve` (127.0.0.1); a Herd `.test` domain is refused by design.
 

@@ -14,7 +14,8 @@ use Illuminate\Http\Middleware\TrustHosts;
  * refused before ResolveRequestOrigin derives the URL root from it.
  *
  * Laravel's stock TrustHosts switches itself off in the `local` environment
- * and under tests; the installed core runs as `local`, so this subclass
+ * and under tests; this guarantee must not depend on APP_ENV (the packaged
+ * core runs as `production`, development as `local`), so this subclass
  * enforces the list unconditionally. Never a wildcard, never subdomains.
  */
 final class TrustLoopbackHosts extends TrustHosts

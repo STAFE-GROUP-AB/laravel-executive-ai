@@ -382,6 +382,10 @@ file operations. Both may be intended for different paths (the data directory vs
 cache), but neither ADR says so, and the weaker mechanism silently failing is exactly how unencrypted
 copies accumulate (threat-model T-43). **Needs:** `ENG` — A with B, one sentence in whichever ADR
 owns the data directory.
+**Status (S1-06):** implemented as `tmutil addexclusion` on `data/database/` and `data/storage/framework/`
+only — not on all of `data/` — so `data/backups/` stays inside Time Machine as ADR-002 D5 wants
+(`docs/architecture/runtime-layout.md` §4). `isExcludedFromBackupKey` remains the mechanism for the
+GUI brief cache (S1-09). Andreas confirms or changes the scope; ADR-002 D5 gets the sentence then.
 
 ### A22 — The helper's peer-verification fallback must be unreachable in a shipped build
 ADR-005 D3.3 verifies the core's code signature on `automation.sock` but falls back to
@@ -390,3 +394,21 @@ ADR-001 D2 says it is signed, so the fallback should be unreachable in a notaris
 remains a code path, and a silent downgrade of the strongest control on that boundary belongs in
 health, not in a log line (threat-model T-60). **Needs:** `ENG` — G with A and H: make the fallback
 refuse to engage when `app()->isProduction()`, with a test, or delete it.
+
+### A23 — Two licence findings from the first real FrankenPHP build (S1-06)
+`packaging/runtime/build-runtime.sh` built the curated binary on 2026-10-10 (FrankenPHP 1.13.0,
+PHP 8.5.11 ZTS, Caddy 2.11.7, static-php-cli 2.8.5; 146 MB, system libraries only) and found two
+things the ADRs do not cover (`docs/architecture/runtime-layout.md` §5):
+
+1. **Mercure (AGPL-3.0) is linked by FrankenPHP's own `caddy/` module** even when it is left out of
+   the xcaddy `--with` list, which is all ADR-001 D1/E4 relies on. The `nomercure` Go build tag is
+   required; static-php-cli 2.8.5 hard-codes its tag list, so the recipe patches the pinned source
+   behind an exact-string guard and verifies the tag in `go version -m`. **Needs:** `ENG` — ADR-001 D1
+   names the tag and the patch; owner A with H.
+2. **GNU libiconv (LGPL-2.1) is statically linked** because static-php-cli builds `libxml2` (a
+   dependency of `php` itself on macOS) against it; the upstream release artefact has the same. ADR-007
+   D2.2 forbids this without a legal opinion and ADR-001 L1 did not list it. The build gate fails
+   closed on any GPL/LGPL/AGPL notice; the measurement used `LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT=1`
+   and that binary must not be signed or shipped. Options: patch the libxml2 recipe to use the macOS
+   system iconv, or obtain the L-1 opinion on LGPL §6 for a static link. **Needs:** `DECISION` —
+   Andreas (with L-1); blocks S1-12 (the signed artefact).
