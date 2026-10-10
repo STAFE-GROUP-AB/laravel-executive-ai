@@ -8,7 +8,7 @@
 **Binding inputs:** ADR-001 D3/D4, ADR-003 D1/D3/D4/D7/D8, ADR-005 D1.9/D3, ADR-006 D3/D6, [health-contract.md](health-contract.md) §6, [brief-schema.md](brief-schema.md) §4/§6
 
 Two parties implement opposite ends of this contract in Sprint 1 (S1-13): the SwiftUI menu-bar app
-(`apps/macos/Sources/IPC/`) and the Laravel core (`app/Support/Health/IpcController.php` + middleware
+(`apps/macos/LaravelExecutiveAI/IPC/`) and the Laravel core (`app/Support/Health/IpcController.php` + middleware
 under `app/Security/Authorization/`). It is specified once, here, so neither side improvises. Nothing
 in this document is drop-in code.
 
@@ -596,7 +596,7 @@ loopback traffic.
   `remote_access.enabled`, `remote_access.disabled`, `ipc.pairing_reset`) with `via: ipc` and the
   `request_id`.
 - Swift side: `os.Logger` with the grant and every header value interpolated at `.private` (D7 row 6);
-  the SwiftLint rule from ADR-003 applies to `apps/macos/Sources/IPC/`.
+  the SwiftLint rule from ADR-003 applies to `apps/macos/LaravelExecutiveAI/IPC/`.
 - Diagnostics export (D7 row 9) includes the request log lines and `ipc.rejected` events, never the
   Keychain items or the brief cache.
 
