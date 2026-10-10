@@ -1,0 +1,3 @@
+# Downloaded / re-signed runtime binaries are never committed (≈180 MB each).
+bin/
+.last-server.log

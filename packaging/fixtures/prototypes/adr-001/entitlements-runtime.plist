@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ADR-001 prototype: the minimum Hardened Runtime exceptions a bundled PHP runtime is
+         expected to need. allow-jit covers OPcache JIT (MAP_JIT). The other exceptions Herd
+         ships (allow-unsigned-executable-memory, disable-library-validation,
+         allow-dyld-environment-variables) are deliberately NOT included; the prototype tests
+         whether FrankenPHP boots without them. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+</dict>
+</plist>
