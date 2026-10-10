@@ -1,0 +1,95 @@
+EXECUTIVE BRIEF · version 1
+Executive Brief torsdag 9 oktober: offert till Nordlund Bygg, CI röd på
+main, leverans till Milano
+
+Genererad: fredag 9 oktober 2026 kl. 05:30 (UTC+02:00)
+Period: 8 oktober 2026 05:30 – 9 oktober 2026 05:30 (UTC+02:00)
+
+Två saker kräver beslut i dag: offerten till Nordlund Bygg AB väntar på
+svar sedan tisdag, och CI på main har varit röd i tre dagar vilket
+blockerar releasen. Du har lovat Officina Ferrari leveransbesked senast
+fredag. Herr Weber på Weber Logistik GmbH vill ha ett återsamtal. En
+möjlig förskjutning av Q4-releasen är noterad men obekräftad.
+
+Punkter (5)
+-----------
+
+1. [Åtgärd · Kritisk] Svara Nordlund Bygg AB om offert 2026-114
+
+Karin Nordlund påminde i går om offerten på 184 000 kr för ombyggnaden
+av lagerlokalen i Mölndal: "Vi behöver ert svar senast fredag 10 oktober
+för att kunna boka entreprenören." Offerten skickades tisdag 7 oktober och
+ingen bekräftelse har gått ut. Förslag: skicka bekräftelse och boka
+uppstartsmöte.
+
+Deadline: lördag 10 oktober 2026 kl. 17:00 (UTC+02:00)
+
+Källor:
+- E-post · andreas@example.se (Google Workspace) · Re: Offert 2026-114
+  ombyggnad lager Mölndal · lxai://email/messages/01M4FJ7PSGHQK9584ZERF9GYGM
+- CRM · Nordlund Bygg AB — offert 2026-114 ·
+  lxai://crm/customers/01M4FJ7ZJRDVPBT5PEZTZWC6BX/offers/2026-114
+
+Kräver ditt godkännande:
+http://localhost:8000/approvals/01M4FJ7WN0BRGSZJGNGZ5FSVT5
+
+2. [Risk · Hög] CI på main har varit röd i tre dagar
+
+Arbetsflödet "ci" i STAFE-GROUP-AB/laravel-executive-ai har misslyckats på
+de senaste sju körningarna sedan måndag 6 oktober. Senaste felmeddelande:
+"Tests: 3 failed, 212 passed —
+BriefDeliveryTest::it_never_sends_twice_on_retry". Releasen 1.4.0 är
+planerad till måndag och kan inte taggas från en röd main.
+
+Källa:
+- GitHub · github.com/STAFE-GROUP-AB (GitHub App) · ci — main — 7
+  failed runs since 2026-10-06 ·
+  https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/workflows/ci.yml?query=branch%3Amain
+
+3. [Åtagande · Hög] Du har lovat Officina Ferrari leveransbesked senast
+fredag
+
+I ditt svar till Giulia Ferrari i går skrev du: "Vi confermo la data di
+consegna entro venerdì 10 ottobre." Giulia svarade: "Perfetto, grazie
+Andreas. Aspettiamo la conferma per organizzare il ritiro a Milano." Inget
+leveransbesked är skickat ännu.
+
+Deadline: lördag 10 oktober 2026 kl. 23:59 (UTC+02:00)
+
+Källa:
+- E-post · andreas@example.it (iCloud Mail) · Re: Consegna ottobre —
+  Officina Ferrari S.r.l. · lxai://email/threads/01M4FJ7SQ88YMXHC57TMV9Z6SV
+
+Kräver ditt godkännande:
+http://localhost:8000/approvals/01M4FJ7XM84RV70ZSNAMPQ03HX
+
+4. [Uppföljning · Normal] Ring tillbaka Thomas Weber, Weber Logistik GmbH
+
+Thomas Weber lämnade ett meddelande i går eftermiddag: "Bitte rufen Sie
+mich zurück, wir möchten das Angebot für die Lagerverwaltung noch diese
+Woche besprechen." Han finns i kalendern som "Rückruf Weber" fredag 10
+oktober 10:00. CRM-anteckningen från 2 oktober nämner att han vill ha en
+tyskspråkig demo.
+
+Källor:
+- Kalender · andreas@example.se (Google Calendar) · Rückruf Weber ·
+  lxai://calendar/events/01M4FJ7TPGMZYEWQV83KK07D8J
+- CRM · Thomas Weber — anteckning 2 oktober ·
+  lxai://crm/contacts/01M4FJ7VNR32E7DH0T2MHMD75Q/notes/2026-10-02
+
+5. [Info · Låg] Möjlig förskjutning av Q4-releasen
+
+Kombinationen av den röda CI-pipelinen och två öppna
+säkerhetsgranskningar kan innebära att Q4-releasen inte kan tas den 13
+oktober som planerat. Inget beslut eller datum är dokumenterat i någon
+källa; detta är en bedömning, inte ett faktum.
+
+Osäkert (konfidens 40 %): Slutsats dragen från CI-status och
+granskningskö; ingen källa anger ett nytt releasedatum.
+
+--
+Öppna hela briefen: http://localhost:8000/briefs/01M4FJ7GY0PZH6YA3D9574XN5K
+Sekretessläge: Endast lokalt (LOCAL_ONLY)
+Brief 01M4FJ7GY0PZH6YA3D9574XN5K · version 1 · sha256:558c32969727
+Skickat av Laravel Executive AI från en fryst brief. Varje punkt visar sin
+källa eller en uttrycklig osäkerhetsmarkering.
