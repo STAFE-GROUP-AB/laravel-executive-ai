@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Security\Authorization\Otp\OtpCode;
 use App\Support\Health\Jobs\QueueSelftestJob;
 use Illuminate\Support\Facades\Schedule;
 
@@ -26,3 +27,7 @@ Schedule::command('health:selftest')
 Schedule::job(new QueueSelftestJob)
     ->everyMinute()
     ->description('Dispatch the queue self-test job; the worker records its heartbeat on processing');
+
+Schedule::command('model:prune', ['--model' => [OtpCode::class]])
+    ->daily()
+    ->description('Delete one-time login codes that expired more than a day ago (S1-02)');

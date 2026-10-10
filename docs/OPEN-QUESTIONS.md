@@ -335,6 +335,11 @@ ADR-006 D3 fixes proxies, hosts, cookies and CSRF for both origins but sets no
 approval UI without a control and XSS without a second layer (threat-model T-21, T-22).
 **Needs:** `ENG` — C (TALL/PWA) with H, recorded in S1-05's sibling item **S1-04**, which ships the
 app shell and should set them by default with a `PwaSecurityHeadersTest`.
+**Status (S1-02):** the headers landed in S1-02 — `App\Http\Middleware\SecurityHeaders` on the whole
+`web` group with a per-request CSP nonce shared by Vite and Livewire, pinned by
+`tests/Feature/Auth/PwaSecurityHeadersTest.php` and documented with the rationale for each value in
+[`docs/architecture/auth.md`](architecture/auth.md) §9. S1-04's app shell ships inside them. Still
+open for the tailnet origin: HSTS and the `TrustProxies`/`TrustHosts` half of D3 (E4-1).
 
 ### A17 — Spotlight and QuickLook are not excluded from the data directory
 Time Machine exclusion is decided (ADR-002 D5 `tmutil addexclusion`; ADR-003 E26

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Security\Authorization\Otp\OtpCode;
+use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -21,6 +23,9 @@ use Illuminate\Notifications\Notifiable;
  * @property string $id
  * @property string $name
  * @property string $email
+ * @property ?CarbonImmutable $email_verified_at
+ * @property ?CarbonImmutable $last_login_at
+ * @property int $login_count
  */
 #[Fillable(['name', 'email'])]
 #[Hidden(['password', 'remember_token'])]
@@ -38,6 +43,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'immutable_datetime',
+            'last_login_at' => 'immutable_datetime',
+            'login_count' => 'integer',
             'password' => 'hashed',
         ];
     }
@@ -46,5 +53,11 @@ class User extends Authenticatable
     public function memberships(): HasMany
     {
         return $this->hasMany(Membership::class);
+    }
+
+    /** @return HasMany<OtpCode, $this> */
+    public function otpCodes(): HasMany
+    {
+        return $this->hasMany(OtpCode::class);
     }
 }

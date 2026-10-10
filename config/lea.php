@@ -43,4 +43,36 @@ return [
         'provider' => env('LEA_AI_PROVIDER') ?: null,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication (S1-02, docs/architecture/auth.md)
+    |--------------------------------------------------------------------------
+    |
+    | Login is a one-time code by email; there is no password anywhere.
+    | `otp.autofill` is only honoured when APP_ENV is `local`: the code is
+    | then filled in and verified without opening the mail, so a developer
+    | signs in with one click. It is inert in every other environment.
+    | `request_rate_limit` bounds how often one address/IP pair may ask for
+    | a code; the issuer itself is not rate-limited so the login self-test
+    | (health:selftest, every minute) never locks the owner out.
+    |
+    */
+
+    'auth' => [
+        'otp' => [
+            'length' => 6,
+            'ttl_minutes' => 10,
+            'max_attempts' => 5,
+            'cooldown_seconds' => 60,
+            'autofill' => (bool) env('OTP_AUTOFILL', false),
+        ],
+        'request_rate_limit' => [
+            'max_attempts' => 5,
+            'decay_seconds' => 900,
+        ],
+        'passkeys' => [
+            'tracking_issue' => 'https://github.com/STAFE-GROUP-AB/laravel-executive-ai/issues/69',
+        ],
+    ],
+
 ];
