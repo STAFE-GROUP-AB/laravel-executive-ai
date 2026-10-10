@@ -30,11 +30,16 @@ are checkable. Read `packaging/fixtures/README.md` → "Security corpora" for th
 
 | Suite | Reads | Status |
 |---|---|---|
-| `tests/Security/PromptInjectionCorpusTest.php` | every case in `prompt-injection/*.json` | first failing case lands with S0-21 (#21); full coverage in S1 |
-| `tests/Security/HostileMcpServerTest.php` | every exchange in `hostile-mcp/*.json` | S1, with the MCP client (ADR-005 D4) |
+| `tests/Security/ForeignEmailCannotTriggerSendTest.php` | the §16.7 cases: `email_body` × `exfiltration` (all four languages), plus `privilege_escalation` and the From-identity variant | S0-21 (#21) commits it as an **expected-failing** gate; turns green with E2-4. Threat model T-01, T-05, T-06, T-08 |
+| `tests/Security/PromptInjectionCorpusTest.php` | every case in `prompt-injection/*.json` | S1, once an agent run exists; the S0-21 file is its first rows |
+| `tests/Security/HostileMcpServerTest.php` | every exchange in `hostile-mcp/*.json` | S1/S3, with the MCP client (ADR-005 D4). Threat model T-02, T-52 |
 | `tests/Security/LocalOnlyEgressTest.php` | the `policy_downgrade` cases plus the AI fixture suite | ADR-004 D4 requires it before that ADR can be Accepted |
 | cross-account / IDOR tests | the `cross_account_access` cases and the S0-18 accounts | S1 with the CRM |
 | redaction tests | `secrets-corpus.json` and the `secret_harvesting` cases | ADR-003 D7 |
+
+Which threat each case answers is recorded in
+[`docs/security/threat-model.md`](../../docs/security/threat-model.md) (S0-23), not here: name the
+`T-nn` ids in the test docblock alongside the case id so the register and the tests stay connected.
 
 Each suite is **data-driven**: one test per case id, named after the case, so a failure names the
 attack. In Pest:
