@@ -14,7 +14,7 @@ Thanks for your interest. This project is in **Sprint 0 (architecture freeze)**;
 1. Open or pick an issue. Every PR must reference one.
 2. Branch from `main`. `main` is protected and requires CI.
 3. Keep PRs small and reviewable. **No giant "AI agent builds everything" PRs.** Break work into vertical slices with tests and reproducible behaviour.
-4. Use [Conventional Commits](https://www.conventionalcommits.org/): `feat(crm): …`, `fix(mac): …`, `docs(adr): …`, `test(security): …`.
+4. Use [Conventional Commits](https://www.conventionalcommits.org/): `feat(crm): …`, `fix(mac): …`, `docs(adr): …`, `test(security): …`. Allowed types, scopes, the CI-enforced header regex, versioning and the release process are in [`docs/operations/release-policy.md`](docs/operations/release-policy.md).
 5. Include in the PR description: the issue, the ADR if architectural, tests added, **security impact** (even if "none"), and a screenshot or recording for UI changes.
 6. Security-critical modules (`app/Security`, `app/Approvals`, `app/MCP`, `app/Integrations`, installer/updater, IPC) require two reviewers.
 

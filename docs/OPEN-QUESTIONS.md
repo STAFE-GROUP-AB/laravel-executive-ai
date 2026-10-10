@@ -90,12 +90,22 @@ ADR-004 as a gap, with the local workaround named.
   LM Studio / MLX-style local endpoints, and runtime-built providers via `Ai::build([...])` — which
   is how user-supplied keys avoid `.env`. This satisfies the §4 provider list without a custom
   driver, **provided** `LOCAL_ONLY` enforcement wraps the adapter (the SDK itself has no such mode).
-- `laravel/mcp` (`composer require laravel/mcp`) builds MCP **servers** (tools, resources, prompts,
-  OAuth 2.1 via Sanctum, stdio and HTTP/SSE). It is **not an MCP client**. §7's MCP Manager
-  (Discover → Assess → … → Connect → Grant) therefore needs a separate client implementation or
-  library for registry discovery and for connecting to third-party servers. **ADR-005 must decide
-  the client side explicitly** — `laravel/mcp` covers only the §7 "expose own limited Laravel MCP
-  tools" half.
+- `laravel/mcp` (`composer require laravel/mcp`, v1.0.1 2026-09-24) builds MCP **servers** (tools,
+  resources, prompts, OAuth 2.1 via Sanctum, stdio and HTTP/SSE) **and ships an MCP client**:
+  `src/Client/` (`ClientManager`, `Transport`, `OAuth`, `Protocol`, `NegotiatedConnection`) plus
+  `Client.php`/`WebClient.php`. *Correction 2026-10-10:* an earlier version of this note, based on
+  the https://laravel.com/ai/mcp overview page alone, said the package was server-only; the source
+  tree disproves that. ADR-005 therefore uses `laravel/mcp` for both directions, wrapped in an own
+  connection factory for HTTPS-only, host allowlist, SSRF/DNS pinning and no-redirects, which the
+  library does not enforce.
+
+**ADR-004 drafted 2026-10-10** (`docs/adrs/004-provider-neutral-ai.md`): pins `laravel/ai` **1.2.0**
+exactly (released 2026-10-07). Re-verification against the 1.2.0 source added four facts the note
+above lacked, each now a decision in ADR-004: the SDK fails over silently between providers when
+`prompt()` receives an array (we pass one provider, always); `config/ai.php` ships `'default' =>
+'openai'` (we set it to an undefined name); the Ollama driver has a hard-coded default model (we always
+pass a model); and the SDK carries **no per-model capability data** (our `ModelCapabilities` registry is
+the source of truth).
 
 ---
 
@@ -120,6 +130,11 @@ ADR-004 as a gap, with the local workaround named.
 | **Evidence required** | **Vendor-doc citation per model plus a measured download size.** §10.9: a local model does not automatically make its training data, license or use free of compliance questions — model licenses and redistribution must be checked |
 | **Defensible default** | Support already-installed Ollama or LM Studio first and **reuse** it (§12.1); offer at most one small tested model as an explicitly asynchronous post-core download (§0, §12.1); bundle no model weights in the DMG until a license review says a specific model may be redistributed |
 | **Decide by** | `ENG+ANDREAS` — which runtimes to support is engineering; whether a given model's license permits redistribution inside an MIT product is Andreas' call |
+
+**ADR-004 D8 (2026-10-10)** lists six candidates with verified licenses and Ollama download sizes
+without choosing one. Qwen2.5-3B-Instruct is excluded outright (Qwen Research License, non-commercial
+only). Llama 3.2 and Gemma 3 need Andreas' ruling on attribution/flow-down obligations; Phi-4-mini
+(MIT), Qwen2.5-7B and Mistral 7B (Apache-2.0) need attribution only. Lab download timing is still owed.
 
 ---
 
@@ -212,7 +227,9 @@ data model, three paragraphs apart. **Recommendation:** `email_connections`, sin
 ### A5 — "macOS 15/26" in §15.1
 It is unclear whether this means "macOS 15 through macOS 26" (a supported range), "macOS 15 or
 macOS 26", or a typo. §2 separately says "macOS 15+". The support matrix needs an unambiguous floor
-and a highest-tested version. **Needs:** `ENG`, recorded in S0-22.
+and a highest-tested version. **Needs:** `ENG`, recorded in S0-22. **Proposed 2026-10-10 (ADR-001
+D5):** read as the range macOS 15 through 26 — floor 15.0, highest tested 26.x; Apple Silicon only,
+Intel explicitly unsupported. S0-22 confirms with measurements.
 
 ### A6 — No `docs` label exists
 §16 step 1 lists ten labels; the repo has eleven (`adr` was added). Workstream J (docs/community) has
@@ -248,6 +265,10 @@ ADR-001 minimum machine before Accepted.
 §4 lists six candidate providers. Shipping all six in v1 multiplies the contract-test surface for no
 stated benefit. **Recommendation:** pick two for v1 and treat the rest as post-v1 adapters behind the
 same interface. **Needs:** `ENG`, recorded in ADR-004.
+**Resolved 2026-10-10 (ENG, ADR-004 D6): OpenAI and Anthropic** are the two v1 external adapters;
+OpenRouter ships as a third only if the identical contract matrix passes in Sprint 2 with no
+adapter-specific code; Gemini is post-v1. Anthropic is not `EU_RESTRICTED`-eligible today (first-party
+`inference_geo` is `us`/`global` only) and is offered in `CUSTOM` mode until that changes.
 
 ### A11 — Eight real provider test accounts are a procurement item, not a coding task
 §5.6 acceptance criterion 1 requires three Google, two Microsoft, one HEY, one iCloud and one generic
