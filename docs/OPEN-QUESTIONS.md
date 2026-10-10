@@ -223,7 +223,9 @@ data model, three paragraphs apart. **Recommendation:** `email_connections`, sin
 ### A5 — "macOS 15/26" in §15.1
 It is unclear whether this means "macOS 15 through macOS 26" (a supported range), "macOS 15 or
 macOS 26", or a typo. §2 separately says "macOS 15+". The support matrix needs an unambiguous floor
-and a highest-tested version. **Needs:** `ENG`, recorded in S0-22.
+and a highest-tested version. **Needs:** `ENG`, recorded in S0-22. **Proposed 2026-10-10 (ADR-001
+D5):** read as the range macOS 15 through 26 — floor 15.0, highest tested 26.x; Apple Silicon only,
+Intel explicitly unsupported. S0-22 confirms with measurements.
 
 ### A6 — No `docs` label exists
 §16 step 1 lists ten labels; the repo has eleven (`adr` was added). Workstream J (docs/community) has
