@@ -6,7 +6,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 
 | ADR | Title | Owner | Closes | Status |
 |---|---|---|---|---|
-| [001](001-macos-runtime-packaging.md) | macOS runtime packaging | A (macOS/Swift) + B | §15.1, §15.2 | Proposed |
+| [001](001-macos-runtime-packaging.md) | macOS runtime packaging | A (macOS/Swift) + B | §15.1, §15.2 | Proposed — written 2026-10-10 with measured prototype; awaits Andreas (legal L1–L4, A12) and the S1-06 clean-Mac run |
 | [002](002-local-db-and-queue.md) | Local database and queue | B (Laravel platform) | §15.3a, A3, A9 | Proposed |
 | [003](003-keychain-and-secrets.md) | Keychain and secret storage | H (Security/privacy) + A | §15.3b | Proposed |
 | [004](004-provider-neutral-ai.md) | Provider-neutral AI layer | D (AI/Agents) | §15.4 (SDK), §15.6, A10 | Proposed |
