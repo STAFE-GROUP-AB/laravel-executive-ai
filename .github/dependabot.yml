@@ -19,9 +19,8 @@ updates:
     open-pull-requests-limit: 5
     versioning-strategy: increase
     commit-message:
-      prefix: build(deps)
-      prefix-development: build(deps-dev)
-      include: scope
+      prefix: build
+      prefix-development: build
     groups:
       composer-production:
         dependency-type: production
@@ -44,9 +43,8 @@ updates:
     open-pull-requests-limit: 5
     versioning-strategy: increase
     commit-message:
-      prefix: build(deps)
-      prefix-development: build(deps-dev)
-      include: scope
+      prefix: build
+      prefix-development: build
     groups:
       npm-production:
         dependency-type: production
@@ -68,8 +66,7 @@ updates:
       timezone: Europe/Stockholm
     open-pull-requests-limit: 5
     commit-message:
-      prefix: ci(deps)
-      include: scope
+      prefix: ci
     groups:
       github-actions:
         patterns:
@@ -84,8 +81,7 @@ updates:
       timezone: Europe/Stockholm
     open-pull-requests-limit: 5
     commit-message:
-      prefix: build(deps)
-      include: scope
+      prefix: build
     groups:
       swift:
         update-types:
