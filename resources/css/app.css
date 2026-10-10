@@ -1,0 +1,12 @@
+/*
+ * Tailwind entry point (docs/architecture/design-system.md §4).
+ * Order matters: Tailwind first, then the design tokens, then the theme
+ * extension that maps every Tailwind value onto a CSS custom property.
+ */
+@import 'tailwindcss';
+@import './tokens.css';
+@config '../../tailwind.config.js';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/livewire/resources/views/**/*.blade.php';
+@source '../../storage/framework/views/*.php';

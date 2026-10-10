@@ -18,6 +18,16 @@ Thumbs.db
 /storage/*.key
 /storage/pail
 /bootstrap/cache/*.php
+/public/fonts-manifest.dev.json
+_ide_helper.php
+.phpactor.json
+/.codex
+/.cursor/
+/.nova
+/.zed
+Homestead.json
+Homestead.yaml
+*.log
 .env
 .env.*
 !.env.example

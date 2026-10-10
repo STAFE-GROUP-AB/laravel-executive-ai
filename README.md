@@ -81,6 +81,21 @@ docs/              architecture, ADRs, operations, security, compliance, roadmap
 
 Sprint 0 architecture freeze → Sprint 1 vertical slice (install → create owner → open PWA → seeded brief → same brief in menu bar → exact email preview) → Sprint 2 real core (CRM, auth/MFA, assistant, real briefs) → Sprint 3 sources and automation (multi-account email, GitHub, MCP, Peekaboo) → Sprint 4 production candidate (Tailscale, upgrades, backups, EU data controls, notarization, third-party review). Details and the current backlog: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+## Development
+
+Requires PHP 8.4, Composer 2 and Node 24. No MySQL, Redis or Docker: the app runs on a single SQLite file in WAL mode with the database queue.
+
+```sh
+git clone https://github.com/STAFE-GROUP-AB/laravel-executive-ai.git
+cd laravel-executive-ai
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+composer test
+```
+
 ## Contributing
 
 Pull requests are welcome once Sprint 0 contracts are frozen. Read [`CONTRIBUTING.md`](CONTRIBUTING.md). Report vulnerabilities privately per [`SECURITY.md`](SECURITY.md) — never in public issues.
