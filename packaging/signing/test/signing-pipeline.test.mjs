@@ -175,7 +175,11 @@ test('the signing report and the image are uploaded for 14 days; the report and 
     const cleanup = section(workflow, '- name: Delete the temporary keychain', '\n  # Sprint 4');
     assert.match(cleanup, /if: always\(\)/);
     assert.match(cleanup, /sign\.sh cleanup/);
-    assert.match(workflow, /LXAI_SIGNING_KEYCHAIN: \$\{\{ runner\.temp \}\}\//, 'the keychain lives under runner.temp');
+    // The `runner` context is not available in workflow- or job-level env (GitHub rejects the
+    // file), so the keychain path is sign.sh's $RUNNER_TEMP default, identical in every step.
+    assert.doesNotMatch(workflow, /^\s+LXAI_SIGNING_KEYCHAIN:/m, 'the workflow does not override the keychain path');
+    assert.doesNotMatch(workflow, /^\s+[A-Z_]+: \$\{\{ runner\./m, 'no runner context in an env mapping');
+    assert.match(sign, /printf '%s\/lxai-signing\.keychain-db' "\$RUNNER_TEMP"/, 'sign.sh defaults the keychain to $RUNNER_TEMP');
 });
 
 test('the Supervisor is signed before the app, the image after it, and the scripts the workflow calls exist and are executable', () => {

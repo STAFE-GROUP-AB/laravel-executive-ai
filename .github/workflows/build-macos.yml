@@ -53,11 +53,10 @@ jobs:
     name: build-macos
     runs-on: macos-15
     timeout-minutes: 45
-    env:
-      # The temporary keychain sign.sh creates and the cleanup step deletes. Under $RUNNER_TEMP so
-      # a cancelled run cannot leave it inside the checkout. (Job level: the `runner` context is
-      # not available in workflow-level env.)
-      LXAI_SIGNING_KEYCHAIN: ${{ runner.temp }}/lxai-signing.keychain-db
+    # The temporary keychain sign.sh creates and the cleanup step deletes defaults to
+    # $RUNNER_TEMP/lxai-signing.keychain-db (sign.sh `keychain_path`): outside the checkout, same
+    # path in every step of this job. (The `runner` context is not available in workflow- or
+    # job-level env, so it is not spelled out here.)
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
