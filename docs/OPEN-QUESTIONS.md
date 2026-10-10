@@ -97,6 +97,14 @@ ADR-004 as a gap, with the local workaround named.
   the client side explicitly** — `laravel/mcp` covers only the §7 "expose own limited Laravel MCP
   tools" half.
 
+**ADR-004 drafted 2026-10-10** (`docs/adrs/004-provider-neutral-ai.md`): pins `laravel/ai` **1.2.0**
+exactly (released 2026-10-07). Re-verification against the 1.2.0 source added four facts the note
+above lacked, each now a decision in ADR-004: the SDK fails over silently between providers when
+`prompt()` receives an array (we pass one provider, always); `config/ai.php` ships `'default' =>
+'openai'` (we set it to an undefined name); the Ollama driver has a hard-coded default model (we always
+pass a model); and the SDK carries **no per-model capability data** (our `ModelCapabilities` registry is
+the source of truth).
+
 ---
 
 ## §15.5 — Peekaboo permissions, UI-session scenarios, app/window allowlist, helper signing
@@ -120,6 +128,11 @@ ADR-004 as a gap, with the local workaround named.
 | **Evidence required** | **Vendor-doc citation per model plus a measured download size.** §10.9: a local model does not automatically make its training data, license or use free of compliance questions — model licenses and redistribution must be checked |
 | **Defensible default** | Support already-installed Ollama or LM Studio first and **reuse** it (§12.1); offer at most one small tested model as an explicitly asynchronous post-core download (§0, §12.1); bundle no model weights in the DMG until a license review says a specific model may be redistributed |
 | **Decide by** | `ENG+ANDREAS` — which runtimes to support is engineering; whether a given model's license permits redistribution inside an MIT product is Andreas' call |
+
+**ADR-004 D8 (2026-10-10)** lists six candidates with verified licenses and Ollama download sizes
+without choosing one. Qwen2.5-3B-Instruct is excluded outright (Qwen Research License, non-commercial
+only). Llama 3.2 and Gemma 3 need Andreas' ruling on attribution/flow-down obligations; Phi-4-mini
+(MIT), Qwen2.5-7B and Mistral 7B (Apache-2.0) need attribution only. Lab download timing is still owed.
 
 ---
 
@@ -238,6 +251,10 @@ in Sprint 0 or early Sprint 2, before the Sprint 3 adapters are built on an assu
 §4 lists six candidate providers. Shipping all six in v1 multiplies the contract-test surface for no
 stated benefit. **Recommendation:** pick two for v1 and treat the rest as post-v1 adapters behind the
 same interface. **Needs:** `ENG`, recorded in ADR-004.
+**Resolved 2026-10-10 (ENG, ADR-004 D6): OpenAI and Anthropic** are the two v1 external adapters;
+OpenRouter ships as a third only if the identical contract matrix passes in Sprint 2 with no
+adapter-specific code; Gemini is post-v1. Anthropic is not `EU_RESTRICTED`-eligible today (first-party
+`inference_geo` is `us`/`global` only) and is offered in `CUSTOM` mode until that changes.
 
 ### A11 — Eight real provider test accounts are a procurement item, not a coding task
 §5.6 acceptance criterion 1 requires three Google, two Microsoft, one HEY, one iCloud and one generic
