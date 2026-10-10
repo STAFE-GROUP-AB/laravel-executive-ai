@@ -1,0 +1,12 @@
+# Default owner for everything
+*                       @andreaskviby
+
+# Security-critical modules require review from the owner (two reviewers enforced via branch protection)
+/app/Security/          @andreaskviby
+/app/Approvals/         @andreaskviby
+/app/MCP/               @andreaskviby
+/app/Integrations/      @andreaskviby
+/apps/macos/            @andreaskviby
+/packaging/             @andreaskviby
+/.github/workflows/     @andreaskviby
+/docs/adrs/             @andreaskviby

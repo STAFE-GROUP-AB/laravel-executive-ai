@@ -1,0 +1,45 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / tooling
+.idea/
+.vscode/
+*.swp
+.phpunit.result.cache
+.phpunit.cache/
+
+# Laravel (lives at repo root per docs/blueprint §2.1)
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/bootstrap/cache/*.php
+.env
+.env.*
+!.env.example
+auth.json
+
+# Swift / Xcode (apps/macos)
+apps/macos/**/xcuserdata/
+apps/macos/**/*.xcuserstate
+apps/macos/**/DerivedData/
+apps/macos/**/.build/
+apps/macos/**/*.dSYM
+apps/macos/**/*.dSYM.zip
+
+# Packaging outputs
+/packaging/build/
+/packaging/dist/
+*.dmg
+
+# Local models, data, secrets — never in git
+*.gguf
+*.mlmodelc
+*.p12
+*.mobileprovision
+*.pem
+*.key
