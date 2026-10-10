@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "01M4K3WWGQ9RSTRFPX25D7WGMX",
+  "timestamp": "2026-10-10T14:36:29.079Z",
+  "synthetic": true,
+  "profile": "mac-a",
+  "machine": {
+    "chip": "Apple M4 Max",
+    "memory_gb": 36,
+    "macos_version": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "runtime_cached": true,
+  "clean_machine": false,
+  "scenario": "fresh_install",
+  "build": {
+    "product_version": "0.1.0-alpha.1"
+  },
+  "started_at": "2026-10-10T09:00:04.200Z",
+  "ready_at": "2026-10-10T09:02:01.800Z",
+  "core_ready_ms": 117600,
+  "human_interaction_ms": 44000,
+  "automated_ms": 73600,
+  "dmg_open_to_welcome_ms": 4200,
+  "phases": {
+    "WELCOME": {
+      "started_at": "2026-10-10T09:00:04.200Z",
+      "duration_ms": 3700,
+      "human_ms": 3700
+    },
+    "PREFLIGHT": {
+      "started_at": "2026-10-10T09:00:07.900Z",
+      "duration_ms": 2500,
+      "human_ms": 0
+    },
+    "PACKAGE_VERIFY": {
+      "started_at": "2026-10-10T09:00:10.400Z",
+      "duration_ms": 5700,
+      "human_ms": 0
+    },
+    "INSTALL_CORE": {
+      "started_at": "2026-10-10T09:00:16.100Z",
+      "duration_ms": 46600,
+      "human_ms": 0
+    },
+    "CREATE_OWNER": {
+      "started_at": "2026-10-10T09:01:02.700Z",
+      "duration_ms": 29300,
+      "human_ms": 28500
+    },
+    "SELECT_AI": {
+      "started_at": "2026-10-10T09:01:32.000Z",
+      "duration_ms": 13600,
+      "human_ms": 11800
+    },
+    "BOOT_SERVICES": {
+      "started_at": "2026-10-10T09:01:45.600Z",
+      "duration_ms": 6700,
+      "human_ms": 0
+    },
+    "HEALTH_CHECK": {
+      "started_at": "2026-10-10T09:01:52.300Z",
+      "duration_ms": 9500,
+      "human_ms": 0
+    }
+  },
+  "human_interactions": [
+    {
+      "started_at": "2026-10-10T09:00:04.200Z",
+      "ended_at": "2026-10-10T09:00:07.900Z",
+      "duration_ms": 3700,
+      "during_state": "WELCOME"
+    },
+    {
+      "started_at": "2026-10-10T09:01:03.000Z",
+      "ended_at": "2026-10-10T09:01:31.500Z",
+      "duration_ms": 28500,
+      "during_state": "CREATE_OWNER"
+    },
+    {
+      "started_at": "2026-10-10T09:01:32.300Z",
+      "ended_at": "2026-10-10T09:01:44.100Z",
+      "duration_ms": 11800,
+      "during_state": "SELECT_AI"
+    }
+  ],
+  "async_post_core": {
+    "counted_in_core_ready_ms": false,
+    "steps": {
+      "MODEL_DOWNLOAD": {
+        "started_at": "2026-10-10T09:02:05.000Z",
+        "ended_at": "2026-10-10T09:09:48.000Z",
+        "duration_ms": 463000,
+        "outcome": "completed",
+        "overlaps_core_window": false
+      },
+      "OAUTH_GOOGLE": {
+        "started_at": "2026-10-10T09:02:20.000Z",
+        "ended_at": "2026-10-10T09:03:05.250Z",
+        "duration_ms": 45250,
+        "outcome": "completed",
+        "overlaps_core_window": false
+      },
+      "PEEKABOO_PERMISSIONS": {
+        "started_at": "2026-10-10T09:02:10.000Z",
+        "ended_at": "2026-10-10T09:02:14.500Z",
+        "duration_ms": 4500,
+        "outcome": "skipped",
+        "overlaps_core_window": false
+      }
+    }
+  },
+  "notes": "SYNTHETIC example illustrating the record shape. Timestamps are invented, not measured. Never counted by aggregate or gate."
+}

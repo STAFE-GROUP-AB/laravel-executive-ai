@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/packaging/manifest/install-timer/record.schema.json",
+  "title": "Install-timer run record",
+  "description": "One measured install (blueprint §16 step 6, §12.2). core_ready_ms is WELCOME → READY wall-clock time with human prompts included. async_post_core holds everything §0 lists as happening after core-ready (model downloads, OAuth, permissions, Tailscale, …) and is structurally separate: no field in this document sums it into core_ready_ms, and async_post_core.counted_in_core_ready_ms is the constant false.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "timestamp",
+    "synthetic",
+    "profile",
+    "machine",
+    "runtime_cached",
+    "clean_machine",
+    "scenario",
+    "started_at",
+    "ready_at",
+    "core_ready_ms",
+    "human_interaction_ms",
+    "automated_ms",
+    "dmg_open_to_welcome_ms",
+    "phases",
+    "human_interactions",
+    "async_post_core"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Record schema version. Minor adds optional fields; major removes, renames, retypes or changes an enum."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+      "description": "ULID assigned when the record is written. Also the file name suffix."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the record was written (RFC 3339)."
+    },
+    "synthetic": {
+      "type": "boolean",
+      "description": "True for generated or illustrative data. Synthetic records are excluded from aggregate by default and never count toward the gate."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["mac-a", "mac-b", "other"],
+      "description": "§12.2 machine profile: mac-a = clean M4 Max 36–64 GB, mac-b = clean M3 Ultra, other = any machine outside the two gated profiles (developer Macs, CI runners)."
+    },
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chip", "memory_gb", "macos_version"],
+      "properties": {
+        "chip": {
+          "type": "string",
+          "minLength": 1,
+          "description": "sysctl machdep.cpu.brand_string, e.g. \"Apple M4 Max\"."
+        },
+        "memory_gb": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "sysctl hw.memsize rounded to whole GiB."
+        },
+        "macos_version": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+){0,2}$",
+          "description": "sw_vers -productVersion."
+        },
+        "macos_build": {
+          "type": "string",
+          "minLength": 1,
+          "description": "sw_vers -buildVersion, when available."
+        }
+      }
+    },
+    "runtime_cached": {
+      "type": "boolean",
+      "description": "True when the signed runtime bundle was already on disk / in the page cache before WELCOME (ADR-001 E3: first launch after signing costs ~3.5 s extra). §0 states the target for cached runtimes; uncached runs are reported separately."
+    },
+    "clean_machine": {
+      "type": "boolean",
+      "description": "True only when the operator asserts the clean-machine protocol in docs/operations/install-measurement.md was followed. Runs with false are reported but never gate."
+    },
+    "scenario": {
+      "type": "string",
+      "enum": ["fresh_install", "reinstall", "upgrade", "data_preserving_reinstall"],
+      "description": "Only fresh_install runs count toward the §12.2 timing gate; other scenarios are timed for coverage."
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Product version of the DMG under test (docs/operations/release-policy.md §2)."
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "description": "Git commit the DMG was built from."
+        }
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the WELCOME event: the installer's Welcome screen is on screen."
+    },
+    "ready_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the READY event: /health/ready returned ready: true and the Done screen is on screen."
+    },
+    "core_ready_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "ready_at − started_at. The §12.2 gated number. Includes human prompts and runtime initialisation; excludes every async post-core step by construction."
+    },
+    "human_interaction_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sum of human_interactions[].duration_ms. Already inside core_ready_ms; reported as its own phase per §12.2."
+    },
+    "automated_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "core_ready_ms − human_interaction_ms: time the installer spent working while nobody was being asked anything."
+    },
+    "dmg_open_to_welcome_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Informational: DMG_OPEN → WELCOME when the operator timed the DMG open and Gatekeeper check. Not part of core_ready_ms; reported so it cannot be hidden."
+    },
+    "phases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "WELCOME",
+        "PREFLIGHT",
+        "PACKAGE_VERIFY",
+        "INSTALL_CORE",
+        "CREATE_OWNER",
+        "SELECT_AI",
+        "BOOT_SERVICES",
+        "HEALTH_CHECK"
+      ],
+      "properties": {
+        "WELCOME": { "$ref": "#/$defs/phase" },
+        "PREFLIGHT": { "$ref": "#/$defs/phase" },
+        "PACKAGE_VERIFY": { "$ref": "#/$defs/phase" },
+        "INSTALL_CORE": { "$ref": "#/$defs/phase" },
+        "CREATE_OWNER": { "$ref": "#/$defs/phase" },
+        "SELECT_AI": { "$ref": "#/$defs/phase" },
+        "BOOT_SERVICES": { "$ref": "#/$defs/phase" },
+        "HEALTH_CHECK": { "$ref": "#/$defs/phase" }
+      },
+      "description": "One entry per §12.1 state in order; a state's duration ends when the next state is entered, and HEALTH_CHECK ends at READY. Durations sum to core_ready_ms."
+    },
+    "human_interactions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/humanInteraction" },
+      "description": "Every interval between human_interaction_start and human_interaction_end inside the core window."
+    },
+    "async_post_core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counted_in_core_ready_ms", "steps"],
+      "properties": {
+        "counted_in_core_ready_ms": {
+          "type": "boolean",
+          "const": false,
+          "description": "Always false. Exists so a reader of the JSON cannot miss that these numbers are outside core_ready_ms."
+        },
+        "steps": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Z][A-Z0-9_]*$": { "$ref": "#/$defs/asyncStep" }
+          },
+          "description": "Keyed by step name: the §12.1 optional path (CONNECT_EMAIL, CONNECT_GITHUB, PEEKABOO_PERMISSIONS, REMOTE_ACCESS, SCHEDULE_BRIEF) and the §0 list (MODEL_DOWNLOAD, OAUTH_GOOGLE, OAUTH_MICROSOFT, OAUTH_GITHUB, ICLOUD_MAIL, HEY, TAILSCALE_LOGIN, IOS_PUSH, EMAIL_VERIFICATION). Network-conditional; reported separately."
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Free text from the operator. No personal data."
+    }
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "duration_ms", "human_ms"],
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock time in this state, human prompts included."
+        },
+        "human_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Portion of duration_ms during which a human prompt was open."
+        }
+      }
+    },
+    "humanInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "ended_at", "duration_ms", "during_state"],
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "during_state": {
+          "type": "string",
+          "enum": [
+            "WELCOME",
+            "PREFLIGHT",
+            "PACKAGE_VERIFY",
+            "INSTALL_CORE",
+            "CREATE_OWNER",
+            "SELECT_AI",
+            "BOOT_SERVICES",
+            "HEALTH_CHECK",
+            "READY"
+          ],
+          "description": "The installer state that was active when the prompt opened."
+        }
+      }
+    },
+    "asyncStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "ended_at", "duration_ms", "outcome", "overlaps_core_window"],
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": ["string", "null"], "format": "date-time" },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "outcome": {
+          "type": "string",
+          "enum": ["completed", "skipped", "failed", "cancelled", "incomplete"],
+          "description": "incomplete = still running when the record was written (ended_at and duration_ms are null)."
+        },
+        "overlaps_core_window": {
+          "type": "boolean",
+          "description": "True when the step started before READY. The step still does not count toward core_ready_ms, but an installer that blocks core-ready on such a step is a §0 violation and must be fixed, not re-labelled."
+        }
+      }
+    }
+  }
+}
