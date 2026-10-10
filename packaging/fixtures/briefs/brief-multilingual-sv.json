@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP05TGTYSS3Y9ZE1K3D",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "sv",
+  "subject": "Executive Brief torsdag 9 oktober: Nordlund vill ha svar fredag, Örjan föreslår Åkersberga",
+  "summary": "Karin Nordlund på Nordlund Bygg AB vill ha svar på offert 2026-114 senast fredag. Örjan Sjöström föreslår att årsgenomgången flyttas till Åkersberga eftersom Göteborgskontoret byggs om. Höstens kapacitet är osäker – ingen källa anger hur många konsulttimmar som är bokade.",
+  "items": [
+    {
+      "id": "01M4FBBSP09WE98NJATWXZPVF6",
+      "kind": "action",
+      "title": "Svara Nordlund Bygg AB om offert 2026-114",
+      "body": "Karin Nordlund skrev: \"Vi behöver ert svar senast fredag 10 oktober för att kunna boka entreprenören.\" Offerten på 184 000 kr gäller ombyggnaden av lagerlokalen i Mölndal.",
+      "priority": "critical",
+      "due_at": "2026-10-10T17:00:00+02:00",
+      "source_refs": ["01M4FBB83GEE5JPGX0FNBYTVMK"],
+      "action_ids": ["01M4FBBSP084NRBM1CC81SA3KA"],
+      "dedupe_key": "crm:customer:nordlund-bygg:offer:2026-114"
+    },
+    {
+      "id": "01M4FBBSP0BSAYJVTWT2GWYNCE",
+      "kind": "followup",
+      "title": "Örjan Sjöström föreslår Åkersberga för årsgenomgången",
+      "body": "Örjan skrev: \"Kan vi ses i Åkersberga i stället? Vårt kontor i Göteborg är under ombyggnad hela november.\" Projektet Årsgenomgång 2026 i CRM har fortfarande Göteborg som plats och inget datum.",
+      "priority": "normal",
+      "source_refs": ["01M4FBB748VYN6K40GQCSZT69X", "01M4FBB92RJQQQ7W39D8RDB6FC"],
+      "dedupe_key": "email:thread:sjostrom-akerlund:arsgenomgang"
+    },
+    {
+      "id": "01M4FBBSP0VK6AQTVPT06C043Q",
+      "kind": "info",
+      "title": "Höstens konsultkapacitet är oklar",
+      "body": "Varken CRM eller kalendern visar hur många timmar som är bokade i november. Om både Nordlund och Sjöström & Åkerlund startar samtidigt kan det bli trångt; detta är en bedömning.",
+      "priority": "low",
+      "uncertainty": {
+        "reason": "Ingen källa innehåller beläggningssiffror; slutsats från två samtidiga projektstarter.",
+        "confidence": 0.35
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBB748VYN6K40GQCSZT69X",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB748VYN6K40GQCSZT69X",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Workspace)",
+      "title": "Årsgenomgång – kan vi ses i Åkersberga?",
+      "captured_at": "2026-10-09T05:29:41+02:00",
+      "excerpt_hash": "sha256:a5e7c26752a143b42b114aafaafd21b6fa8e4ea2af955956a9c13b8ddbd18b57"
+    },
+    {
+      "id": "01M4FBB83GEE5JPGX0FNBYTVMK",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB83GEE5JPGX0FNBYTVMK",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Workspace)",
+      "title": "Re: Offert 2026-114 ombyggnad lager Mölndal",
+      "captured_at": "2026-10-09T05:29:42+02:00",
+      "excerpt_hash": "sha256:4d3f7b67e981c292e7f4b53eb28a74cc2b83559e75bd4efab80e101d9a46cb44"
+    },
+    {
+      "id": "01M4FBB92RJQQQ7W39D8RDB6FC",
+      "type": "crm",
+      "uri": "lxai://crm/projects/01M1DZPW00T92RAPMPSDRG5Y7N",
+      "account_id": null,
+      "title": "Sjöström & Åkerlund Konsult AB — Årsgenomgång 2026",
+      "captured_at": "2026-10-09T05:29:43+02:00",
+      "excerpt_hash": "sha256:771b95de5e540410c15a16988318e4dd45ee822130bb4361ef24b5f35a7fdc92"
+    }
+  ],
+  "action_ids": ["01M4FBBSP084NRBM1CC81SA3KA"],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:50a636c15419df56920452c0e0552552d1a46b57826cc1f84cb615660ed6c3d5",
+    "trace_id": "01M4FBBSP05TGTYSS3Y9ZE1K3D-run-1"
+  },
+  "content_hash": "sha256:bc3b55728e963d6864f493568048c2beadd66c48e9dd39e39d224bb25d034b9f",
+  "delivery_state": "sent",
+  "idempotency_key": "01M4FBBSP04M9SJ0WGZ69VM5YT",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP04M9SJ0WGZ69VM5YT",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP04M9SJ0WGZ69VM5YT",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "<01M4FBBSP04M9SJ0WGZ69VM5YT.email.andreas=example.se@laravel-executive-ai.local>",
+      "sent_at": "2026-10-09T05:30:06+02:00"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

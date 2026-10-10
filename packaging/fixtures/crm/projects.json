@@ -1,0 +1,131 @@
+[
+  {
+    "id": "01M3P2V000323BEJ7ZTJ2DHPQV",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-09-29T10:00:00+02:00",
+    "updated_at": "2026-10-07T09:12:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/projects/01M3P2V000323BEJ7ZTJ2DHPQV",
+    "sensitivity_class": "internal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-09-29T10:00:00+02:00",
+      "trace_id": null
+    },
+    "customer_id": "01M4FJ7ZJRDVPBT5PEZTZWC6BX",
+    "name": "Ombyggnad lagerlokal Mölndal (offert 2026-114)",
+    "status": "planned",
+    "starts_on": null,
+    "due_on": null,
+    "contact_ids": ["01KH3CETM0PGFQ5HFHQ2A5DNM9"],
+    "github_links": [],
+    "description": "Ombyggnad av lagerlokalen i Mölndal. Offert 2026-114 på 184 000 kr skickad 7 oktober; start beror på kundens svar."
+  },
+  {
+    "id": "01M2J18Y00KX8VD12RT0E08F2E",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-09-15T10:00:00+02:00",
+    "updated_at": "2026-10-06T11:00:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/projects/01M2J18Y00KX8VD12RT0E08F2E",
+    "sensitivity_class": "confidential",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-09-15T10:00:00+02:00",
+      "trace_id": null
+    },
+    "customer_id": "01KKGMCCM0YSR4Q6TVT46VQE03",
+    "name": "Consegna ottobre",
+    "status": "active",
+    "starts_on": "2026-09-15",
+    "due_on": "2026-10-17",
+    "contact_ids": ["01KKGMNHK0SAX1VQBKV6VXPST8", "01KS26Q3J0TVZ3NVFNY9VKTND0"],
+    "github_links": [],
+    "description": "Consegna a Milano. Nota del 6 ottobre: \"spostata di una settimana su richiesta di Giulia\" — in conflitto con la conferma via e-mail dell'8 ottobre (entro venerdì 10 ottobre). Il conflitto è intenzionale: vedi briefs/brief-conflicting-sources.json."
+  },
+  {
+    "id": "01M2YX8H00XXDCQFVNT5K9V727",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-09-20T10:00:00+02:00",
+    "updated_at": "2026-10-08T08:15:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/projects/01M2YX8H00XXDCQFVNT5K9V727",
+    "sensitivity_class": "internal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-09-20T10:00:00+02:00",
+      "trace_id": null
+    },
+    "customer_id": "01KT67Y600Z18DMTCEW0G8CQ52",
+    "name": "Angebot Lagerverwaltung",
+    "status": "planned",
+    "starts_on": null,
+    "due_on": null,
+    "contact_ids": ["01M4FJ7VNR32E7DH0T2MHMD75Q", "01KT687AZ030JA890HTFR6138S"],
+    "github_links": [],
+    "description": "Angebot für die Lagerverwaltungssoftware. Offen: Größe (m²) und Straße der Lagerhalle, deutschsprachige Demo."
+  },
+  {
+    "id": "01KYY5CK007T00EMHV1BDN0TCN",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-08-01T10:00:00+02:00",
+    "updated_at": "2026-10-08T11:45:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/projects/01KYY5CK007T00EMHV1BDN0TCN",
+    "sensitivity_class": "internal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-08-01T10:00:00+02:00",
+      "trace_id": null
+    },
+    "customer_id": "01KXJCMC00D2RY518YA668KMCD",
+    "name": "São Paulo rollout",
+    "status": "active",
+    "starts_on": "2026-08-01",
+    "due_on": "2026-12-15",
+    "contact_ids": ["01KXJCXGZ091ZFGNA99GFX5MZR"],
+    "github_links": [
+      {
+        "kind": "repository",
+        "uri": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai"
+      },
+      {
+        "kind": "pull_request",
+        "uri": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/pull/212"
+      }
+    ],
+    "description": "Rollout of the brief renderer to the São Paulo team. PR #212 (naïve UTF-8 façade) fixes mojibake in subjects with ß and ö."
+  },
+  {
+    "id": "01M1DZPW00T92RAPMPSDRG5Y7N",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-09-01T10:00:00+02:00",
+    "updated_at": "2026-09-01T10:00:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/projects/01M1DZPW00T92RAPMPSDRG5Y7N",
+    "sensitivity_class": "internal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-09-01T10:00:00+02:00",
+      "trace_id": null
+    },
+    "customer_id": "01KFDA3QM02VDHVC2WGADBB9BV",
+    "name": "Årsgenomgång 2026",
+    "status": "planned",
+    "starts_on": null,
+    "due_on": null,
+    "contact_ids": ["01KFDACWK0EPRYZ6GG2ZV1HQ2V"],
+    "github_links": [],
+    "description": "Årsgenomgång med Sjöström & Åkerlund. Plats enligt CRM: Göteborg. Inget datum."
+  }
+]

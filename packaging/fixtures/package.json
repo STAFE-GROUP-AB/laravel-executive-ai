@@ -2,14 +2,15 @@
   "name": "@laravel-executive-ai/fixture-validation",
   "version": "1.0.0",
   "private": true,
-  "description": "Validates the frozen Executive Brief, health contract and IPC contract schemas and every committed fixture against them (S0-13, S0-14, S0-15).",
+  "description": "Validates the frozen Executive Brief, health contract, IPC contract and CRM fixture-pack schemas and every committed fixture against them (S0-13, S0-14, S0-15, S0-18).",
   "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "validate": "node validate-schema.mjs"
+    "validate": "node validate-schema.mjs",
+    "hash-brief": "node tools/hash-brief.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",

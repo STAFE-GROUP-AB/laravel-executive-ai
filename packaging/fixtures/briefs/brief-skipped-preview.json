@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP0Y0YMW5RYDWNTHB4J",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "sv",
+  "subject": "Executive Brief torsdag 9 oktober (förhandsvisning): Örjan Sjöström vill flytta årsgenomgången",
+  "summary": "Det här är en lokal förhandsvisning. Briefen visas i menyraden och i PWA:n men inget mejl skickas, eftersom mottagare och sändkonto inte är bekräftade än (§5.5). Innehållet är annars vanligt: Örjan Sjöström föreslår att årsgenomgången hålls i Åkersberga i stället för i Göteborg.",
+  "items": [
+    {
+      "id": "01M4FBBSP0AW740B7KGN4YRQ9X",
+      "kind": "followup",
+      "title": "Örjan Sjöström föreslår Åkersberga för årsgenomgången",
+      "body": "Örjan skrev: \"Kan vi ses i Åkersberga i stället? Vårt kontor i Göteborg är under ombyggnad hela november.\" Inget datum är föreslaget.",
+      "priority": "normal",
+      "source_refs": ["01M4FBB92RFZ25MV7KSEBQJYE2"],
+      "dedupe_key": "email:thread:sjostrom-akerlund:arsgenomgang"
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBB92RFZ25MV7KSEBQJYE2",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB92RFZ25MV7KSEBQJYE2",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Workspace)",
+      "title": "Årsgenomgång – kan vi ses i Åkersberga?",
+      "captured_at": "2026-10-09T05:29:43+02:00",
+      "excerpt_hash": "sha256:3c70c646e59e65e3044b1c91057420380741d1bcdb3f54489cfdad80061ef3a8"
+    }
+  ],
+  "action_ids": [],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:8692d37ca628f8a2a66427b0f48aa08b22bfbe4bcd90abe3150d1c2979e76f33",
+    "trace_id": "01M4FBBSP0Y0YMW5RYDWNTHB4J-run-1"
+  },
+  "content_hash": "sha256:935bf8ff5441555d1ea3f6b4d73b0ca1c9b2634f6e4d278ae3f0d97c18c30a81",
+  "delivery_state": "skipped",
+  "idempotency_key": "01M4FBBSP0C1EH9FYJNQWZAJCJ",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0C1EH9FYJNQWZAJCJ",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0C1EH9FYJNQWZAJCJ",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "skipped",
+      "message_id": null,
+      "sent_at": null
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

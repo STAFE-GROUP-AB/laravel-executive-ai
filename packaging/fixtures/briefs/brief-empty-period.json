@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP04TFFX9JH9TF6QT5H",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-09T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "sv",
+  "subject": "Executive Brief torsdag 9 oktober: inga nya händelser",
+  "summary": "Perioden är tom: period_start och period_end är samma tidpunkt, och ingen källa har lästs. Det finns inga punkter att visa. En tom brief är ett giltigt dokument och ska renderas som \"inget nytt\", inte som ett fel.",
+  "items": [],
+  "sources": [],
+  "action_ids": [],
+  "model_provenance": {
+    "provider": "none",
+    "model": "none",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "trace_id": "empty-period-no-model-run"
+  },
+  "content_hash": "sha256:f469f543417c4ae64d3e86b7a22645457fd7b9892502e4ebe794713044e2f601",
+  "delivery_state": "sent",
+  "idempotency_key": "01M4FBBSP0XX7END4AHRHV0DK8",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0XX7END4AHRHV0DK8",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0XX7END4AHRHV0DK8",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "<01M4FBBSP0XX7END4AHRHV0DK8.email.andreas=example.se@laravel-executive-ai.local>",
+      "sent_at": "2026-10-09T05:30:03+02:00"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

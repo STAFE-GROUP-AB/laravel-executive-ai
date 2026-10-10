@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP09DAKDY78NWT1NPTA",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "it",
+  "subject": "Executive Brief giovedì 9 ottobre: conferma di consegna a Milano entro venerdì, Niccolò Perù chiede la città dell’incontro",
+  "summary": "Hai promesso a Giulia Ferrari la conferma di consegna entro venerdì 10 ottobre e non è ancora partita. Niccolò Perù dello Studio Legale Conti & Perù chiede se l’incontro di ottobre si terrà a Torino o a Milano. Il ritiro a Milano potrebbe slittare, ma nessuna fonte lo afferma.",
+  "items": [
+    {
+      "id": "01M4FBBSP0NDD2MYVV02X61V71",
+      "kind": "commitment",
+      "title": "Confermare la consegna a Milano entro venerdì 10 ottobre",
+      "body": "Nel thread hai scritto: \"Vi confermo la data di consegna entro venerdì 10 ottobre.\" Giulia ha risposto: \"Perfetto, grazie Andreas. Aspettiamo la conferma per organizzare il ritiro a Milano.\" Il progetto in CRM è ancora in stato attivo senza conferma inviata.",
+      "priority": "high",
+      "due_at": "2026-10-10T23:59:59+02:00",
+      "source_refs": ["01M4FBB748FZAWXHKVWHKGQV83", "01M4FBB92R1FC4N865R5WEWTRX"],
+      "action_ids": ["01M4FBBSP0PB5DEG4JC9KN0354"],
+      "dedupe_key": "email:thread:officina-ferrari:consegna-ottobre"
+    },
+    {
+      "id": "01M4FBBSP0S0R4JK2M67WKHZQ9",
+      "kind": "followup",
+      "title": "Niccolò Perù chiede la città dell’incontro: Torino o Milano?",
+      "body": "Niccolò ha scritto: \"Preferiremmo Torino perché più vicina al nostro studio, ma Milano va bene se è più comoda per lei. Ci farebbe sapere entro la settimana?\" Nessuna data è stata proposta.",
+      "priority": "normal",
+      "source_refs": ["01M4FBB83GRCWMNDRJ2F97XA2F"],
+      "dedupe_key": "email:thread:studio-conti-peru:incontro-ottobre"
+    },
+    {
+      "id": "01M4FBBSP0TEDZCFMPKC6JNSN0",
+      "kind": "risk",
+      "title": "Il ritiro a Milano potrebbe slittare",
+      "body": "Se la conferma di consegna arriva venerdì sera, l’organizzazione del ritiro da parte di Giulia potrebbe spostarsi alla settimana successiva. È una valutazione, non un fatto dichiarato da alcuna fonte.",
+      "priority": "low",
+      "uncertainty": {
+        "reason": "Nessuna fonte indica una data di ritiro; dedotto dai tempi della conferma.",
+        "confidence": 0.4
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBB748FZAWXHKVWHKGQV83",
+      "type": "email",
+      "uri": "lxai://email/threads/01M4FBB748FZAWXHKVWHKGQV83",
+      "account_id": "01M1GENQC0H10CAG1VZ6PZCXTW",
+      "account_label": "andreas@example.it (iCloud Mail)",
+      "title": "Re: Consegna ottobre — Officina Ferrari S.r.l.",
+      "captured_at": "2026-10-09T05:29:41+02:00",
+      "excerpt_hash": "sha256:3a1a626aef352784c3e8b2707f5b0ba26f80aa5dab3193bb1c94825addcb6991"
+    },
+    {
+      "id": "01M4FBB83GRCWMNDRJ2F97XA2F",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB83GRCWMNDRJ2F97XA2F",
+      "account_id": "01M1GENQC0H10CAG1VZ6PZCXTW",
+      "account_label": "andreas@example.it (iCloud Mail)",
+      "title": "Incontro di ottobre: Torino o Milano?",
+      "captured_at": "2026-10-09T05:29:42+02:00",
+      "excerpt_hash": "sha256:75f15981f5be42dba3469e12a83f11e6aa571cadefec91b8dd2c3f9fed486c57"
+    },
+    {
+      "id": "01M4FBB92R1FC4N865R5WEWTRX",
+      "type": "crm",
+      "uri": "lxai://crm/projects/01M2J18Y00KX8VD12RT0E08F2E",
+      "account_id": null,
+      "title": "Officina Ferrari S.r.l. — Consegna ottobre",
+      "captured_at": "2026-10-09T05:29:43+02:00",
+      "excerpt_hash": "sha256:dac8f4fccc5f8817d2a5d74fa61ee4d868f73e1d7cce7855bb2073937e1bb85b"
+    }
+  ],
+  "action_ids": ["01M4FBBSP0PB5DEG4JC9KN0354"],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:9afa5f205e67bface15de6ba57f855fc7e41f5de68335275ca8f33d79f27b7bb",
+    "trace_id": "01M4FBBSP09DAKDY78NWT1NPTA-run-1"
+  },
+  "content_hash": "sha256:458335cb043edd7f17632348cfe8d32180838862be7d38a610fe04a2a8ca3d47",
+  "delivery_state": "sent",
+  "idempotency_key": "01M4FBBSP0ZYH8JQXBWZWDNNY3",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0ZYH8JQXBWZWDNNY3",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0ZYH8JQXBWZWDNNY3",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.it",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "<01M4FBBSP0ZYH8JQXBWZWDNNY3.email.andreas=example.it@laravel-executive-ai.local>",
+      "sent_at": "2026-10-09T05:30:06+02:00"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}
