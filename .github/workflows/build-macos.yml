@@ -47,15 +47,17 @@ env:
   APP_PATH: build/dd/Build/Products/Release/LaravelExecutiveAI.app
   SIGNING_REPORT: build/signing-report.txt
   DIST_DIR: build/dist
-  # The temporary keychain sign.sh creates and the cleanup step deletes. Under $RUNNER_TEMP so a
-  # cancelled run cannot leave it inside the checkout.
-  LXAI_SIGNING_KEYCHAIN: ${{ runner.temp }}/lxai-signing.keychain-db
 
 jobs:
   build-macos:
     name: build-macos
     runs-on: macos-15
     timeout-minutes: 45
+    env:
+      # The temporary keychain sign.sh creates and the cleanup step deletes. Under $RUNNER_TEMP so
+      # a cancelled run cannot leave it inside the checkout. (Job level: the `runner` context is
+      # not available in workflow-level env.)
+      LXAI_SIGNING_KEYCHAIN: ${{ runner.temp }}/lxai-signing.keychain-db
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
