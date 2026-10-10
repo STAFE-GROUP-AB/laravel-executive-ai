@@ -36,6 +36,9 @@ apps/macos/**/*.dSYM.zip
 /packaging/dist/
 *.dmg
 
+# Fixture validation tooling (packaging/fixtures/package.json); lockfile is committed
+/packaging/fixtures/node_modules/
+
 # Local models, data, secrets — never in git
 *.gguf
 *.mlmodelc
