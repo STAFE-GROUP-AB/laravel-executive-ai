@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/STAFE-GROUP-AB/laravel-executive-ai/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem — see SECURITY.md.
+  - name: Blueprint and roadmap
+    url: https://github.com/STAFE-GROUP-AB/laravel-executive-ai/blob/main/docs/ROADMAP.md
+    about: Read the specification and phased plan before proposing scope changes.

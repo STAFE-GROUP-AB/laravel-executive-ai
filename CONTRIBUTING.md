@@ -4,6 +4,7 @@ Thanks for your interest. This project is in **Sprint 0 (architecture freeze)**;
 
 ## Ground rules
 
+- **Be decent.** This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 - **Read the blueprint first**: `Mission/Laravel_Executive_AI_Engineering_Blueprint.md`. It is the binding specification. Product requirements are in Swedish; identifiers, APIs, code and commit messages are in English.
 - **Scope is deliberately closed.** Do not propose Basecamp, GoZero Core, Filament, OpenClaw, a mandatory Playwright/Browserless dependency, Linux/Windows support, or general terminal access for the agent. PRs that reintroduce these will be closed.
 - **Architectural changes need an ADR** in `docs/adrs/` before code.
