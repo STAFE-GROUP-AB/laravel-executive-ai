@@ -3,9 +3,10 @@
 # and S0-25 (apps/macos) land, Dependabot reports "manifest not found" for those ecosystems;
 # that is expected and non-blocking.
 #
-# Swift note: the `swift` ecosystem reads a Package.swift. If the Mac app keeps its SwiftPM
-# dependencies only inside the .xcodeproj (Package.resolved without a Package.swift), either
-# move them into a local Swift package under apps/macos or drop that entry.
+# Swift note: the `swift` ecosystem reads a Package.swift. The only one in the repo is the
+# local DesignTokens package (S0-24); the app in apps/macos/LaravelExecutiveAI.xcodeproj links it
+# as a local package reference and has no Package.swift of its own (S0-25). Add a second `swift`
+# entry if a further local package appears.
 
 version: 2
 updates:
@@ -73,7 +74,7 @@ updates:
           - '*'
 
   - package-ecosystem: swift
-    directory: /apps/macos
+    directory: /apps/macos/DesignTokens
     schedule:
       interval: weekly
       day: monday
