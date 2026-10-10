@@ -11,7 +11,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 | [003](003-keychain-and-secrets.md) | Keychain and secret storage | H (Security/privacy) + A | §15.3b | Proposed |
 | [004](004-provider-neutral-ai.md) | Provider-neutral AI layer | D (AI/Agents) | §15.4 (SDK), §15.6, A10 | Proposed |
 | [005](005-peekaboo-mcp-security.md) | Peekaboo and MCP security model | G (MCP/Automation) + A | §15.4 (MCP), §15.5, A1 | Proposed |
-| [006](006-private-remote-access.md) | Private remote access | A + C, H reviews | §15.8 | Proposed |
+| [006](006-private-remote-access.md) | Private remote access via Tailscale Serve (never Funnel) | A + C, H reviews | §15.8 | Proposed |
 | [007](007-license-and-compliance.md) | License and compliance boundaries | J (Docs/community) + H | §15.10, §15.6 (licenses) | Proposed |
 | 008 | Email account and OAuth strategy | F (Integrations) + H | §15.7, A2 | Planned — Sprint 2, gates Sprint 3 |
 | 009 | Brief scheduling and send consent | D + F + H | §15.9, A2 | Planned — Sprint 2, gates Sprint 3 |
