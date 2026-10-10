@@ -8,7 +8,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 |---|---|---|---|---|
 | [001](001-macos-runtime-packaging.md) | macOS runtime packaging | A (macOS/Swift) + B | §15.1, §15.2 | Proposed — written 2026-10-10 with measured prototype; awaits Andreas (legal L1–L4, A12) and the S1-06 clean-Mac run |
 | [002](002-local-db-and-queue.md) | Local database and queue | B (Laravel platform) | §15.3a, A3 (proposed), A4, A9 | Proposed — benchmark evidence attached, awaiting review |
-| [003](003-keychain-and-secrets.md) | Keychain and secret storage | H (Security/privacy) + A | §15.3b | Proposed |
+| [003](003-keychain-and-secrets.md) | Keychain and secret storage (data protection keychain, Supervisor secrets broker, no App Sandbox in v1, SQLCipher deferred) | H (Security/privacy) + A, B reviews | §15.3b; feeds S0-15, S0-23 | Proposed — written 2026-10-10; Accepted blocked on R1/R2 acceptance (Andreas) and the S1 AfterFirstUnlock + access-group prototypes |
 | [004](004-provider-neutral-ai.md) | Provider-neutral AI layer on `laravel/ai` 1.2.0 | D (AI/Agents), H + B review | §15.4 (SDK half), §15.6 (runtime; licenses → ADR-007), A10 | Proposed — drafted 2026-10-10, awaits D4 egress test and D2 matrix before Accepted |
 | [005](005-peekaboo-mcp-security.md) | Peekaboo and MCP security model | G (MCP/Automation) + A, H reviews | §15.4 (MCP client + transports), §15.5, A1 (pending Andreas) | Proposed — written 2026-10-10; Accepted blocked on A1 ruling and two prototypes listed in its Evidence section |
 | [006](006-private-remote-access.md) | Private remote access via Tailscale Serve (never Funnel) | A + C, H reviews | §15.8 | Proposed |
