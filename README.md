@@ -96,6 +96,20 @@ php artisan migrate
 composer test
 ```
 
+Run the core the way launchd will (S1-07) — three processes, one SQLite file:
+
+```sh
+php artisan serve                      # loopback HTTP; GET /health/live and /health/ready
+php artisan schedule:work              # health:selftest + queue self-test every minute
+php artisan queue:work database --queue=briefs,email-sync,default,ai --sleep=3 --tries=3
+```
+
+`php artisan lea:install-state` reads or sets the §12.1 install marker, `php artisan lea:brief:placeholder`
+creates the install-time placeholder brief, and `php artisan health:selftest` runs the scheduler
+self-test by hand. Quality gates: `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`,
+`vendor/bin/pest --ci`, `node packaging/fixtures/validate-schema.mjs`. Tests build the schema once with
+`migrate` and run inside `DatabaseTransactions`; never use a trait that drops the database.
+
 ## Contributing
 
 Pull requests are welcome once Sprint 0 contracts are frozen. Read [`CONTRIBUTING.md`](CONTRIBUTING.md). Report vulnerabilities privately per [`SECURITY.md`](SECURITY.md) — never in public issues.

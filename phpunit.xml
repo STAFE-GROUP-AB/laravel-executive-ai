@@ -11,6 +11,9 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
         <!-- Negative security tests (tests/Security/README.md). Registered so the
              §16.7 refusal gate runs in the `php` CI lane and so the Security suite
              can be selected by name; `tests/Security/Support` holds the harness and

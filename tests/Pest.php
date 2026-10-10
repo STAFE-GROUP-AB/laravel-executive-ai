@@ -11,7 +11,7 @@ use Tests\TestCase;
 |
 | Every suite boots the application through Tests\TestCase so config(),
 | the SQLite connection and the HTTP kernel are available. Suites that
-| touch the database use DatabaseTransactions (never RefreshDatabase).
+| touch the database use DatabaseTransactions (never the refresh-database trait).
 |
 */
 
