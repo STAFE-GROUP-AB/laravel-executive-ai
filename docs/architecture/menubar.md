@@ -151,11 +151,26 @@ paths, SF Symbols resolve, RFC 3339 offsets), `MenuBarRenderingTests` (every sta
 the screenshots on demand). Fixtures are read from `packaging/fixtures/` relative to `#filePath`,
 which resolves unsigned on CI because the whole repository is checked out.
 
-## 8. What S1-11 adds
+## 8. What S1-11 added, and what is still open
 
-- The AI-state details on the AI row (provider, last success, "Reconfigure AI" deep link) and the
-  "Update required" flow once the IPC version header is live.
-- Swedish copy (`MenuBarCopy` is the single place).
+Added (see [ai-state.md](ai-state.md) §3 for the cross-surface table):
+
+- The AI row's details: `PanelModel.aiProviderText` (the catalogue display name of `ai_provider`,
+  the raw id when unknown), `aiProviderNote` ("no completion has succeeded yet" while
+  `configured_untested`), `aiLastSuccessText` (`ai_last_success_at`, shown **only** while
+  `ai_ready == true`) and `aiAction` — "Set up AI" whenever AI is not ready, "Reconfigure AI" on
+  `ai_state == error`, nothing while ready. `reconfigureAI()` lands in Settings until the Local
+  Models pane exists; it selects nothing and stores nothing.
+- Swedish copy: `MenuBarStrings.en` / `.sv`, chosen by `Locale.current`'s language
+  (`MenuBarLanguage.preferred`), pinned with `MenuBarCopy.use(_:)` in tests. `MenuBarCopy.allStrings`
+  covers both tables for the secrets grep.
+- `MenuBarAiReadyGateTests`: no copy path renders "AI ready" / "AI redo" unless
+  `ai_state == ready && ai_ready == true`, over every fixture and a synthetic document per
+  `ai_state × ai_ready` pair, in both languages.
+
+Still open:
+
+- The "Update required" flow once the IPC version header is live.
 - Visible-session state for Peekaboo automation on the icon (ADR-005 D1.10).
 - Whether the app becomes a pure menu-bar agent after READY (`LSUIElement`).
 

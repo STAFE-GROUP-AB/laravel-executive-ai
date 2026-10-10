@@ -195,9 +195,14 @@ Rendered from the fixture pack (placeholder, `brief-stale`, `brief-canonical`; `
   byte for byte with `RenderedBrief::parityJson()` and the Swift export; `BriefsPagesTest` already
   asserts it equals `tests/__snapshots__/brief-canonical.parity.json`. `data-brief-version`,
   `data-brief-generated-at` and `data-parity-hash` are on the article for the DOM side.
-- **S1-11** — the "AI setup required" banner is `components/ai-state-banner.blade.php` with its
-  wording in `App\Http\View\AiStateCopy`; "AI ready" exists on exactly one code path (the `Ready`
-  case) and `ManifestTest` asserts it. S1-11 adds the "Select AI" affordance and the menu-bar half.
+- **S1-11** (merged) — the "AI setup required" banner is `components/ai-state-banner.blade.php` with
+  its wording in `App\Http\View\AiStateCopy` over `lang/{en,sv}/ai.php`; "AI ready" / "AI redo"
+  exists on exactly one code path (the `Ready` case), `ManifestTest` asserts it and
+  `AiReadyGateTest` sweeps every page in every state and both languages. The banner carries the
+  §12.2 "Select AI" affordance (→ `/settings/ai`, route `settings.ai`, network-only like every
+  page here) and "Reconfigure AI" on error. `/settings/ai` renders §12.3 screen 5 read-only:
+  nothing preselected, only adapter-backed providers (none today, said honestly); the choice
+  itself is made on the Mac. See [ai-state.md](ai-state.md).
 - **Sprint 2+** — `/assistant`, `/approvals`, `/crm/*`, Livewire/Alpine (nonce'd, bundled), push
   notifications (a separate worker concern, still never carrying brief text), user-approved
   offline data and unsent drafts (§1.2) behind an explicit opt-in, not in the shell cache.

@@ -174,7 +174,10 @@ doubles under a temporary directory so the six screens can be exercised before t
 `DesignTokens` only: Welcome (CTA, resume notice), Check (spinner, or blockers only in EN/SV),
 Install (the four automated states as a checklist with real `InstallCoreCheckpoint` substeps and
 a byte-based progress bar; Cancel), Create account (name + e-mail, inline validation), Choose AI
-(skip / each detected local runtime / own key with provider picker, nothing preselected), Done
+(S1-11: skip / each detected local runtime whose adapter exists / own key with a provider picker
+that opens on "Choose a provider"; a detected runtime without an adapter is a *Detected: …*
+suggestion card, not an option; nothing preselected, Continue disabled until a choice —
+`ChooseAiOptions`, `ChooseAiDraft`, [ai-state.md](ai-state.md) §4), Done
 ("AI setup required" banner unless `ai_state == ready`, optional-connections checklist,
 FileVault note, "Open"). Error, cancelled and rolled-back views carry the actions from
 `InstallFailure.actions`.
