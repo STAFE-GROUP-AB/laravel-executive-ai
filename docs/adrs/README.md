@@ -18,6 +18,14 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 
 Sprint 1 may not start until ADR-001, ADR-002 and ADR-003 are Accepted (`docs/ROADMAP.md`).
 
+**Residual risks are consolidated outside the ADRs.** Each ADR keeps its own "Residual risks"
+section, and [`docs/security/threat-model.md`](../security/threat-model.md) (S0-23) collects them
+into one register with a named accepting role, compensating controls and a reopen condition per row,
+plus the trust boundaries and the §11 gate mapping those decisions are supposed to satisfy. An ADR
+that changes a mitigation, or whose reopen condition fires, updates that register in the same PR; the
+threat model also records contradictions **between** ADRs rather than resolving them unilaterally (its
+§6.2).
+
 ## Conventions
 
 - Filename: `NNN-kebab-case-title.md`. Numbers are never reused; a superseding decision gets a new

@@ -310,3 +310,78 @@ docs/contributing/rulesets/main-now.json`) and (2) decide the second-account que
 work is pushed under his own GitHub identity, so GitHub cannot record a real approval and
 "require reviews" cannot be switched on; the recommendation is a second account for the
 coordinator, after which `main-target.json` (1 approval + Code Owner review) is applied.
+**Consequence for S0-23 (2026-10-10):** every row in the threat model's residual-risk register
+(`docs/security/threat-model.md` §5) carries `Signature: pending — A14`. §13's workstream H
+Definition of Done ("signed risk acceptance") cannot be met until A14 is answered, and the threat
+model states that rather than implying a sign-off that has not happened.
+
+### A15 — The shared SSRF / egress guard has no owner and no ADR
+ADR-005 D4.2(b) specifies the guard for MCP connections and says it is *shared with `Browser/Fetch`*,
+and ADR-004 D4.2 specifies the same resolve-and-pin behaviour for model endpoints — but no document
+specifies address normalisation (decimal `2130706433`, octal `0177.0.0.1`, hex, short-form `127.1`,
+IPv4-mapped IPv6 `::ffff:127.0.0.1`, NAT64/6to4 wrappers), the userinfo-authority trap
+(`http://allowed@127.0.0.1/`), the explicit cloud-metadata endpoint list (`169.254.169.254`,
+`metadata.google.internal`, `169.254.170.2`, `fd00:ec2::254`, `100.100.100.200`), `100.64.0.0/10`
+(shared address space, and the tailnet range), the Unix-socket/named-pipe prohibition, port
+restrictions, per-hop redirect re-validation outside MCP, the response size and content-type cap, or
+what a denial logs. §11 requires all of it. **Needs:** `ENG` — H with D, as a section in a new ADR or
+in the E2-5 design. The proposed 16-row checklist is `docs/security/threat-model.md` §3.4.1 (threats
+T-23 – T-29); blocks a safe `Browser/Fetch` in E2-5.
+
+### A16 — PWA browser-hardening headers are unspecified
+ADR-006 D3 fixes proxies, hosts, cookies and CSRF for both origins but sets no
+`Content-Security-Policy` (including `frame-ancestors`), `X-Frame-Options`, `Referrer-Policy`,
+`Permissions-Policy`, `X-Content-Type-Options`, COOP or CORP. That leaves clickjacking of the
+approval UI without a control and XSS without a second layer (threat-model T-21, T-22).
+**Needs:** `ENG` — C (TALL/PWA) with H, recorded in S1-05's sibling item **S1-04**, which ships the
+app shell and should set them by default with a `PwaSecurityHeadersTest`.
+
+### A17 — Spotlight and QuickLook are not excluded from the data directory
+Time Machine exclusion is decided (ADR-002 D5 `tmutil addexclusion`; ADR-003 E26
+`isExcludedFromBackupKey`), but nothing addresses Spotlight indexes or QuickLook thumbnails built
+from `data/`, `data/backups/` or a diagnostics export — plaintext derivatives of customer content
+outside our deletion story (threat-model T-45). **Needs:** `ENG` — A (macOS/Swift) with B, in E4-2.
+
+### A18 — Where the privacy mode lives, who may change it, and whether the change is audited
+ADR-004 D4/D5 define what `LOCAL_ONLY`, `EU_RESTRICTED` and `CUSTOM` *do*, and ADR-001 D4 removes
+`.env` — but no ADR says where the mode and the `LOCAL_ONLY_ALLOW_LAN` toggle are stored, who may
+change them, whether a downgrade needs re-authentication, what audit event it writes, or how the UI
+re-confirms (threat-model T-68). **Needs:** `ENG` — D with H, in E2-5.
+
+### A19 — Contradiction: which processes may call Keychain APIs
+ADR-003 D2 says "exactly **one** process holds the shared access group: the Supervisor", its D5
+entitlement table gives the Peekaboo automation helper **Keychain: none** and says it "is forbidden
+from ever holding a credential", and its forbidden list bans "Keychain API calls anywhere except the
+Supervisor (and the GUI app's own S0-15 pairing item)". ADR-005 D3.4 has the **helper** generate a
+256-bit session token and store it in a Keychain item `<bundle-prefix>.automation.session` "with an
+ACL limited to the helper and the core's signing identity" — a third Keychain writer, holding a
+credential, using the legacy `SecAccess` ACL mechanism that ADR-003 D5 keeps only as a *fallback*.
+One of the two ADRs must change: either ADR-003 D1/D5 gains a helper row, or ADR-005 D3.4 moves the
+token into the broker. **Needs:** `ENG` — H owns the reconciliation. Recorded in
+`docs/security/threat-model.md` §6.2 C1 (threats T-59, T-60); blocks E3-6 and the ADR-003 D1
+inventory. S0-23 deliberately did not resolve it.
+
+### A20 — `Mcp::local('executive')` has no documented caller authentication
+ADR-005 D4.10 protects the HTTP variant of our own MCP server with `auth:sanctum`, `throttle:mcp`,
+`Origin` validation and a loopback bind, but the stdio variant offered "for local editors" is spawned
+by whoever can run it — any same-user process — and would expose `crm.search`, `tasks.list` and
+`brief.read` without a session. The MCP spec itself says stdio implementations should retrieve
+credentials from the environment rather than follow the authorization spec, which is not a design yet.
+**Needs:** `ENG` — G with H: either drop the local variant from v1 or define its credential
+(threat-model T-55).
+
+### A21 — Two Time Machine exclusion mechanisms
+ADR-002 D5 has the installer mark the data directory with `tmutil addexclusion`; ADR-003 D6/E26 uses
+`URLResourceKey.isExcludedFromBackupKey`, which E26 itself warns "resets to `false`" after common
+file operations. Both may be intended for different paths (the data directory vs the GUI brief
+cache), but neither ADR says so, and the weaker mechanism silently failing is exactly how unencrypted
+copies accumulate (threat-model T-43). **Needs:** `ENG` — A with B, one sentence in whichever ADR
+owns the data directory.
+
+### A22 — The helper's peer-verification fallback must be unreachable in a shipped build
+ADR-005 D3.3 verifies the core's code signature on `automation.sock` but falls back to
+"uid + token + signature" **and logs a warning** if the bundled PHP binary is not signed by our team.
+ADR-001 D2 says it is signed, so the fallback should be unreachable in a notarised build — but it
+remains a code path, and a silent downgrade of the strongest control on that boundary belongs in
+health, not in a log line (threat-model T-60). **Needs:** `ENG` — G with A and H: make the fallback
+refuse to engage when `app()->isProduction()`, with a test, or delete it.
