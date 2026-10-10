@@ -106,7 +106,11 @@ php artisan queue:work database --queue=briefs,email-sync,default,ai --sleep=3 -
 
 `php artisan lea:install-state` reads or sets the §12.1 install marker, `php artisan lea:brief:placeholder`
 creates the install-time placeholder brief, and `php artisan health:selftest` runs the scheduler
-self-test by hand. Quality gates: `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`,
+self-test by hand. `php artisan lea:owner:create --name= --email= --organization=` creates the single
+owner account (exit `3` if one exists; or open `/install/owner` in the browser), and
+`php artisan lea:sessions:revoke {email|ulid}` signs that user out everywhere. Sign-in is a one-time
+code by email — no password exists; with `APP_ENV=local` and `OTP_AUTOFILL=true` the login page
+signs the owner in with one click. Details: [`docs/architecture/auth.md`](docs/architecture/auth.md). Quality gates: `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`,
 `vendor/bin/pest --ci`, `node packaging/fixtures/validate-schema.mjs`. Tests build the schema once with
 `migrate` and run inside `DatabaseTransactions`; never use a trait that drops the database.
 

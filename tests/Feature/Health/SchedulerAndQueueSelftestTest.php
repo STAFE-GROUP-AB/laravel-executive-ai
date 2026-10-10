@@ -20,9 +20,12 @@ it('schedules health:selftest and the queue self-test job every minute', functio
     $events = collect(app(Schedule::class)->events());
     $summaries = $events->map(fn (Event $event): string => $event->getSummaryForDisplay());
 
+    $selfTests = $events->filter(fn (Event $event): bool => str_contains($event->getSummaryForDisplay(), 'self-test'));
+
     expect($summaries->first(fn (string $summary): bool => str_contains($summary, 'Scheduler heartbeat')))->not->toBeNull()
         ->and($summaries->first(fn (string $summary): bool => str_contains($summary, 'queue self-test')))->not->toBeNull()
-        ->and($events->pluck('expression')->unique()->all())->toBe(['* * * * *']);
+        ->and($selfTests)->toHaveCount(2)
+        ->and($selfTests->pluck('expression')->unique()->all())->toBe(['* * * * *']);
 });
 
 it('records the scheduler heartbeat and login self-test from health:selftest', function (): void {

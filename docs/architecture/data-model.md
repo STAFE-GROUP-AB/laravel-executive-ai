@@ -49,11 +49,29 @@ Owner and user accounts. **Password-less by design**: login is a one-time code b
 | Column | Notes |
 |---|---|
 | `id` | ULID |
-| `name`, `email` | `users_email_unique` |
-| `email_verified_at`, `password` (nullable), `remember_token` | stock Laravel columns kept for the guard |
+| `name`, `email` | `users_email_unique`; the address is stored lower-cased |
+| `email_verified_at`, `password` (nullable), `remember_token` | stock Laravel columns kept for the guard; `email_verified_at` is set by the first verified one-time code |
+| `last_login_at`, `login_count` | S1-02 login bookkeeping, written by `OtpVerifier` on every verified code |
 
-`sessions.user_id` is `char(26)` to match. `password_reset_tokens` is kept for the framework and
-unused by the OTP flow.
+`sessions.user_id` is `char(26)` to match, and the `sessions` table is the source of truth for
+server-side revocation (`App\Security\Authorization\SessionRevoker`, [auth.md](auth.md) §5).
+`password_reset_tokens` is kept for the framework and unused by the OTP flow.
+
+### `otp_codes`
+
+One-time login codes (S1-02, [auth.md](auth.md) §3). Not a business object: a credential record
+with no organization, provenance or soft delete; rows expired for more than a day are pruned daily
+by `model:prune`.
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users.id` (`otp_codes_user_fk`) |
+| `code_hash` | HMAC-SHA256 of the six digits keyed with the application key — never the code |
+| `expires_at` | ten minutes after issue; issuing a new code sets this to *now* on the previous active ones |
+| `consumed_at` | set on verification; a consumed code is never looked at again |
+| `attempts` | wrong submissions; five locks the code |
+| `ip_address`, `created_at` | |
+| indexes | `otp_codes_user_active_index (user_id, consumed_at, expires_at)`, `otp_codes_expires_at_index` |
 
 ### `organizations`
 

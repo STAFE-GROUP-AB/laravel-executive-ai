@@ -12,8 +12,10 @@ use App\Support\Health\Heartbeats;
 
 /**
  * An owner account exists and the login self-test passed within its interval
- * (contract §2). Owner-exists is one indexed query; the self-test itself is
- * run by `health:selftest`, never on demand — this check reads its last result.
+ * (contract §2). Owner-exists is one indexed query; the self-test itself —
+ * owner resolution, a session round-trip and an OTP issue/verify round-trip
+ * (LoginSelfTest) — is run by `health:selftest`, never on demand. This check
+ * reads its last result and names the part that failed.
  */
 final class AuthLoginCheck implements HealthCheck
 {
@@ -48,7 +50,7 @@ final class AuthLoginCheck implements HealthCheck
         $age = $this->heartbeats->ageSeconds(Heartbeats::LOGIN_SELFTEST) ?? 0;
 
         if (($selfTest['passed'] ?? false) !== true) {
-            return CheckOutcome::fail('owner account exists; login self-test failed '.$passedAt?->toRfc3339String());
+            return CheckOutcome::fail(sprintf('owner account exists; login self-test failed (%s) %s', $this->failedParts($selfTest), $passedAt?->toRfc3339String()));
         }
 
         if ($age > $threshold) {
@@ -56,5 +58,19 @@ final class AuthLoginCheck implements HealthCheck
         }
 
         return CheckOutcome::ok('owner account exists; login self-test passed '.$passedAt?->toRfc3339String());
+    }
+
+    /** @param array<string, mixed> $selfTest */
+    private function failedParts(array $selfTest): string
+    {
+        $failed = [];
+
+        foreach (['owner' => 'owner resolution', 'session' => 'session round-trip', 'otp' => 'otp round-trip'] as $key => $label) {
+            if (array_key_exists($key, $selfTest) && $selfTest[$key] !== true) {
+                $failed[] = $label;
+            }
+        }
+
+        return $failed === [] ? 'unknown part' : implode(', ', $failed);
     }
 }

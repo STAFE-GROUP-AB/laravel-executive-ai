@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Security\Authorization\Otp\OtpHasher;
+use App\Security\Authorization\Passkeys\NotYetAvailable;
+use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
 use App\Security\Queue\RedactingFailedJobProvider;
 use App\Security\Secrets\Redactor;
 use App\Support\Health\AiReadiness;
@@ -26,7 +29,30 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AiReadiness::class, ConfiguredProviderAiReadiness::class);
         $this->app->singleton(PendingApprovals::class, NoPendingApprovals::class);
 
+        $this->registerAuthentication();
         $this->redactFailedJobExceptions();
+    }
+
+    /**
+     * S1-02: one-time codes are HMACed with the application key; passkeys are
+     * the Sprint 1 stub until E2-3 (issue #69) binds a real authenticator.
+     */
+    private function registerAuthentication(): void
+    {
+        $this->app->singleton(OtpHasher::class, function (Application $app): OtpHasher {
+            $key = (string) $app['config']['app.key'];
+
+            if (str_starts_with($key, 'base64:')) {
+                $decoded = base64_decode(substr($key, 7), true);
+                $key = $decoded === false ? $key : $decoded;
+            }
+
+            return new OtpHasher($key);
+        });
+
+        $this->app->singleton(PasskeyAuthenticator::class, function (Application $app): PasskeyAuthenticator {
+            return new NotYetAvailable((string) $app['config']['lea.auth.passkeys.tracking_issue']);
+        });
     }
 
     public function boot(): void
