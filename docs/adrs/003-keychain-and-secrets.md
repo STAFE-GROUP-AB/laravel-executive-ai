@@ -424,7 +424,7 @@ endpoint because the HTML is client-rendered).
   and `pdo_sqlite`; no SQLCipher or SQLite-encryption option.
 - **E23** SQLCipher API — https://www.zetetic.net/sqlcipher/sqlcipher-api/: "PRAGMA key should generally
   be called as the first operation on a database." Raw key form
-  `PRAGMA key = "x'2DD29CA8…'";` bypasses key derivation; default "256,000 PBKDF2 iterations"; "the
+  `PRAGMA key = "x'<64 hex>'";` bypasses key derivation; default "256,000 PBKDF2 iterations"; "the
   majority of the accessible API is identical to the C/C++ interface for SQLite 3." Performance page
   (https://www.zetetic.net/sqlcipher/performance/): "as little as 5-15% overhead"; key derivation causes
   "a substantial delay for the first operation that accesses a database after the connection is opened".
@@ -497,7 +497,7 @@ endpoint because the HTML is client-rendered).
 - Script (kept here so the measurement is reproducible without adding tooling to the repo):
 
 ```zsh
-KEY="x'2DD29CA851E7B56E4697B0E1F08507293D761A05CE4D1B628663F411A8086D99'"
+KEY="x'<64 hex chars from a CSPRNG, e.g. openssl rand -hex 32>'"  # any raw 256-bit key; never commit a real one
 schema="PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
 CREATE TABLE messages(id INTEGER PRIMARY KEY, thread_id INTEGER NOT NULL, account_id INTEGER NOT NULL,
   subject TEXT NOT NULL, body TEXT NOT NULL, received_at INTEGER NOT NULL);
