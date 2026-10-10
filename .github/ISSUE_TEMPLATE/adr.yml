@@ -1,0 +1,44 @@
+name: Architecture decision (ADR)
+description: Propose or request an architecture decision record in docs/adrs/
+title: "ADR-NNN: <decision>"
+labels: ["adr"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Blueprint §15: "Unresolved is not permission to guess." Every ADR needs a measured prototype, a vendor-doc citation, or an explicit owner decision.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What forces this decision now? Quote the blueprint section.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options considered
+      description: At least two, with trade-offs.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Prototype measurements, vendor documentation links (with version/date), or legal/licensing input.
+    validations:
+      required: true
+  - type: dropdown
+    id: decider
+    attributes:
+      label: Who must decide
+      options:
+        - Engineering (DRI + one reviewer from another workstream)
+        - Owner (legal, licensing, Apple account, business)
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: What becomes easier, what becomes harder, what is now forbidden.

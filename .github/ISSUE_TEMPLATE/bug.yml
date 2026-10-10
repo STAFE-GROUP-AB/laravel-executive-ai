@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not behave as the blueprint or docs say it should
+title: "<component>: <short description>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security problem?** Do NOT file it here. Follow [SECURITY.md](../blob/main/SECURITY.md) and report privately.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Mac app (installer / menu bar / updater)
+        - Laravel core / API
+        - PWA / admin
+        - AI engine / providers / briefs
+        - CRM
+        - Email integration
+        - GitHub integration
+        - MCP / Peekaboo
+        - Remote access (Tailscale)
+        - Docs
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and chip
+      placeholder: macOS 15.6, M4 Max
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour (include sanitized logs — never paste tokens, email content or customer data)
+    validations:
+      required: true

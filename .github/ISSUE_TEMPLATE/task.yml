@@ -1,0 +1,71 @@
+name: Task
+description: A scoped, implementable unit of work tied to a sprint and workstream
+title: "<imperative title>"
+labels: []
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      description: Blueprint §13 team / DRI
+      options:
+        - A. macOS/Swift
+        - B. Laravel platform
+        - C. TALL/PWA design
+        - D. AI/Agents
+        - E. CRM
+        - F. Integrations
+        - G. MCP/Automation
+        - H. Security/privacy
+        - I. QA/release
+        - J. Docs/community
+    validations:
+      required: true
+  - type: dropdown
+    id: sprint
+    attributes:
+      label: Sprint
+      options:
+        - Sprint 0 — Architecture freeze
+        - Sprint 1 — Vertical slice
+        - Sprint 2 — Real core
+        - Sprint 3 — Sources and automation
+        - Sprint 4 — Production candidate
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options: [S, M, L]
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What to build, with explicit file paths (blueprint §2.1 layout). State what is deliberately out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: 2–5 bullets an implementer can verify.
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issue numbers or titles that must land first.
+  - type: textarea
+    id: security
+    attributes:
+      label: Security / privacy impact
+      description: Required even if "none". New tool, scope, secret, outbound call, external input, IPC surface?
+    validations:
+      required: true
