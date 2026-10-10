@@ -1,12 +1,36 @@
-# Default owner for everything
-*                       @andreaskviby
+# CODEOWNERS — blueprint §13.2 (CODEOWNERS, two reviewers for security-critical modules),
+# backlog S0-27. The protection settings that make these entries bite are in
+# docs/contributing/branch-protection.md.
+#
+# Security-owner group. Today the project has exactly one human maintainer, so every
+# security-critical path below is routed to @andreaskviby directly. The intended owner is a
+# GitHub team, @STAFE-GROUP-AB/security-owners (blueprint §13 workstream H, Security/privacy
+# lead), which does not exist yet. When it is created: add its members, replace @andreaskviby
+# with @STAFE-GROUP-AB/security-owners on the security-critical lines only, and keep the
+# default owner line as it is. Changing this file is itself security-critical (last line).
+#
+# Later patterns win over earlier ones; the default comes first on purpose.
 
-# Security-critical modules require review from the owner (two reviewers enforced via branch protection)
-/app/Security/          @andreaskviby
-/app/Approvals/         @andreaskviby
-/app/MCP/               @andreaskviby
-/app/Integrations/      @andreaskviby
-/apps/macos/            @andreaskviby
-/packaging/             @andreaskviby
-/.github/workflows/     @andreaskviby
-/docs/adrs/             @andreaskviby
+# Default owner for everything
+*                                   @andreaskviby
+
+# Security-critical modules (CONTRIBUTING.md): two reviewers, see branch-protection.md §5
+/app/Security/                      @andreaskviby
+/app/Approvals/                     @andreaskviby
+/app/MCP/                           @andreaskviby
+/app/Integrations/                  @andreaskviby
+
+# Installer, updater, IPC (the Mac app)
+/apps/macos/                        @andreaskviby
+
+# Release signing keys, runtime manifest with pinned checksums
+/packaging/signing/                 @andreaskviby
+/packaging/manifest/                @andreaskviby
+
+# CI, secrets scanning configuration, architecture decisions
+/.github/workflows/                 @andreaskviby
+/.gitleaks.toml                     @andreaskviby
+/docs/adrs/                         @andreaskviby
+
+# This file
+/CODEOWNERS                         @andreaskviby

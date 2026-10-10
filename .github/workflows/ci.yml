@@ -1,6 +1,7 @@
 # CI — blueprint §13.2 (required checks on protected main), §14 (required suites),
-# backlog S0-05. Job names `php`, `swift` and `secrets-scan` are stable: they are the
-# required status checks configured in S0-27. Do not rename them.
+# backlog S0-05. Job names `php`, `swift`, `secrets-scan` and `fixtures` are stable: they are
+# the required status checks configured in S0-27 (docs/contributing/branch-protection.md,
+# together with `commitlint` from commitlint.yml). Do not rename them.
 #
 # "Born green": the Laravel app (S0-26) and the Xcode project (S0-25) do not exist yet.
 # Each job detects its inputs and skips with a clear log line when they are absent, then

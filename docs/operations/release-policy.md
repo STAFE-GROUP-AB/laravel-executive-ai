@@ -141,10 +141,12 @@ chore(release): prepare v0.2.0
 
 ### 1.5 What CI enforces
 
-A `commitlint`-style job (part of `ci.yml`, S0-05; required check per S0-27) checks **every commit
-in the pull request** and **the pull request title**. The PR title must be a valid header because
-the squash/merge policy from S0-27 turns it into the commit that lands on `main`. The job fails on
-the first violation and names the offending commit.
+The `commitlint` job (`.github/workflows/commitlint.yml`; required check per S0-27) checks **the
+pull request title** and **every commit header in the pull request**. The PR title must be a
+valid header because `main` is squash-merged only (S0-27, `docs/contributing/branch-protection.md`
+§3), which turns the title into the commit that lands on `main`; a bad title **fails** the job.
+Commit headers on the branch are reported as **warnings** and name the offending commit — squash
+discards them, so they do not gate the merge.
 
 Header regex (PCRE, one line, applied to the first line of the message):
 
@@ -323,10 +325,11 @@ touch version fields.
 
 ### 3.2 Merge policy
 
-The merge method (squash vs. rebase, linear history) is decided in S0-27 and must stay consistent
-with §1: whatever lands on `main` must itself pass the header regex. With squash merges that means
-the **PR title is the commit header** and the PR body's first paragraph is the body — write both
-as if they were the commit. Breaking PRs put `!` in the title and `BREAKING CHANGE:` in the body.
+The merge method is **squash only with linear history** (S0-27,
+`docs/contributing/branch-protection.md` §3), which keeps `main` consistent with §1: whatever lands
+on `main` must itself pass the header regex. With squash merges that means the **PR title is the
+commit header** and the PR body's first paragraph is the body — write both as if they were the
+commit. Breaking PRs put `!` in the title and `BREAKING CHANGE:` in the body.
 
 ### 3.3 Release procedure
 

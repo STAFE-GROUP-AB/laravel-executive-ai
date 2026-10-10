@@ -1,0 +1,98 @@
+# commitlint — release policy §1.5 (docs/operations/release-policy.md), backlog S0-27.
+# Job name `commitlint` is a required status check on `main` (docs/contributing/branch-protection.md).
+# Do not rename it.
+#
+# `main` is squash-merged only, so the PR title becomes the commit header that lands on `main`.
+# The title is therefore linted with the exact §1.5 header regex and the job FAILS on a violation.
+# The headers of the individual commits in the PR are linted too, but only as warnings: squash
+# discards them, and agent branches routinely carry work-in-progress commits.
+#
+# No third-party action: the check is a plain bash step (grep -P for the lookahead in the regex).
+# The title is read through an environment variable, never interpolated into the script.
+
+name: commitlint
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitlint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Release policy §1.5 header regex, verbatim. Change it there first; this is a copy.
+  HEADER_REGEX: '^(feat|fix|docs|test|refactor|perf|build|ci|chore|security)(\((mac|laravel|pwa|ai|crm|integrations|mcp|security|compliance|release|adr|docs)\))?(!)?: (?=[^\r\n]{1,60}$)[a-z0-9][^\r\n]*[^.\s]$'
+  HEADER_MAX_LENGTH: '72'
+
+jobs:
+  commitlint:
+    name: commitlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Lint the pull request title (becomes the squash commit header)
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          echo "PR title: $PR_TITLE"
+          status=0
+          if [ "${#PR_TITLE}" -gt "$HEADER_MAX_LENGTH" ]; then
+            echo "::error title=commitlint::PR title is ${#PR_TITLE} characters; the header limit is $HEADER_MAX_LENGTH (release policy §1.5)."
+            status=1
+          fi
+          if ! printf '%s\n' "$PR_TITLE" | grep -qP -- "$HEADER_REGEX"; then
+            echo "::error title=commitlint::PR title is not a valid Conventional Commits header. Expected '<type>(<scope>)!: <subject>' with type in feat|fix|docs|test|refactor|perf|build|ci|chore|security, optional scope in mac|laravel|pwa|ai|crm|integrations|mcp|security|compliance|release|adr|docs, lowercase subject of 1-60 characters, no trailing period (release policy §1.5)."
+            status=1
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          echo "PR title is a valid commit header."
+
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Lint the commit headers on the branch (advisory; squash discards them)
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          warnings=0
+          total=0
+          while IFS=$'\t' read -r sha header; do
+            [ -n "$sha" ] || continue
+            total=$((total + 1))
+            case "$header" in
+              Merge\ *)
+                echo "::warning title=commitlint::$sha is a merge commit ('$header'); rebase instead of merging main into the branch (release policy §1.5)."
+                warnings=$((warnings + 1))
+                continue
+                ;;
+              fixup!*|squash!*)
+                echo "::warning title=commitlint::$sha is a fixup/squash commit ('$header'); autosquash before review (release policy §1.5)."
+                warnings=$((warnings + 1))
+                continue
+                ;;
+            esac
+            if [ "${#header}" -gt "$HEADER_MAX_LENGTH" ] || ! printf '%s\n' "$header" | grep -qP -- "$HEADER_REGEX"; then
+              echo "::warning title=commitlint::$sha header '$header' does not match the §1.5 header rule."
+              warnings=$((warnings + 1))
+            fi
+          done < <(git log --no-merges --format='%h%x09%s' "$BASE_SHA..$HEAD_SHA"; git log --merges --format='%h%x09%s' "$BASE_SHA..$HEAD_SHA")
+          echo "Checked $total commit header(s); $warnings warning(s). Only the PR title gates the merge."
