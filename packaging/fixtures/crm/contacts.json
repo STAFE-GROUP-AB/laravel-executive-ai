@@ -1,0 +1,299 @@
+[
+  {
+    "id": "01KH3CETM0PGFQ5HFHQ2A5DNM9",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-02-10T10:00:00+01:00",
+    "updated_at": "2026-10-08T14:48:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KH3CETM0PGFQ5HFHQ2A5DNM9",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-02-10T10:00:00+01:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01M4FJ7ZJRDVPBT5PEZTZWC6BX"],
+    "given_name": "Karin",
+    "family_name": "Nordlund",
+    "display_name": "Karin Nordlund",
+    "title": "VD",
+    "emails": [
+      {
+        "address": "karin.nordlund@nordlund.example.se",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [
+      {
+        "number": "+46700000001",
+        "label": "mobile"
+      }
+    ],
+    "language": "sv",
+    "notes": "Vill ha svar på offerten senast fredag 10 oktober."
+  },
+  {
+    "id": "01KKGMNHK0SAX1VQBKV6VXPST8",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-03-12T10:05:00+01:00",
+    "updated_at": "2026-10-08T17:21:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KKGMNHK0SAX1VQBKV6VXPST8",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-03-12T10:05:00+01:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KKGMCCM0YSR4Q6TVT46VQE03"],
+    "given_name": "Giulia",
+    "family_name": "Ferrari",
+    "display_name": "Giulia Ferrari",
+    "title": "Responsabile acquisti",
+    "emails": [
+      {
+        "address": "giulia.ferrari@example.it",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [
+      {
+        "number": "+390200000002",
+        "label": "work"
+      }
+    ],
+    "language": "it",
+    "notes": "Organizza il ritiro a Milano dopo la conferma di consegna."
+  },
+  {
+    "id": "01KS26N8Z0W4P6VTDN4AZP0GH6",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-05-20T10:05:00+02:00",
+    "updated_at": "2026-10-08T10:45:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KS26N8Z0W4P6VTDN4AZP0GH6",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-05-20T10:05:00+02:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KS26C4008VE6T87ZXRF76DRK"],
+    "given_name": "Niccolò",
+    "family_name": "Perù",
+    "display_name": "Niccolò Perù",
+    "title": "Avvocato, socio",
+    "emails": [
+      {
+        "address": "n.peru@example.it",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [],
+    "language": "it",
+    "notes": "Preferisce incontri a Torino."
+  },
+  {
+    "id": "01KS26Q3J0TVZ3NVFNY9VKTND0",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-05-20T10:06:00+02:00",
+    "updated_at": "2026-09-30T09:00:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KS26Q3J0TVZ3NVFNY9VKTND0",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-05-20T10:06:00+02:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KS26C4008VE6T87ZXRF76DRK", "01KKGMCCM0YSR4Q6TVT46VQE03"],
+    "given_name": "Francesca",
+    "family_name": "Conti",
+    "display_name": "Francesca Conti",
+    "title": "Avvocato, socia; consigliera di amministrazione Officina Ferrari",
+    "emails": [
+      {
+        "address": "f.conti@example.it",
+        "label": "work",
+        "primary": true
+      },
+      {
+        "address": "francesca.conti@example.org",
+        "label": "personal",
+        "primary": false
+      }
+    ],
+    "phones": [
+      {
+        "number": "+390110000003",
+        "label": "work"
+      }
+    ],
+    "language": "it",
+    "notes": "Appartiene a due clienti (customer_contact): lo Studio e Officina Ferrari."
+  },
+  {
+    "id": "01M4FJ7VNR32E7DH0T2MHMD75Q",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-06-03T10:05:00+02:00",
+    "updated_at": "2026-10-08T15:40:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01M4FJ7VNR32E7DH0T2MHMD75Q",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-06-03T10:05:00+02:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KT67Y600Z18DMTCEW0G8CQ52"],
+    "given_name": "Thomas",
+    "family_name": "Weber",
+    "display_name": "Thomas Weber",
+    "title": "Geschäftsführer",
+    "emails": [
+      {
+        "address": "thomas.weber@weber-logistik.example.de",
+        "label": "work",
+        "primary": true
+      },
+      {
+        "address": "t.weber@example.de",
+        "label": "other",
+        "primary": false
+      },
+      {
+        "address": "thomas.weber@example.org",
+        "label": "personal",
+        "primary": false
+      }
+    ],
+    "phones": [
+      {
+        "number": "+49221000000004",
+        "label": "work"
+      },
+      {
+        "number": "+491700000004",
+        "label": "mobile"
+      }
+    ],
+    "language": "de",
+    "notes": "Schreibt gelegentlich von t.weber@example.de (Nebenadresse). Wünscht deutschsprachige Demo."
+  },
+  {
+    "id": "01KT687AZ030JA890HTFR6138S",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-06-03T10:06:00+02:00",
+    "updated_at": "2026-10-08T08:15:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KT687AZ030JA890HTFR6138S",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-06-03T10:06:00+02:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KT67Y600Z18DMTCEW0G8CQ52"],
+    "given_name": "Jörg",
+    "family_name": "Müßig",
+    "display_name": "Jörg Müßig",
+    "title": "Leiter Buchhaltung",
+    "emails": [
+      {
+        "address": "joerg.muessig@weber-logistik.example.de",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [],
+    "language": "de",
+    "notes": "Gibt Angebote erst frei, wenn Größe und Straße der Lagerhalle angegeben sind."
+  },
+  {
+    "id": "01KXJCXGZ091ZFGNA99GFX5MZR",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-07-15T10:05:00+02:00",
+    "updated_at": "2026-10-08T11:45:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KXJCXGZ091ZFGNA99GFX5MZR",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-07-15T10:05:00+02:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KXJCMC00D2RY518YA668KMCD"],
+    "given_name": "Zoë",
+    "family_name": "Brontë-Çelik",
+    "display_name": "Zoë Brontë-Çelik",
+    "title": "Managing Partner",
+    "emails": [
+      {
+        "address": "zoe@bronte-celik.example.com",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [
+      {
+        "number": "+442000000005",
+        "label": "work"
+      }
+    ],
+    "language": "en-GB",
+    "notes": "Board meets Mondays; wants plans before Friday syncs."
+  },
+  {
+    "id": "01KFDACWK0EPRYZ6GG2ZV1HQ2V",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-01-20T10:05:00+01:00",
+    "updated_at": "2026-10-08T13:30:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/contacts/01KFDACWK0EPRYZ6GG2ZV1HQ2V",
+    "sensitivity_class": "personal",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-01-20T10:05:00+01:00",
+      "trace_id": null
+    },
+    "customer_ids": ["01KFDA3QM02VDHVC2WGADBB9BV"],
+    "given_name": "Örjan",
+    "family_name": "Sjöström",
+    "display_name": "Örjan Sjöström",
+    "title": "Partner",
+    "emails": [
+      {
+        "address": "orjan.sjostrom@sjostrom-akerlund.example.se",
+        "label": "work",
+        "primary": true
+      }
+    ],
+    "phones": [
+      {
+        "number": "+46310000006",
+        "label": "work"
+      }
+    ],
+    "language": "sv",
+    "notes": "Göteborgskontoret byggs om hela november."
+  }
+]

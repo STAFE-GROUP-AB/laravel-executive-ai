@@ -1,0 +1,83 @@
+[
+  {
+    "id": "01M4E0J5J01J3MC6NZPVJY8QXR",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-10-08T17:30:00+02:00",
+    "updated_at": "2026-10-08T17:30:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/commitments/01M4E0J5J01J3MC6NZPVJY8QXR",
+    "sensitivity_class": "confidential",
+    "provenance": {
+      "origin": "ai_extraction",
+      "actor": "ai:ollama/fixture-local-7b-instruct",
+      "recorded_at": "2026-10-08T17:30:00+02:00",
+      "trace_id": "extract-commitments-run-2026-10-08-1"
+    },
+    "communication_id": "01M4E0J5J0CX5DFJHZJ0SX2QD6",
+    "customer_id": "01KKGMCCM0YSR4Q6TVT46VQE03",
+    "contact_id": "01KKGMNHK0SAX1VQBKV6VXPST8",
+    "direction": "owed_by_us",
+    "text": "Vi confermo la data di consegna entro venerdì 10 ottobre.",
+    "promised_at": "2026-10-08T17:02:00+02:00",
+    "due_at": "2026-10-10T23:59:59+02:00",
+    "status": "open",
+    "follow_up_task_id": "01M4E25E60X6CSP4R0VDN6J8PS",
+    "brief_item_id": "01M4FJ7KVR644NVGHTFEGR4VEY",
+    "extracted_by": "ai"
+  },
+  {
+    "id": "01M4DRWT00SN9DJY4VES21NQH1",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-10-08T15:00:00+02:00",
+    "updated_at": "2026-10-08T15:00:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/commitments/01M4DRWT00SN9DJY4VES21NQH1",
+    "sensitivity_class": "confidential",
+    "provenance": {
+      "origin": "ai_extraction",
+      "actor": "ai:ollama/fixture-local-7b-instruct",
+      "recorded_at": "2026-10-08T15:00:00+02:00",
+      "trace_id": "extract-commitments-run-2026-10-08-1"
+    },
+    "communication_id": "01M4DRWT001ZTKBKSA08R7V2K2",
+    "customer_id": "01M4FJ7ZJRDVPBT5PEZTZWC6BX",
+    "contact_id": "01KH3CETM0PGFQ5HFHQ2A5DNM9",
+    "direction": "owed_to_us",
+    "text": "Vi bokar entreprenören inom en vecka efter ert svar.",
+    "promised_at": "2026-10-08T14:48:00+02:00",
+    "due_at": null,
+    "status": "open",
+    "follow_up_task_id": null,
+    "brief_item_id": null,
+    "extracted_by": "ai"
+  },
+  {
+    "id": "01M3XXF0M0CJRN5QYJVNHTA8NB",
+    "organization_id": "01M1DRV4R0PA37N135HTBQ3Y60",
+    "created_at": "2026-10-02T11:05:00+02:00",
+    "updated_at": "2026-10-02T11:05:00+02:00",
+    "deleted_at": null,
+    "source_id": null,
+    "source_uri": "lxai://crm/commitments/01M3XXF0M0CJRN5QYJVNHTA8NB",
+    "sensitivity_class": "confidential",
+    "provenance": {
+      "origin": "manual",
+      "actor": "user:01M1DRV4R0N9670DRZXA824K45",
+      "recorded_at": "2026-10-02T11:05:00+02:00",
+      "trace_id": null
+    },
+    "communication_id": "01M3XXF0M017B5JR777ZABF9X3",
+    "customer_id": "01KT67Y600Z18DMTCEW0G8CQ52",
+    "contact_id": "01M4FJ7VNR32E7DH0T2MHMD75Q",
+    "direction": "owed_by_us",
+    "text": "Zugesagt: wir bereiten eine deutschsprachige Demo vor, Termin folgt.",
+    "promised_at": "2026-10-02T11:00:00+02:00",
+    "due_at": null,
+    "status": "open",
+    "follow_up_task_id": "01M3XXF0M0VY2E30S2C0FBN3ND",
+    "brief_item_id": null,
+    "extracted_by": "user"
+  }
+]

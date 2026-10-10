@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP0WDR6G8Y6WF5YX6KR",
+  "version": 2,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "en",
+  "subject": "Executive Brief Thursday 9 October: Milano delivery date is disputed between email and CRM",
+  "summary": "Your email thread with Giulia Ferrari says the Milano delivery is due Friday 10 October; the CRM project record says 17 October. The brief does not pick a side and sets no deadline: both sources are cited and the conflict is marked as uncertain. CI on main is still red. This is version 2 of today's brief, regenerated after the CRM record was synced.",
+  "items": [
+    {
+      "id": "01M4FBBSP0AMXXDCTSJS24CZ07",
+      "kind": "commitment",
+      "title": "Milano delivery date: email says 10 October, CRM says 17 October",
+      "body": "In the email thread you wrote: \"Vi confermo la data di consegna entro venerdì 10 ottobre.\" The CRM project \"Consegna ottobre\", updated 6 October, has due date 2026-10-17 with the note \"spostata di una settimana su richiesta di Giulia\". The two sources contradict each other and neither supersedes the other on its face: the email is newer than the CRM note, but the CRM note claims the move was Giulia's own request. No due date is set on this item until you resolve which date holds.",
+      "priority": "high",
+      "source_refs": ["01M4FBBB18MTC3BTTPFFDJDR80", "01M4FBBC0GD86T7A0KSWEZ41KF"],
+      "uncertainty": {
+        "reason": "Email (8 Oct) and CRM project record (6 Oct) state different delivery dates; the brief cannot determine which is current.",
+        "confidence": 0.5
+      },
+      "action_ids": ["01M4FBBSP0BZ0KED9SPZPPMSJ6"],
+      "dedupe_key": "email:thread:officina-ferrari:consegna-ottobre"
+    },
+    {
+      "id": "01M4FBBSP0THASK9WC22NYX4MZ",
+      "kind": "risk",
+      "title": "CI on main is still red",
+      "body": "The \"ci\" workflow has now failed on nine consecutive runs since Monday 6 October. The latest failure is still BriefDeliveryTest::it_never_sends_twice_on_retry.",
+      "priority": "high",
+      "source_refs": ["01M4FBBCZRX026S6YB214CXRQJ"],
+      "dedupe_key": "github:STAFE-GROUP-AB/laravel-executive-ai:workflow:ci:main"
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBBB18MTC3BTTPFFDJDR80",
+      "type": "email",
+      "uri": "lxai://email/threads/01M4FBBB18MTC3BTTPFFDJDR80",
+      "account_id": "01M1GENQC0H10CAG1VZ6PZCXTW",
+      "account_label": "andreas@example.it (iCloud Mail)",
+      "title": "Re: Consegna ottobre — Officina Ferrari S.r.l.",
+      "captured_at": "2026-10-09T05:29:45+02:00",
+      "excerpt_hash": "sha256:9a73694b58c0824c9bf54d55949402ec5d5a9ed1b094858905fec00daaa3b5e1"
+    },
+    {
+      "id": "01M4FBBC0GD86T7A0KSWEZ41KF",
+      "type": "crm",
+      "uri": "lxai://crm/projects/01M2J18Y00KX8VD12RT0E08F2E",
+      "account_id": null,
+      "title": "Officina Ferrari S.r.l. — Consegna ottobre",
+      "captured_at": "2026-10-09T05:29:46+02:00",
+      "excerpt_hash": "sha256:d41a1dc488b9d8a43ccf6975efa795e9c7c2306f3ebe29cb2d4c4300319a636e"
+    },
+    {
+      "id": "01M4FBBCZRX026S6YB214CXRQJ",
+      "type": "github",
+      "uri": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/workflows/ci.yml?query=branch%3Amain",
+      "account_id": "01M1GF81A07RD39TC6A1BRKMKG",
+      "account_label": "github.com/STAFE-GROUP-AB (GitHub App)",
+      "title": "ci — main — still failing",
+      "captured_at": "2026-10-09T05:29:47+02:00",
+      "excerpt_hash": "sha256:72433cdbf0d01e09f9dc3823a1d3cee8ef08ba75b41c80564824f52eaa647257"
+    }
+  ],
+  "action_ids": ["01M4FBBSP0BZ0KED9SPZPPMSJ6"],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:78a2af8233ffca5916c716d7eefb09f9796e28d95f64e7d812653f28b7999f05",
+    "trace_id": "01M4FBBSP0WDR6G8Y6WF5YX6KR-run-2"
+  },
+  "content_hash": "sha256:1f48692ad25ee7af0fb79740b7da7e9e3c45ed8788922ac55929525c30efa459",
+  "delivery_state": "queued",
+  "idempotency_key": "01M4FBBSP0DYCEK669GSDH4E20",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0DYCEK669GSDH4E20",
+      "sent_at": "2026-10-09T05:30:02+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0DYCEK669GSDH4E20",
+      "sent_at": "2026-10-09T05:30:02+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "queued",
+      "message_id": null,
+      "sent_at": null
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

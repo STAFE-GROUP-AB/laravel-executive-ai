@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP009WPM31B80NFD4NX",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "en",
+  "subject": "Executive Brief Thursday 9 October: Nordlund Bygg wants an answer by Friday",
+  "summary": "Karin Nordlund reminded you about offer 2026-114 and wants an answer by Friday 10 October. The menu bar and the PWA received this brief; the email delivery failed three times because the sending account needs to be reauthorised. No further attempts will be made until you reconnect the account.",
+  "items": [
+    {
+      "id": "01M4FBBSP0D4P456TJYGPRZ12C",
+      "kind": "action",
+      "title": "Reply to Nordlund Bygg AB about offer 2026-114",
+      "body": "Karin Nordlund wrote: \"Vi behöver ert svar senast fredag 10 oktober för att kunna boka entreprenören.\" The offer was sent on Tuesday 7 October and no confirmation has gone out.",
+      "priority": "critical",
+      "due_at": "2026-10-10T17:00:00+02:00",
+      "source_refs": ["01M4FBB748B5VKK6RX004AYZ9Z"],
+      "dedupe_key": "crm:customer:nordlund-bygg:offer:2026-114"
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBB748B5VKK6RX004AYZ9Z",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB748B5VKK6RX004AYZ9Z",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Workspace)",
+      "title": "Re: Offert 2026-114 ombyggnad lager Mölndal",
+      "captured_at": "2026-10-09T05:29:41+02:00",
+      "excerpt_hash": "sha256:6c3da27568cfe9f2ada91c0743ce04dc1573ebe3021ee5473886004bac3a3073"
+    }
+  ],
+  "action_ids": [],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:df00648faf61657df8d68b62479780ac85511feb8c862f25583239963801c2f9",
+    "trace_id": "01M4FBBSP009WPM31B80NFD4NX-run-1"
+  },
+  "content_hash": "sha256:fc33ab297f634add6f9ec89cd1327ba618b7498d6b3b7b9fc76ea29976084aa8",
+  "delivery_state": "failed",
+  "idempotency_key": "01M4FBBSP0F2PPQBGXK60WQ878",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0F2PPQBGXK60WQ878",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0F2PPQBGXK60WQ878",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "failed",
+      "message_id": null,
+      "sent_at": null,
+      "error": "SMTP 421 service not available; retry scheduled"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 2,
+      "status": "failed",
+      "message_id": null,
+      "sent_at": null,
+      "error": "SMTP 451 temporary local problem; retry scheduled"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 3,
+      "status": "failed",
+      "message_id": null,
+      "sent_at": null,
+      "error": "SMTP 535 authentication failed; sending account marked for reauthorization, no further retries"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

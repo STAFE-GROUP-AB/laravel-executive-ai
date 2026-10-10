@@ -287,11 +287,15 @@ cd packaging/fixtures && npm ci      # pinned ajv + ajv-formats, lockfile commit
 node packaging/fixtures/validate-schema.mjs
 ```
 
-The script validates both schema files as draft 2020-12 schemas in ajv strict mode, then validates
+The script validates the schema files as draft 2020-12 schemas in ajv strict mode, then validates
 every `packaging/fixtures/briefs/*.json` against `brief.schema.json` (plus `content_hash`,
 referential integrity of `source_refs`/`action_ids`, period ordering, `stale_after > generated_at`,
-and the single-`sent`-per-target rule) and every `packaging/fixtures/health/*.json` against
-`health.schema.json`. Exit code 1 on any failure. S0-05 runs it as a CI step:
+and the single-`sent`-per-target rule), every `packaging/fixtures/health/*.json` against
+`health.schema.json`, and the CRM fixture pack `packaging/fixtures/crm/*.json` against
+`crm/crm.schema.json` with cross-file referential integrity (S0-18). The canonicalisation and
+`content_hash` rule live in `packaging/fixtures/lib/jcs.mjs`;
+`packaging/fixtures/tools/hash-brief.mjs` prints or rewrites a fixture's hash. Exit code 1 on any
+failure. S0-05 runs it as a CI step:
 
 ```yaml
 - run: node packaging/fixtures/validate-schema.mjs

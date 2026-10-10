@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/crm/crm.schema.json",
+  "$comment": "CRM fixture pack schema 1.0.0 (S0-18). Describes the shape of packaging/fixtures/crm/*.json as ONE object keyed by file basename; validate-schema.mjs assembles the files and adds referential-integrity checks. Blueprint §3.1 (common fields), §3.2 (local CRM), §5.6 (explainable matching), ADR-002 D9 (communications projection). This is a fixture contract, not the storage schema: S1-01 / E2-2 own the tables and must be able to round-trip these records.",
+  "title": "CRM fixture pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["customers", "contacts", "projects", "tasks", "communications", "commitments"],
+  "properties": {
+    "customers": {
+      "description": "Customers with a legal identity (§3.2). Two customers MAY share an email domain; §5.6 forbids assuming that one domain is one customer.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/customer" }
+    },
+    "contacts": {
+      "description": "Natural persons at one or more customers, each with one or more email addresses (§3.2).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/contact" }
+    },
+    "projects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/project" }
+    },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/task" }
+    },
+    "communications": {
+      "description": "CRM timeline projection (ADR-002 D9): one row per link between a source item and a customer or contact, with an explainable, correctable match.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/communication" }
+    },
+    "commitments": {
+      "description": "Promises extracted from communication (§3.1 commitments, §3.2 'komma ihåg lovade uppföljningar').",
+      "type": "array",
+      "items": { "$ref": "#/$defs/commitment" }
+    }
+  },
+  "$defs": {
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "nullableUlid": {
+      "oneOf": [
+        { "$ref": "#/$defs/ulid" },
+        { "type": "null" }
+      ]
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nullableDateTime": {
+      "oneOf": [
+        { "$ref": "#/$defs/dateTime" },
+        { "type": "null" }
+      ]
+    },
+    "nullableDate": {
+      "oneOf": [
+        { "type": "string", "format": "date" },
+        { "type": "null" }
+      ]
+    },
+    "bcp47": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z]{4})?(-([A-Za-z]{2}|[0-9]{3}))?(-([A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$"
+    },
+    "emailAddress": {
+      "description": "Lowercase. Fixtures use example.* domains only; never a real address.",
+      "type": "string",
+      "format": "email",
+      "pattern": "^[^A-Z\\s]+$",
+      "maxLength": 320
+    },
+    "nullableEmailAddress": {
+      "oneOf": [
+        { "$ref": "#/$defs/emailAddress" },
+        { "type": "null" }
+      ]
+    },
+    "domain": {
+      "type": "string",
+      "format": "hostname",
+      "pattern": "^[a-z0-9.-]+$"
+    },
+    "uri": {
+      "description": "Resolvable inside the product (lxai://…) or a public https URL. Never carries credentials.",
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2000
+    },
+    "nullableUri": {
+      "oneOf": [
+        { "$ref": "#/$defs/uri" },
+        { "type": "null" }
+      ]
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "shortText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\r\\n]+$"
+    },
+    "priority": {
+      "$comment": "Same vocabulary as brief items so a task can be lifted into a brief unchanged.",
+      "type": "string",
+      "enum": ["critical", "high", "normal", "low"]
+    },
+    "sensitivityClass": {
+      "description": "§3.1 sensitivity class. public: may leave the organisation; internal: business data without personal data; confidential: commercially sensitive; personal: relates to an identified natural person (GDPR Art. 4) and is subject to export/erasure (§3.2). Vocabulary proposed by S0-18; the security ADRs may refine it.",
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "personal"]
+    },
+    "provenance": {
+      "description": "§3.1 provenance: who or what created the record and under which trace. Never contains credentials or prompt text.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "actor", "recorded_at", "trace_id"],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["manual", "import", "sync", "ai_extraction", "user_correction"]
+        },
+        "actor": {
+          "description": "user:<ulid> for a person, job:<JobName> for a sync or scheduled job, ai:<provider>/<model> for a model step.",
+          "type": "string",
+          "pattern": "^(user:[0-7][0-9A-HJKMNP-TV-Z]{25}|job:[A-Za-z][A-Za-z0-9]*|ai:[a-z0-9_-]+/[A-Za-z0-9._:-]+)$"
+        },
+        "recorded_at": { "$ref": "#/$defs/dateTime" },
+        "trace_id": {
+          "description": "ai_runs / tool_runs trace id when a job or model produced the record; null for manual entry.",
+          "type": ["string", "null"],
+          "maxLength": 128
+        }
+      }
+    },
+    "common": {
+      "$comment": "§3.1: every business object carries ULID, organization_id, timestamps, source_id/source_uri, sensitivity class, provenance, soft-delete. Entities add their own properties on top and close with unevaluatedProperties: false.",
+      "type": "object",
+      "required": [
+        "id",
+        "organization_id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "source_id",
+        "source_uri",
+        "sensitivity_class",
+        "provenance"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "organization_id": { "$ref": "#/$defs/ulid" },
+        "created_at": { "$ref": "#/$defs/dateTime" },
+        "updated_at": { "$ref": "#/$defs/dateTime" },
+        "deleted_at": { "$ref": "#/$defs/nullableDateTime" },
+        "source_id": {
+          "description": "Id of the external or internal record this object was derived from (§3.1). Null for records typed in by a person.",
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
+        "source_uri": {
+          "description": "Locator of the original record (§5.6 'källhänvisning till original'); for manual records the object's own lxai:// URI.",
+          "$ref": "#/$defs/uri"
+        },
+        "sensitivity_class": { "$ref": "#/$defs/sensitivityClass" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "customer": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "legal_name",
+            "display_name",
+            "country",
+            "registration_number",
+            "email_domains",
+            "website",
+            "status",
+            "owner_user_id",
+            "tags",
+            "notes"
+          ],
+          "properties": {
+            "legal_name": { "$ref": "#/$defs/shortText" },
+            "display_name": { "$ref": "#/$defs/shortText" },
+            "country": {
+              "description": "ISO 3166-1 alpha-2.",
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            "registration_number": {
+              "description": "Organisation number / VAT id as issued in the customer's country. Fictional in fixtures.",
+              "type": ["string", "null"],
+              "maxLength": 50
+            },
+            "email_domains": {
+              "description": "Domains seen on this customer's mail. NOT a unique key: several customers may list the same domain (§5.6).",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/domain" }
+            },
+            "website": { "$ref": "#/$defs/nullableUri" },
+            "status": {
+              "type": "string",
+              "enum": ["prospect", "active", "dormant", "churned"]
+            },
+            "owner_user_id": {
+              "description": "The user responsible for the relationship (§3.2 'relationer/owner').",
+              "$ref": "#/$defs/ulid"
+            },
+            "tags": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/shortText" }
+            },
+            "notes": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "contactEmail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "label", "primary"],
+      "properties": {
+        "address": { "$ref": "#/$defs/emailAddress" },
+        "label": {
+          "type": "string",
+          "enum": ["work", "personal", "other"]
+        },
+        "primary": {
+          "description": "Exactly one address per contact is primary (checked by the validator).",
+          "type": "boolean"
+        }
+      }
+    },
+    "contactPhone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "label"],
+      "properties": {
+        "number": {
+          "description": "E.164. Fixtures use fictional numbers.",
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{6,14}$"
+        },
+        "label": {
+          "type": "string",
+          "enum": ["work", "mobile", "other"]
+        }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "customer_ids",
+            "given_name",
+            "family_name",
+            "display_name",
+            "title",
+            "emails",
+            "phones",
+            "language",
+            "notes"
+          ],
+          "properties": {
+            "customer_ids": {
+              "description": "customer_contact pivot (§3.1). A person can belong to more than one customer.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/ulid" }
+            },
+            "given_name": { "$ref": "#/$defs/shortText" },
+            "family_name": { "$ref": "#/$defs/shortText" },
+            "display_name": { "$ref": "#/$defs/shortText" },
+            "title": {
+              "type": ["string", "null"],
+              "maxLength": 200
+            },
+            "emails": {
+              "description": "§3.2 'flera e-postadresser'.",
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/contactEmail" }
+            },
+            "phones": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/contactPhone" }
+            },
+            "language": {
+              "description": "Preferred correspondence language (BCP-47).",
+              "$ref": "#/$defs/bcp47"
+            },
+            "notes": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "githubLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "uri"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["repository", "issue", "pull_request"]
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/",
+          "maxLength": 2000
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "customer_id",
+            "name",
+            "status",
+            "starts_on",
+            "due_on",
+            "contact_ids",
+            "github_links",
+            "description"
+          ],
+          "properties": {
+            "customer_id": { "$ref": "#/$defs/ulid" },
+            "name": { "$ref": "#/$defs/shortText" },
+            "status": {
+              "type": "string",
+              "enum": ["planned", "active", "on_hold", "done", "cancelled"]
+            },
+            "starts_on": { "$ref": "#/$defs/nullableDate" },
+            "due_on": { "$ref": "#/$defs/nullableDate" },
+            "contact_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/ulid" }
+            },
+            "github_links": {
+              "description": "§3.2 'GitHub-länkar'; §3.1 project_links.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/githubLink" }
+            },
+            "description": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "task": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "title",
+            "description",
+            "status",
+            "priority",
+            "due_at",
+            "customer_id",
+            "project_id",
+            "contact_id",
+            "assignee_user_ids"
+          ],
+          "properties": {
+            "title": { "$ref": "#/$defs/shortText" },
+            "description": { "$ref": "#/$defs/text" },
+            "status": {
+              "type": "string",
+              "enum": ["todo", "doing", "blocked", "done"]
+            },
+            "priority": { "$ref": "#/$defs/priority" },
+            "due_at": {
+              "description": "Only when a source or the user stated a deadline (§4.2: no invented deadlines).",
+              "$ref": "#/$defs/nullableDateTime"
+            },
+            "customer_id": { "$ref": "#/$defs/nullableUlid" },
+            "project_id": { "$ref": "#/$defs/nullableUlid" },
+            "contact_id": { "$ref": "#/$defs/nullableUlid" },
+            "assignee_user_ids": {
+              "description": "task_assignees (§3.1). Users are not part of this pack; the owner's ULID is documented in README.md.",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/ulid" }
+            }
+          }
+        }
+      ]
+    },
+    "matchedBy": {
+      "type": "string",
+      "enum": ["rule", "ai", "user"]
+    },
+    "matchCorrection": {
+      "description": "The match this row replaced when a user corrected it (§5.6 'möjlighet att korrigera felaktiga matchningar'). The original stays visible so the correction is auditable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customer_id", "contact_id", "matched_by", "match_reason", "confidence", "corrected_at"],
+      "properties": {
+        "customer_id": { "$ref": "#/$defs/nullableUlid" },
+        "contact_id": { "$ref": "#/$defs/nullableUlid" },
+        "matched_by": { "$ref": "#/$defs/matchedBy" },
+        "match_reason": { "$ref": "#/$defs/shortText" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "corrected_at": { "$ref": "#/$defs/dateTime" }
+      }
+    },
+    "communication": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "source_type",
+            "account_id",
+            "account_label",
+            "direction",
+            "occurred_at",
+            "subject",
+            "excerpt",
+            "from_address",
+            "to_addresses",
+            "customer_id",
+            "contact_id",
+            "match_reason",
+            "matched_by",
+            "confidence",
+            "correction_of"
+          ],
+          "properties": {
+            "source_type": {
+              "description": "Morph target of source_id (ADR-002 D9): email_messages today, GitHub items or notes tomorrow.",
+              "type": "string",
+              "enum": ["email_message", "github_issue", "github_pull_request", "call_note", "meeting_note"]
+            },
+            "account_id": {
+              "description": "Connected external account the item was read from; null for notes typed in locally. §5.6: the source account is always shown.",
+              "$ref": "#/$defs/nullableUlid"
+            },
+            "account_label": {
+              "type": ["string", "null"],
+              "maxLength": 200
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["inbound", "outbound", "internal"]
+            },
+            "occurred_at": { "$ref": "#/$defs/dateTime" },
+            "subject": { "$ref": "#/$defs/shortText" },
+            "excerpt": {
+              "description": "Plain-text excerpt (HTML sanitised away). Prompt-injection corpora (S0-19) put their payloads here.",
+              "$ref": "#/$defs/text"
+            },
+            "from_address": { "$ref": "#/$defs/nullableEmailAddress" },
+            "to_addresses": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/emailAddress" }
+            },
+            "customer_id": { "$ref": "#/$defs/nullableUlid" },
+            "contact_id": { "$ref": "#/$defs/nullableUlid" },
+            "match_reason": {
+              "description": "Human-readable explanation of why this item was linked to this customer/contact (§5.6 'förklarlig'). Required and non-empty; 'same domain' alone is a weak reason and must say so.",
+              "$ref": "#/$defs/shortText"
+            },
+            "matched_by": { "$ref": "#/$defs/matchedBy" },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "correction_of": {
+              "oneOf": [
+                { "$ref": "#/$defs/matchCorrection" },
+                { "type": "null" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "commitment": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": [
+            "communication_id",
+            "customer_id",
+            "contact_id",
+            "direction",
+            "text",
+            "promised_at",
+            "due_at",
+            "status",
+            "follow_up_task_id",
+            "brief_item_id",
+            "extracted_by"
+          ],
+          "properties": {
+            "communication_id": {
+              "description": "The communication the promise was made in; the timeline shows it as the source.",
+              "$ref": "#/$defs/ulid"
+            },
+            "customer_id": { "$ref": "#/$defs/ulid" },
+            "contact_id": { "$ref": "#/$defs/nullableUlid" },
+            "direction": {
+              "description": "owed_by_us: the owner promised something; owed_to_us: the counterpart promised something.",
+              "type": "string",
+              "enum": ["owed_by_us", "owed_to_us"]
+            },
+            "text": {
+              "description": "The promise, quoted verbatim from the source where possible.",
+              "$ref": "#/$defs/text"
+            },
+            "promised_at": { "$ref": "#/$defs/dateTime" },
+            "due_at": {
+              "description": "Only when the source states a deadline (§4.2).",
+              "$ref": "#/$defs/nullableDateTime"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["open", "kept", "missed", "withdrawn"]
+            },
+            "follow_up_task_id": {
+              "description": "The task created to honour the promise (§3.2 'komma ihåg lovade uppföljningar').",
+              "$ref": "#/$defs/nullableUlid"
+            },
+            "brief_item_id": {
+              "description": "Id of the brief item (briefs/*.json items[].id) that surfaced this commitment, when one did.",
+              "$ref": "#/$defs/nullableUlid"
+            },
+            "extracted_by": {
+              "type": "string",
+              "enum": ["ai", "user"]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

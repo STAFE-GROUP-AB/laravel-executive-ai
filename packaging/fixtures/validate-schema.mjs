@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-15 IPC contract,
-// S0-20 install-timer record) and every committed fixture against them. CI step:
-// `node packaging/fixtures/validate-schema.mjs` (see S0-05).
+// S0-18 CRM fixture pack, S0-20 install-timer record) and every committed fixture against them.
+// CI step: `node packaging/fixtures/validate-schema.mjs` (see S0-05).
 //
 // Exit code 0 when everything passes, 1 on any failure. No network access.
 
-import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -25,20 +24,27 @@ import {
     signingKey,
     tokenMac,
 } from './ipc-signing.mjs';
+import { briefContentHash } from './lib/jcs.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
 const rel = (path) => relative(repoRoot, path);
 
+// mode "each": every fixture file is one document validated against the schema.
+// mode "pack": all fixture files together form one document keyed by file basename (without
+// .json), so cross-file references can be checked. Schema files inside the fixture directory are
+// skipped by name.
 const suites = [
     {
         schema: join(here, 'brief.schema.json'),
         fixturesDir: join(here, 'briefs'),
+        mode: 'each',
         extraChecks: [checkBriefContentHash, checkBriefReferentialIntegrity],
     },
     {
         schema: join(here, 'health.schema.json'),
         fixturesDir: join(here, 'health'),
+        mode: 'each',
         extraChecks: [],
     },
     {
@@ -46,6 +52,7 @@ const suites = [
         // validator; this ajv pass catches drift between the two).
         schema: join(here, '..', 'manifest', 'install-timer', 'record.schema.json'),
         fixturesDir: join(here, '..', 'manifest', 'install-timer', 'results', 'example'),
+        mode: 'each',
         extraChecks: [checkInstallTimerRecordIsSynthetic],
     },
     {
@@ -53,7 +60,16 @@ const suites = [
         fixturesDir: join(here, 'ipc'),
         // ipc.schema.json $refs the brief and health schemas by $id; they are registered when the
         // suites above compile, so this suite must come after them.
+        mode: 'each',
         extraChecks: [checkIpcSignatures, checkIpcEmbeddedBrief],
+    },
+    {
+        // Last: commitments[].brief_item_id must resolve to an item of a brief validated above
+        // (briefs/ and the brief embedded in the ipc briefs.latest exchange both count).
+        schema: join(here, 'crm', 'crm.schema.json'),
+        fixturesDir: join(here, 'crm'),
+        mode: 'pack',
+        extraChecks: [checkCrmReferentialIntegrity],
     },
 ];
 
@@ -62,6 +78,9 @@ addFormats(ajv);
 
 let failures = 0;
 let validated = 0;
+
+// Item ids seen in validated briefs; CRM commitments may point at them (brief_item_id).
+const knownBriefItemIds = new Set();
 
 function fail(subject, message) {
     failures += 1;
@@ -83,29 +102,8 @@ function formatErrors(errors) {
         .join('\n      ');
 }
 
-// RFC 8785 (JCS) canonicalisation for the value types the brief schema allows: objects with sorted
-// member names, arrays in order, strings, integers, bounded decimals, booleans and null.
-function canonicalize(value) {
-    if (Array.isArray(value)) {
-        return `[${value.map(canonicalize).join(',')}]`;
-    }
-
-    if (value !== null && typeof value === 'object') {
-        const keys = Object.keys(value).sort();
-
-        return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalize(value[k])}`).join(',')}}`;
-    }
-
-    return JSON.stringify(value);
-}
-
 function checkBriefContentHash(subject, brief) {
-    const envelope = { ...brief };
-    delete envelope.delivery_state;
-    delete envelope.deliveries;
-    delete envelope.content_hash;
-
-    const digest = `sha256:${createHash('sha256').update(canonicalize(envelope), 'utf8').digest('hex')}`;
+    const digest = briefContentHash(brief);
 
     if (brief.content_hash !== digest) {
         fail(subject, `content_hash mismatch: document says ${brief.content_hash}, envelope hashes to ${digest}`);
@@ -120,6 +118,7 @@ function checkBriefReferentialIntegrity(subject, brief) {
     const sourceIds = new Set(brief.sources.map((s) => s.id));
     const actionIds = new Set(brief.action_ids);
     const itemIds = new Set();
+    const dedupeKeys = new Set();
     const problems = [];
 
     if (brief.sources.length !== sourceIds.size) {
@@ -132,6 +131,7 @@ function checkBriefReferentialIntegrity(subject, brief) {
         }
 
         itemIds.add(item.id);
+        knownBriefItemIds.add(item.id);
 
         for (const ref of item.source_refs ?? []) {
             if (! sourceIds.has(ref)) {
@@ -143,6 +143,14 @@ function checkBriefReferentialIntegrity(subject, brief) {
             if (! actionIds.has(actionId)) {
                 problems.push(`item ${item.id} references action ${actionId} missing from action_ids`);
             }
+        }
+
+        if (item.dedupe_key !== undefined) {
+            if (dedupeKeys.has(item.dedupe_key)) {
+                problems.push(`two items share dedupe_key ${item.dedupe_key} (§4.2: one matter, one item)`);
+            }
+
+            dedupeKeys.add(item.dedupe_key);
         }
     }
 
@@ -317,6 +325,185 @@ function checkIpcEmbeddedBrief(subject, exchange) {
     return ok;
 }
 
+// Referential integrity and pack invariants for packaging/fixtures/crm (blueprint §3.1, §3.2,
+// §5.6; ADR-002 D9). The schema checks shapes; this checks that the files describe one world.
+function checkCrmReferentialIntegrity(subject, pack) {
+    const problems = [];
+    const byId = new Map();
+    const index = (name) => new Map(pack[name].map((r) => [r.id, r]));
+
+    for (const [file, records] of Object.entries(pack)) {
+        for (const record of records) {
+            if (byId.has(record.id)) {
+                problems.push(`${file}: id ${record.id} is also used in ${byId.get(record.id)}`);
+            }
+
+            byId.set(record.id, file);
+
+            if (Date.parse(record.updated_at) < Date.parse(record.created_at)) {
+                problems.push(`${file} ${record.id}: updated_at is before created_at`);
+            }
+
+            if (record.deleted_at !== null && Date.parse(record.deleted_at) < Date.parse(record.created_at)) {
+                problems.push(`${file} ${record.id}: deleted_at is before created_at`);
+            }
+        }
+    }
+
+    const organizationIds = new Set(Object.values(pack).flat().map((r) => r.organization_id));
+
+    if (organizationIds.size !== 1) {
+        problems.push(`the pack must describe exactly one organisation, found ${[...organizationIds].join(', ')}`);
+    }
+
+    const customers = index('customers');
+    const contacts = index('contacts');
+    const projects = index('projects');
+    const tasks = index('tasks');
+    const communications = index('communications');
+
+    const requireRef = (file, record, field, target, targetName) => {
+        const value = record[field];
+
+        if (value === null || value === undefined) {
+            return;
+        }
+
+        if (! target.has(value)) {
+            problems.push(`${file} ${record.id}: ${field} ${value} does not exist in ${targetName}`);
+        }
+    };
+
+    const requireRefs = (file, record, field, target, targetName) => {
+        for (const value of record[field] ?? []) {
+            if (! target.has(value)) {
+                problems.push(`${file} ${record.id}: ${field} entry ${value} does not exist in ${targetName}`);
+            }
+        }
+    };
+
+    const contactBelongsTo = (contactId, customerId) => contacts.get(contactId)?.customer_ids.includes(customerId) ?? false;
+
+    const seenAddresses = new Map();
+
+    for (const contact of pack.contacts) {
+        requireRefs('contacts', contact, 'customer_ids', customers, 'customers');
+
+        const primaries = contact.emails.filter((e) => e.primary).length;
+
+        if (primaries !== 1) {
+            problems.push(`contacts ${contact.id}: exactly one primary email required, found ${primaries}`);
+        }
+
+        for (const { address } of contact.emails) {
+            if (seenAddresses.has(address)) {
+                problems.push(`contacts ${contact.id}: address ${address} is also on contact ${seenAddresses.get(address)}`);
+            }
+
+            seenAddresses.set(address, contact.id);
+        }
+    }
+
+    for (const project of pack.projects) {
+        requireRef('projects', project, 'customer_id', customers, 'customers');
+        requireRefs('projects', project, 'contact_ids', contacts, 'contacts');
+
+        for (const contactId of project.contact_ids) {
+            if (contacts.has(contactId) && ! contactBelongsTo(contactId, project.customer_id)) {
+                problems.push(`projects ${project.id}: contact ${contactId} does not belong to customer ${project.customer_id}`);
+            }
+        }
+
+        if (project.starts_on !== null && project.due_on !== null && project.due_on < project.starts_on) {
+            problems.push(`projects ${project.id}: due_on is before starts_on`);
+        }
+    }
+
+    for (const task of pack.tasks) {
+        requireRef('tasks', task, 'customer_id', customers, 'customers');
+        requireRef('tasks', task, 'project_id', projects, 'projects');
+        requireRef('tasks', task, 'contact_id', contacts, 'contacts');
+
+        const project = task.project_id === null ? null : projects.get(task.project_id);
+
+        if (project && task.customer_id !== null && project.customer_id !== task.customer_id) {
+            problems.push(`tasks ${task.id}: project ${task.project_id} belongs to another customer than customer_id`);
+        }
+
+        if (task.contact_id !== null && task.customer_id !== null && contacts.has(task.contact_id) && ! contactBelongsTo(task.contact_id, task.customer_id)) {
+            problems.push(`tasks ${task.id}: contact ${task.contact_id} does not belong to customer ${task.customer_id}`);
+        }
+    }
+
+    for (const communication of pack.communications) {
+        requireRef('communications', communication, 'customer_id', customers, 'customers');
+        requireRef('communications', communication, 'contact_id', contacts, 'contacts');
+
+        if (communication.customer_id === null && communication.contact_id === null) {
+            problems.push(`communications ${communication.id}: a timeline row links to a customer or a contact (ADR-002 D9)`);
+        }
+
+        if (communication.customer_id !== null && communication.contact_id !== null && contacts.has(communication.contact_id) && ! contactBelongsTo(communication.contact_id, communication.customer_id)) {
+            problems.push(`communications ${communication.id}: contact ${communication.contact_id} does not belong to customer ${communication.customer_id}`);
+        }
+
+        if (communication.account_id !== null && communication.account_label === null) {
+            problems.push(`communications ${communication.id}: account_label is required when account_id is set (§5.6)`);
+        }
+
+        if (communication.correction_of !== null) {
+            if (communication.matched_by !== 'user') {
+                problems.push(`communications ${communication.id}: correction_of implies matched_by user`);
+            }
+
+            requireRef('communications', communication.correction_of, 'customer_id', customers, 'customers');
+        }
+    }
+
+    for (const commitment of pack.commitments) {
+        requireRef('commitments', commitment, 'communication_id', communications, 'communications');
+        requireRef('commitments', commitment, 'customer_id', customers, 'customers');
+        requireRef('commitments', commitment, 'contact_id', contacts, 'contacts');
+        requireRef('commitments', commitment, 'follow_up_task_id', tasks, 'tasks');
+
+        const communication = communications.get(commitment.communication_id);
+
+        if (communication && communication.customer_id !== null && communication.customer_id !== commitment.customer_id) {
+            problems.push(`commitments ${commitment.id}: communication ${commitment.communication_id} is linked to another customer`);
+        }
+
+        if (commitment.brief_item_id !== null && ! knownBriefItemIds.has(commitment.brief_item_id)) {
+            problems.push(`commitments ${commitment.id}: brief_item_id ${commitment.brief_item_id} is not an item of any brief fixture`);
+        }
+
+        if (commitment.due_at !== null && Date.parse(commitment.due_at) < Date.parse(commitment.promised_at)) {
+            problems.push(`commitments ${commitment.id}: due_at is before promised_at`);
+        }
+    }
+
+    // §5.6: the pack must keep at least one email domain that belongs to more than one customer,
+    // so explainable-matching tests always have something to fail against. Do not "fix" this.
+    const customersPerDomain = new Map();
+
+    for (const customer of pack.customers) {
+        for (const domain of customer.email_domains) {
+            customersPerDomain.set(domain, (customersPerDomain.get(domain) ?? 0) + 1);
+        }
+    }
+
+    if (! [...customersPerDomain.values()].some((count) => count >= 2)) {
+        problems.push('no email domain is shared by two customers; §5.6 fixtures require one');
+    }
+
+    if (problems.length > 0) {
+        fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    return true;
+}
+
 function listJsonFiles(dir) {
     let entries;
 
@@ -331,9 +518,27 @@ function listJsonFiles(dir) {
     }
 
     return entries
-        .filter((e) => e.isFile() && e.name.endsWith('.json'))
+        .filter((e) => e.isFile() && e.name.endsWith('.json') && ! e.name.endsWith('.schema.json'))
         .map((e) => join(dir, e.name))
         .sort();
+}
+
+function validateDocument(subject, document, validate, extraChecks) {
+    if (! validate(document)) {
+        fail(subject, formatErrors(validate.errors));
+
+        return;
+    }
+
+    let extraOk = true;
+
+    for (const check of extraChecks) {
+        extraOk = check(subject, document) && extraOk;
+    }
+
+    if (extraOk) {
+        pass(subject);
+    }
 }
 
 for (const suite of suites) {
@@ -370,6 +575,27 @@ for (const suite of suites) {
         continue;
     }
 
+    if (suite.mode === 'pack') {
+        const subject = `${rel(suite.fixturesDir)}/*.json`;
+        const pack = {};
+        let readable = true;
+
+        for (const fixture of fixtures) {
+            try {
+                pack[basename(fixture, '.json')] = readJson(fixture);
+            } catch (error) {
+                fail(rel(fixture), `unreadable JSON: ${error.message}`);
+                readable = false;
+            }
+        }
+
+        if (readable) {
+            validateDocument(subject, pack, validate, suite.extraChecks);
+        }
+
+        continue;
+    }
+
     for (const fixture of fixtures) {
         const subject = rel(fixture);
         let document;
@@ -381,20 +607,7 @@ for (const suite of suites) {
             continue;
         }
 
-        if (! validate(document)) {
-            fail(subject, formatErrors(validate.errors));
-            continue;
-        }
-
-        let extraOk = true;
-
-        for (const check of suite.extraChecks) {
-            extraOk = check(subject, document) && extraOk;
-        }
-
-        if (extraOk) {
-            pass(subject);
-        }
+        validateDocument(subject, document, validate, suite.extraChecks);
     }
 }
 

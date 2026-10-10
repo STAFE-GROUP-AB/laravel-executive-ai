@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP0H4JXQDT4Q6ZFWDKD",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "en",
+  "subject": "Executive Brief Thursday 9 October: Zoë Brontë-Çelik wants the São Paulo plan, PR #212 needs review",
+  "summary": "Zoë Brontë-Çelik (Brontë & Çelik Associates Ltd) asked for the São Paulo rollout plan before Friday's sync. PR #212 — “Add naïve UTF-8 façade for the mail renderer” — has waited for your review since yesterday. Whether the rollout needs a Portuguese-language brief is unknown.",
+  "items": [
+    {
+      "id": "01M4FBBSP0SMX08BQGJBTNX4S0",
+      "kind": "action",
+      "title": "Send Zoë Brontë-Çelik the São Paulo rollout plan",
+      "body": "Zoë wrote: “Could you share the São Paulo rollout plan before Friday’s sync? Our board meets Monday and I’d rather not improvise.” The sync is in the calendar for Friday 10 October at 14:00 London time.",
+      "priority": "high",
+      "due_at": "2026-10-10T15:00:00+02:00",
+      "source_refs": ["01M4FBB748PDAWAE1FR0BNTW18", "01M4FBB92RAEPMJVG9QDSB5WF6"],
+      "action_ids": ["01M4FBBSP0W93VT23Y8W03GT02"],
+      "dedupe_key": "crm:customer:bronte-celik:rollout-plan"
+    },
+    {
+      "id": "01M4FBBSP0876N5HQQ2SFDNYHH",
+      "kind": "followup",
+      "title": "Review PR #212 “Add naïve UTF-8 façade for the mail renderer”",
+      "body": "Opened by a contributor on Wednesday; CI is green and you are the requested reviewer. The description notes it fixes mojibake in subjects containing ß and ö.",
+      "priority": "normal",
+      "source_refs": ["01M4FBB83GHQDWHQGR6XDH0ETC"],
+      "dedupe_key": "github:STAFE-GROUP-AB/laravel-executive-ai:pull:212"
+    },
+    {
+      "id": "01M4FBBSP0P3T9NFZR88P8EA1T",
+      "kind": "info",
+      "title": "A Portuguese-language brief may be expected for São Paulo",
+      "body": "Nothing in the thread says which language the São Paulo team reads. The question is raised so you can ask Zoë; it is not a requirement anyone stated.",
+      "priority": "low",
+      "uncertainty": {
+        "reason": "No source mentions language requirements; inferred from the rollout location.",
+        "confidence": 0.3
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "01M4FBB748PDAWAE1FR0BNTW18",
+      "type": "email",
+      "uri": "lxai://email/messages/01M4FBB748PDAWAE1FR0BNTW18",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Workspace)",
+      "title": "São Paulo rollout – plan before Friday?",
+      "captured_at": "2026-10-09T05:29:41+02:00",
+      "excerpt_hash": "sha256:88f3a34b981b3a8de85a4842f8ca3fbd68ee89528a33854302da19aa05e63735"
+    },
+    {
+      "id": "01M4FBB83GHQDWHQGR6XDH0ETC",
+      "type": "github",
+      "uri": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/pull/212",
+      "account_id": "01M1GF81A07RD39TC6A1BRKMKG",
+      "account_label": "github.com/STAFE-GROUP-AB (GitHub App)",
+      "title": "PR #212: Add naïve UTF-8 façade for the mail renderer",
+      "captured_at": "2026-10-09T05:29:42+02:00",
+      "excerpt_hash": "sha256:eee4ac2bdb2125ec054ab51fbe07975ccb0313459153555860c44713f0c90864"
+    },
+    {
+      "id": "01M4FBB92RAEPMJVG9QDSB5WF6",
+      "type": "calendar",
+      "uri": "lxai://calendar/events/01M4FBB92RAEPMJVG9QDSB5WF6",
+      "account_id": "01M4FJ7YKGT1R7QHBVEY0MNKEC",
+      "account_label": "andreas@example.se (Google Calendar)",
+      "title": "Rollout sync — Brontë & Çelik",
+      "captured_at": "2026-10-09T05:29:43+02:00",
+      "excerpt_hash": "sha256:ecc00695a3582862ab56615a3b258136893c50b71894e3ed13aa02e79985de01"
+    }
+  ],
+  "action_ids": ["01M4FBBSP0W93VT23Y8W03GT02"],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:b91b33217c0982674036f50fcf7ca6c39c960033e2d2a7e4e657cc8573ca4250",
+    "trace_id": "01M4FBBSP0H4JXQDT4Q6ZFWDKD-run-1"
+  },
+  "content_hash": "sha256:d0fc91b5592b7895512999caa33a16a4c765e6b96cdf14bce5e1991ef4270ccf",
+  "delivery_state": "sent",
+  "idempotency_key": "01M4FBBSP0S45AMYEJM630F80Y",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP0S45AMYEJM630F80Y",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP0S45AMYEJM630F80Y",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "<01M4FBBSP0S45AMYEJM630F80Y.email.andreas=example.se@laravel-executive-ai.local>",
+      "sent_at": "2026-10-09T05:30:06+02:00"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}

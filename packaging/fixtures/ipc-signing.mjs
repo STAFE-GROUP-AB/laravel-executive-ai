@@ -7,6 +7,8 @@
 
 import { createHash, createHmac } from 'node:crypto';
 
+import { canonicalize } from './lib/jcs.mjs';
+
 // The documented test key: 32 zero bytes. Never a valid production key (§4.6).
 export const TEST_KEY = Buffer.alloc(32, 0);
 
@@ -87,19 +89,9 @@ export function parseElevation(elevation) {
 
 // RFC 8785 (JCS) canonical form. Fixture bodies are JSON values; the bytes that are hashed on the
 // wire are whatever the client sent, and conformance tests send exactly this form (§4.6).
-export function canonicalJson(value) {
-    if (Array.isArray(value)) {
-        return `[${value.map(canonicalJson).join(',')}]`;
-    }
-
-    if (value !== null && typeof value === 'object') {
-        const keys = Object.keys(value).sort();
-
-        return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
-    }
-
-    return JSON.stringify(value);
-}
+// The one definition of canonical bytes in the repo lives in lib/jcs.mjs (shared with the brief
+// content_hash); this is the same function under the name the IPC contract uses.
+export const canonicalJson = canonicalize;
 
 export function bodyBytes(body) {
     if (body === null || body === undefined) {

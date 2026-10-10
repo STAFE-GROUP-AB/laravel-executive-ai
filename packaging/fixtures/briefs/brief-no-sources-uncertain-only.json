@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "id": "01M4FBBSP0AP5KDVVMRGEDKG3K",
+  "version": 1,
+  "generated_at": "2026-10-09T05:30:00+02:00",
+  "period_start": "2026-10-08T05:30:00+02:00",
+  "period_end": "2026-10-09T05:30:00+02:00",
+  "language": "en",
+  "subject": "Executive Brief Thursday 9 October: three unconfirmed signals, nothing sourced",
+  "summary": "No connected source produced a citable record in this period. The three items below are inferences from earlier context and each one carries an explicit uncertainty marker; none has a deadline, because no source states one. Treat this brief as a prompt to check, not as facts.",
+  "items": [
+    {
+      "id": "01M4FBBSP0DE4RRRXVKD4685NH",
+      "kind": "risk",
+      "title": "The Q4 release may slip past 13 October",
+      "body": "CI on main has been red for several days and two security reviews are still open. No source in this period records a decision or a new date; this is an assessment.",
+      "priority": "normal",
+      "uncertainty": {
+        "reason": "Inferred from CI status and the review queue; no source names a new release date.",
+        "confidence": 0.4
+      }
+    },
+    {
+      "id": "01M4FBBSP0Q3CDWWX6C85QD7RD",
+      "kind": "followup",
+      "title": "Nordlund Bygg AB probably expects an answer before the weekend",
+      "body": "The offer 2026-114 was sent on Tuesday and Karin Nordlund has asked about it before. Nothing new arrived in this period, so the expectation is extrapolated, not quoted. No due date is given for that reason.",
+      "priority": "normal",
+      "uncertainty": {
+        "reason": "No message from Nordlund Bygg AB in this period; expectation extrapolated from the earlier reminder.",
+        "confidence": 0.5
+      }
+    },
+    {
+      "id": "01M4FBBSP03NTAGZKJK6BVE2MD",
+      "kind": "info",
+      "title": "Weber Logistik GmbH may be comparing offers",
+      "body": "Thomas Weber asked for a German-language demo and a callback this week. Whether a competitor is involved is not stated anywhere; the item exists so you can decide whether to ask.",
+      "priority": "low",
+      "uncertainty": {
+        "reason": "Speculation from timing alone; no source mentions a competitor.",
+        "confidence": 0.25
+      }
+    }
+  ],
+  "sources": [],
+  "action_ids": [],
+  "model_provenance": {
+    "provider": "ollama",
+    "model": "fixture-local-7b-instruct",
+    "privacy_mode": "LOCAL_ONLY",
+    "prompt_hash": "sha256:386276a4ee8082d6cc30fa16969480929016059840702702c55a22f35c7b4335",
+    "trace_id": "01M4FBBSP0AP5KDVVMRGEDKG3K-run-1"
+  },
+  "content_hash": "sha256:cf9d3ce011755d29f21b64c365d90cee4b1bddde2e9069acfa64427cf967dce0",
+  "delivery_state": "sent",
+  "idempotency_key": "01M4FBBSP02CMHAVWCD3W5Y2BF",
+  "deliveries": [
+    {
+      "channel": "menubar",
+      "recipient": "menubar:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "menubar:01M4FBBSP02CMHAVWCD3W5Y2BF",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "pwa",
+      "recipient": "pwa:local",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "pwa:01M4FBBSP02CMHAVWCD3W5Y2BF",
+      "sent_at": "2026-10-09T05:30:01+02:00"
+    },
+    {
+      "channel": "email",
+      "recipient": "andreas@example.se",
+      "attempt": 1,
+      "status": "sent",
+      "message_id": "<01M4FBBSP02CMHAVWCD3W5Y2BF.email.andreas=example.se@laravel-executive-ai.local>",
+      "sent_at": "2026-10-09T05:30:04+02:00"
+    }
+  ],
+  "stale_after": "2026-10-10T05:30:00+02:00"
+}
