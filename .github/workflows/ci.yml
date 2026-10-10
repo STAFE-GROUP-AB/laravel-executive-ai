@@ -410,3 +410,10 @@ jobs:
       - name: Install-timer runner tests (S0-20)
         if: steps.detect.outputs.has_install_timer == 'true'
         run: node --test 'packaging/manifest/install-timer/**/*.test.mjs'
+
+      # Service-worker cache-policy audit (S1-04, blueprint §1.2). Dependency-free node:test;
+      # self-detecting so this step needs no change to the detect step above. Runs against the
+      # worker source; the `php` job's Pest suite covers the built public/sw.js after `npm run build`.
+      - name: Service-worker cache audit (S1-04)
+        if: hashFiles('packaging/fixtures/e2e/sw-cache-audit.test.mjs') != ''
+        run: node --test 'packaging/fixtures/e2e/**/*.test.mjs'

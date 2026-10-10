@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Route;
 | Required from routes/web.php, so everything here runs inside the `web`
 | group (session, CSRF, ResolveRequestOrigin, SecurityHeaders). Login is a
 | one-time code by email; there is no password or password-reset route.
-| The unauthenticated pages are served with Cache-Control: no-store.
+| The unauthenticated pages are served with Cache-Control: no-store. The
+| signed-in surface (/home, /briefs) lives in routes/pwa.php (S1-04) under
+| the route names `home` and `briefs` that the login redirect relies on.
 |
 */
 
@@ -32,14 +34,4 @@ Route::middleware('cache.headers:no_store')->group(function (): void {
     Route::post('/logout', LogoutController::class)
         ->middleware('auth')
         ->name('logout');
-});
-
-/*
-| The PWA's signed-in surface. S1-04 replaces the two closures below with its
-| own components and views (resources/views/home, resources/views/briefs); the
-| paths, the route names and the `auth` middleware are the contract it builds on.
-*/
-Route::middleware('auth')->group(function (): void {
-    Route::get('/home', fn () => view('auth.signed-in-placeholder', ['title' => 'Home']))->name('home');
-    Route::get('/briefs', fn () => view('auth.signed-in-placeholder', ['title' => 'Briefs']))->name('briefs');
 });

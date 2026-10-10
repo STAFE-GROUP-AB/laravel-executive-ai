@@ -10,3 +10,114 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../vendor/livewire/livewire/resources/views/**/*.blade.php';
 @source '../../storage/framework/views/*.php';
+
+/*
+ * App shell (S1-04). Everything below reads tokens only; no raw colours, no
+ * inline styles in Blade (the pages run under a strict CSP, threat-model A16).
+ */
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+        scroll-padding-top: var(--size-touch-min);
+    }
+
+    body {
+        font-family: var(--font-sans);
+        background-color: var(--color-canvas);
+        color: var(--color-text-primary);
+        overflow-wrap: break-word;
+    }
+
+    /* design-system.md §6: every interactive element shows the ring; never removed without replacement. */
+    :focus-visible {
+        outline: var(--focus-ring-width) solid var(--color-focus-ring);
+        outline-offset: var(--focus-ring-offset);
+    }
+
+    svg {
+        vertical-align: middle;
+    }
+}
+
+@layer components {
+    .skip-link {
+        position: absolute;
+        top: -100vh;
+        left: var(--space-4);
+        z-index: var(--z-tooltip);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-md);
+        background-color: var(--color-accent);
+        color: var(--color-text-on-accent);
+        font-weight: var(--font-weight-medium);
+    }
+
+    .skip-link:focus {
+        top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+    }
+
+    .card {
+        padding: var(--space-5);
+        border-radius: var(--radius-lg);
+        background-color: var(--color-surface);
+        box-shadow: var(--shadow-1);
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        display: inline-flex;
+        min-height: var(--size-touch-min);
+        min-width: var(--size-touch-min);
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-5);
+        border-radius: var(--radius-md);
+        font-size: var(--text-md);
+        line-height: var(--leading-md);
+        font-weight: var(--font-weight-medium);
+        text-decoration: none;
+        transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+    }
+
+    .btn-primary {
+        background-color: var(--color-accent);
+        color: var(--color-text-on-accent);
+    }
+
+    .btn-primary:hover {
+        background-color: var(--color-accent-hover);
+    }
+
+    .btn-secondary {
+        border: 1px solid var(--color-border-strong);
+        background-color: var(--color-surface);
+        color: var(--color-text-primary);
+    }
+
+    .btn-secondary:hover {
+        background-color: var(--color-surface-sunken);
+    }
+}
+
+/* iPhone safe areas (viewport-fit=cover): the tab bar sits in the home-indicator area. */
+@utility pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Room under <main> for the fixed tab bar; lg:pb-* overrides it once the sidebar takes over. */
+@utility pb-tabbar {
+    padding-bottom: calc(var(--size-touch-min) + var(--space-10) + env(safe-area-inset-bottom, 0px));
+}
+
+@utility fill-accent {
+    fill: var(--color-accent);
+}
+
+@utility fill-on-accent {
+    fill: var(--color-text-on-accent);
+}

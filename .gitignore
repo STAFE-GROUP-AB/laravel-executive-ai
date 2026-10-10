@@ -13,6 +13,8 @@ Thumbs.db
 /vendor/
 /node_modules/
 /public/build/
+# Built by `vite build --config vite.sw.config.js` from resources/js/service-worker.js (S1-04)
+/public/sw.js
 /public/hot
 /public/storage
 /storage/*.key

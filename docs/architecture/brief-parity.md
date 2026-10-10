@@ -74,14 +74,14 @@ From brief-schema §6, restated per surface:
 
 | Obligation | Mail (S1-03) | PWA (S1-04) | Menu bar (S1-09) |
 |---|---|---|---|
-| Builds the payload from the document, renders from the payload | `BriefMailRenderer` → `BriefParityPayload` → `BriefViewModel` → Blade | reuse `BriefParityPayload` | Swift port of `fromDocument()` |
-| Shows every item, in order, title + whole body | done | | |
-| `due_at` only when present | done | | |
-| Source refs (type · account · title · uri) **or** uncertainty marker (reason + confidence); both when both | done | | |
-| `privacy_mode` visible | footer | | |
-| Every `action_ids` entry reachable as an approval affordance | link per action id | | |
-| Exports the payload as JCS | `RenderedBrief::parityJson()`; `lea:brief:preview` writes `*.parity.json` | | |
-| Declares the max `schema_version`; refuses a higher major | `BriefMailRenderer::SUPPORTED_SCHEMA_VERSION` | | |
+| Builds the payload from the document, renders from the payload | `BriefMailRenderer` → `BriefParityPayload` → `BriefViewModel` → Blade | `BriefPage::fromBrief()` → `BriefParityPayload` → the same `BriefViewModel::build()` → `briefs/show.blade.php` | Swift port of `fromDocument()` |
+| Shows every item, in order, title + whole body | done | done (`<li data-brief-item data-position>`) | |
+| `due_at` only when present | done | done (`<time data-due-at>`) | |
+| Source refs (type · account · title · uri) **or** uncertainty marker (reason + confidence); both when both | done | done (`data-source-ref`, `data-uncertainty`) | |
+| `privacy_mode` visible | footer | header `<dd data-privacy-mode>` | |
+| Every `action_ids` entry reachable as an approval affordance | link per action id | badge per action id (`data-action-id`); links once `/approvals` exists | |
+| Exports the payload as JCS | `RenderedBrief::parityJson()`; `lea:brief:preview` writes `*.parity.json` | `GET /briefs/{brief}/parity.json` (`BriefPage::parityJson()`); `data-parity-hash` on the article | |
+| Declares the max `schema_version`; refuses a higher major | `BriefMailRenderer::SUPPORTED_SCHEMA_VERSION` | inherits the mapper's `Brief::SCHEMA_VERSION` gate at import | |
 
 ## 3. The S1-10 test (to be written)
 
@@ -95,5 +95,8 @@ From brief-schema §6, restated per surface:
   `tests/Feature/Briefs/Mail/BriefMailSnapshotTest.php` (`tests/__snapshots__/brief-canonical.{html,txt}`).
 
 Open for S1-10: where the Swift export is produced (a `swift test` that writes JSON to a path the
-PHP test reads, or a committed Swift snapshot regenerated in CI) and how the PWA export is captured
-(a JSON endpoint next to `/briefs/{brief}` versus a Blade `data-parity` attribute).
+PHP test reads, or a committed Swift snapshot regenerated in CI). The PWA export is the JSON endpoint
+`GET /briefs/{brief}/parity.json` (S1-04; auth + `BriefPolicy`, `Cache-Control: no-store`), which
+returns `BriefPage::parityJson()` — the payload the page was rendered from — and the page carries
+`data-parity-hash` for a DOM-side check (`tests/Feature/Pwa/BriefsPagesTest.php` asserts both equal
+the mail snapshot).

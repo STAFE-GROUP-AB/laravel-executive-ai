@@ -104,6 +104,10 @@ php artisan schedule:work              # health:selftest + queue self-test every
 php artisan queue:work database --queue=briefs,email-sync,default,ai --sleep=3 --tries=3
 ```
 
+The PWA shell is at `/home` and `/briefs` once an owner is signed in (S1-02); `npm run build` also emits the
+service worker to `public/sw.js`, which caches the app shell and nothing else — see
+[`docs/architecture/pwa.md`](docs/architecture/pwa.md) for the cache policy and the install steps.
+
 `php artisan lea:install-state` reads or sets the §12.1 install marker, `php artisan lea:brief:placeholder`
 creates the install-time placeholder brief, and `php artisan health:selftest` runs the scheduler
 self-test by hand. `php artisan lea:owner:create --name= --email= --organization=` creates the single

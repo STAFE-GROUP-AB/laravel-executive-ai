@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Laravel Executive AI mark (S1-04). Accent #0f5f70 and text-on-accent #ffffff from tokens.css.
+       Source for the PNGs in this folder: see docs/architecture/pwa.md for the regeneration command. -->
+  <rect width="512" height="512" rx="112" fill="#0f5f70"/>
+  <rect x="136" y="156" width="240" height="28" rx="14" fill="#ffffff"/>
+  <rect x="136" y="242" width="240" height="28" rx="14" fill="#ffffff"/>
+  <rect x="136" y="328" width="152" height="28" rx="14" fill="#ffffff"/>
+  <circle cx="352" cy="342" r="22" fill="#ffffff"/>
+</svg>
