@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://laravel-executive-ai.dev/schemas/ai-providers-1.0.0.json",
+  "title": "AI provider catalogue",
+  "$comment": "S1-11 (blueprint §1.1, §12.3 screen 5; ADR-004 D1/D6). The one list of AI providers the product knows about, shared by the Laravel core (App\\AI\\Providers\\SupportedProviders) and the Mac installer (AiProviderCatalog); both mirror it statically and a test on each side pins the equality. `adapter_available` is the only field that changes over time: it flips to true in the PR that lands a bound App\\AI\\Providers\\AiProviderAdapter for the provider (tests/Unit/AI/SupportedProvidersTest.php refuses a flag without a binding and a binding without the flag). SELECT_AI and the PWA list only entries with adapter_available true (§1.1 \"only options a real adapter supports\"); nothing in this file is ever preselected. See docs/architecture/ai-state.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "providers"],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "display_name", "kind", "driver", "adapter_available"],
+        "properties": {
+          "id": {
+            "description": "Stable provider id: the value of LEA_AI_PROVIDER, the Swift AiProviderID / LocalAiRuntime id and the key under lang/*/ai.php `providers`.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "kind": {
+            "description": "local runs on the owner's Mac (no key, no egress); remote is the owner's own account with a key stored by the Supervisor (ADR-003).",
+            "enum": ["local", "remote"]
+          },
+          "driver": {
+            "description": "Laravel AI SDK driver the adapter is built on (ADR-004 D1 table).",
+            "enum": ["ollama", "openai-compatible", "openai", "anthropic"]
+          },
+          "adapter_available": {
+            "description": "True only when a real AiProviderAdapter implementation for this provider is bound in the core.",
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

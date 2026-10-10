@@ -65,7 +65,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(Looping::class, QueueWorkerHeartbeat::class);
 
-        View::composer(['layouts.app', 'home.*', 'briefs.*'], ShellStateComposer::class);
+        View::composer(['layouts.app', 'home.*', 'briefs.*', 'settings.*'], ShellStateComposer::class);
     }
 
     /**

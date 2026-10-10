@@ -51,6 +51,15 @@ const suites = [
         extraChecks: [],
     },
     {
+        // S1-11 provider catalogue shared by the Laravel core (SupportedProviders) and the Mac
+        // installer (AiProviderCatalog); each side mirrors it statically and a test pins the
+        // equality (docs/architecture/ai-state.md).
+        schema: join(here, 'ai-providers.schema.json'),
+        fixturesDir: join(here, 'ai-providers'),
+        mode: 'each',
+        extraChecks: [checkAiProviderCatalogue],
+    },
+    {
         // S0-20 install-timer record (the tool also validates with its own dependency-free
         // validator; this ajv pass catches drift between the two).
         schema: join(here, '..', 'manifest', 'install-timer', 'record.schema.json'),
@@ -239,6 +248,29 @@ function checkBriefReferentialIntegrity(subject, brief) {
 
     if (problems.length > 0) {
         fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    return true;
+}
+
+// S1-11: provider ids are the join key for LEA_AI_PROVIDER, the Swift ids and lang/*/ai.php, so
+// they must be unique, and a local provider never needs a key-bearing driver's remote variant.
+function checkAiProviderCatalogue(subject, catalogue) {
+    const ids = catalogue.providers.map((p) => p.id);
+    const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+
+    if (duplicates.length > 0) {
+        fail(subject, `duplicate provider ids: ${[...new Set(duplicates)].join(', ')}`);
+
+        return false;
+    }
+
+    const badLocal = catalogue.providers.filter((p) => p.kind === 'local' && ! ['ollama', 'openai-compatible'].includes(p.driver));
+
+    if (badLocal.length > 0) {
+        fail(subject, `local providers must use the ollama or openai-compatible driver (ADR-004 D1): ${badLocal.map((p) => p.id).join(', ')}`);
 
         return false;
     }

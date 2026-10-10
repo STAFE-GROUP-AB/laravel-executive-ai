@@ -24,6 +24,15 @@ final readonly class AiReadinessReport
         return new self(AiState::ConfiguredUntested, $provider, null);
     }
 
+    /**
+     * Only ConfiguredProviderAiReadiness (and its Sprint 2 successor over
+     * `ai_runs`) may build this, from a recorded successful completion.
+     */
+    public static function ready(string $provider, CarbonImmutable $lastSuccessAt): self
+    {
+        return new self(AiState::Ready, $provider, $lastSuccessAt);
+    }
+
     public function isReady(): bool
     {
         return $this->state === AiState::Ready;
