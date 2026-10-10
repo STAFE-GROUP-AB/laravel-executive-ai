@@ -458,3 +458,20 @@ ADR is wrong gets amended in the same PR.
    expansion then moves back to Xcode. The exact commands and the pass/fail criteria for the lab run
    are the checklist in `packaging/signing/README.md` §5; the verdict is recorded here and in
    services.md §1 in the same PR as the ADR amendment (S1-14 lab Mac).
+
+### A25 — A keep-data uninstall deletes `core.app-key` while keeping the database (ADR-003 D8)
+S1-13 (#41) ships the ADR-003 D8 promise literally: uninstall deletes **every**
+`se.stafe.executive-ai.*` Keychain item, including `core.app-key`, even when the person chooses
+*Keep my data* (`docs/operations/uninstall.md` §5). In Sprint 1 that is harmless — nothing in `data/`
+is encrypted with `APP_KEY` yet (connector credentials live in the Keychain, not the database) — and
+the Supervisor generates a fresh key on the next boot. From the first encrypted attribute or
+encrypted cast (Sprint 2+: OAuth state, MCP server config, anything under `encrypted:` casts), a
+keep-data uninstall followed by a reinstall would leave rows that can no longer be decrypted.
+Options: (a) a keep-data uninstall keeps `core.app-key` (and only it) and D8's wording becomes
+"every item except the application key when data is kept"; (b) the uninstaller re-encrypts with a
+throwaway key written into `data/` before deleting — rejected on sight, it moves the key next to the
+data; (c) keep-data uninstall exports nothing and the docs say encrypted rows are lost — a bad
+surprise for exactly the person who chose to keep their data. **Recommended:** (a), decided before the
+first `encrypted` cast lands; the `previous[]` field of the `laravel_app_key` envelope already
+supports rotation afterwards. **Needs:** `DECISION` — H (security lead) with A; gate on the first
+Sprint 2 item that adds an encrypted column.
