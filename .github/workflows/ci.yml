@@ -351,3 +351,47 @@ jobs:
           path: gitleaks.sarif
           if-no-files-found: ignore
           retention-days: 7
+
+  fixtures:
+    name: fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect fixture tooling
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          has_validator=false; has_contrast=false
+          [ -f packaging/fixtures/package.json ] && [ -f packaging/fixtures/validate-schema.mjs ] && has_validator=true
+          [ -f packaging/fixtures/design/contrast-check.mjs ] && has_contrast=true
+          {
+            echo "has_validator=$has_validator"
+            echo "has_contrast=$has_contrast"
+          } >> "$GITHUB_OUTPUT"
+          [ "$has_validator" = true ] || echo "::notice title=fixtures::No schema validator yet (lands with S0-13/S0-14). Skipping."
+          [ "$has_contrast" = true ] || echo "::notice title=fixtures::No contrast check yet (lands with S0-24). Skipping."
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        if: steps.detect.outputs.has_validator == 'true' || steps.detect.outputs.has_contrast == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate brief and health schemas and fixtures (S0-13, S0-14)
+        if: steps.detect.outputs.has_validator == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix packaging/fixtures --no-audit --no-fund
+          git diff --exit-code -- packaging/fixtures/package-lock.json
+          node packaging/fixtures/validate-schema.mjs
+
+      - name: Design token contrast gate (S0-24)
+        if: steps.detect.outputs.has_contrast == 'true'
+        run: node packaging/fixtures/design/contrast-check.mjs
