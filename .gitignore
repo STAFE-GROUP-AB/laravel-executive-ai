@@ -43,6 +43,9 @@ apps/macos/**/*.dSYM.zip
 *.sqlite.stop
 packaging/fixtures/prototypes/**/tmp/
 
+# Fixture validation tooling (packaging/fixtures/package.json); lockfile is committed
+/packaging/fixtures/node_modules/
+
 # Local models, data, secrets — never in git
 *.gguf
 *.mlmodelc
