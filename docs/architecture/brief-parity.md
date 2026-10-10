@@ -74,14 +74,14 @@ From brief-schema §6, restated per surface:
 
 | Obligation | Mail (S1-03) | PWA (S1-04) | Menu bar (S1-09) |
 |---|---|---|---|
-| Builds the payload from the document, renders from the payload | `BriefMailRenderer` → `BriefParityPayload` → `BriefViewModel` → Blade | `BriefPage::fromBrief()` → `BriefParityPayload` → the same `BriefViewModel::build()` → `briefs/show.blade.php` | Swift port of `fromDocument()` |
-| Shows every item, in order, title + whole body | done | done (`<li data-brief-item data-position>`) | |
-| `due_at` only when present | done | done (`<time data-due-at>`) | |
-| Source refs (type · account · title · uri) **or** uncertainty marker (reason + confidence); both when both | done | done (`data-source-ref`, `data-uncertainty`) | |
-| `privacy_mode` visible | footer | header `<dd data-privacy-mode>` | |
-| Every `action_ids` entry reachable as an approval affordance | link per action id | badge per action id (`data-action-id`); links once `/approvals` exists | |
-| Exports the payload as JCS | `RenderedBrief::parityJson()`; `lea:brief:preview` writes `*.parity.json` | `GET /briefs/{brief}/parity.json` (`BriefPage::parityJson()`); `data-parity-hash` on the article | |
-| Declares the max `schema_version`; refuses a higher major | `BriefMailRenderer::SUPPORTED_SCHEMA_VERSION` | inherits the mapper's `Brief::SCHEMA_VERSION` gate at import | |
+| Builds the payload from the document, renders from the payload | `BriefMailRenderer` → `BriefParityPayload` → `BriefViewModel` → Blade | `BriefPage::fromBrief()` → `BriefParityPayload` → the same `BriefViewModel::build()` → `briefs/show.blade.php` | `BriefParityPayload.fromDocument()` (Swift port, `MenuBar/BriefParityPayload.swift`) → `PanelModel.brief` → `MenuBarPanelView`; the raw document goes to the cache only |
+| Shows every item, in order, title + whole body | done | done (`<li data-brief-item data-position>`) | done — `ForEach(brief.items)` in document order; whole body inside a disclosure |
+| `due_at` only when present | done | done (`<time data-due-at>`) | done — "Due …" row in the item's own offset |
+| Source refs (type · account · title · uri) **or** uncertainty marker (reason + confidence); both when both | done | done (`data-source-ref`, `data-uncertainty`) | done — `SourceRefRow` (uri as tooltip) and the uncertainty row with `confidence` as a percentage |
+| `privacy_mode` visible | footer | header `<dd data-privacy-mode>` | status band "Privacy mode: …" (health's value when reachable, the payload's otherwise) |
+| Every `action_ids` entry reachable as an approval affordance | link per action id | badge per action id (`data-action-id`); links once `/approvals` exists | "Review action" button per action id → `<origin>/approvals/<id>`; seal on the item row |
+| Exports the payload as JCS | `RenderedBrief::parityJson()`; `lea:brief:preview` writes `*.parity.json` | `GET /briefs/{brief}/parity.json` (`BriefPage::parityJson()`); `data-parity-hash` on the article | `BriefParityPayload.canonicalJSON()` (`MenuBar/JCS.swift`); `BriefParityPayloadTests` asserts byte-identity with the committed snapshot |
+| Declares the max `schema_version`; refuses a higher major | `BriefMailRenderer::SUPPORTED_SCHEMA_VERSION` | inherits the mapper's `Brief::SCHEMA_VERSION` gate at import | `BriefParityPayload.supportedSchemaVersion`; a higher major → `error(.updateRequired)`, never a partial brief, cache untouched |
 
 ## 3. The S1-10 test (to be written)
 
@@ -90,12 +90,14 @@ From brief-schema §6, restated per surface:
 - Deliberately break it once (add a key on one surface) and record that it failed.
 - `version` and `generated_at` asserted identical across all three.
 - Runs in CI on every PR touching `app/Briefs/Render/`, `resources/views/briefs/`,
-  `resources/views/mail/` or `apps/macos/Sources/MenuBar/`.
+  `resources/views/mail/` or `apps/macos/LaravelExecutiveAI/MenuBar/`.
 - Presentation is guarded separately per surface: mail by
   `tests/Feature/Briefs/Mail/BriefMailSnapshotTest.php` (`tests/__snapshots__/brief-canonical.{html,txt}`).
 
-Open for S1-10: where the Swift export is produced (a `swift test` that writes JSON to a path the
-PHP test reads, or a committed Swift snapshot regenerated in CI). The PWA export is the JSON endpoint
+The Swift export is produced in the `swift` CI lane: `BriefParityPayloadTests` (S1-09) projects
+`brief-canonical.json` through the Swift port and asserts the JCS bytes equal the committed
+`tests/__snapshots__/brief-canonical.parity.json`, so the PHP snapshot is the shared oracle and no
+file crosses between the lanes. Open for S1-10: whether to also diff the three exports in one job. The PWA export is the JSON endpoint
 `GET /briefs/{brief}/parity.json` (S1-04; auth + `BriefPolicy`, `Cache-Control: no-store`), which
 returns `BriefPage::parityJson()` — the payload the page was rendered from — and the page carries
 `data-parity-hash` for a DOM-side check (`tests/Feature/Pwa/BriefsPagesTest.php` asserts both equal

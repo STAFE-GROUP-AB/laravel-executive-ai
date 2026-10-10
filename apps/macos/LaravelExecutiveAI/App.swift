@@ -1,8 +1,10 @@
-// Laravel Executive AI — app shell (S0-25) with the first-run installer (S1-05, §12.3).
+// Laravel Executive AI — app shell (S0-25) with the first-run installer (S1-05, §12.3) and the
+// menu bar panel (S1-09, §1.1).
 //
-// The window shows the installer until the install state is READY, then the placeholder that
-// S1-09 replaces. The MenuBarExtra is unchanged. No IPC (S1-08), no Supervisor (S1-07), no
-// networking: the live dependencies stop with an actionable error where those items plug in.
+// The window shows the installer until the install state is READY, then the shell placeholder.
+// The MenuBarExtra renders from the cached brief (MenuBar/); its core client stays unreachable
+// until S1-08 part 2. No Supervisor (S1-07), no networking: the live dependencies stop with an
+// actionable error where those items plug in.
 
 import DesignTokens
 import SwiftUI
@@ -10,6 +12,7 @@ import SwiftUI
 @main
 struct LaravelExecutiveAIApp: App {
     @State private var installer = InstallStateMachine(dependencies: LaravelExecutiveAIApp.makeDependencies())
+    @State private var menuBar = PanelModel.live()
 
     var body: some Scene {
         WindowGroup("Laravel Executive AI") {
@@ -21,11 +24,7 @@ struct LaravelExecutiveAIApp: App {
         }
         .defaultSize(width: 640, height: 600)
 
-        // Blueprint §1.1: the panel lists the latest brief, system status, approvals and
-        // shortcuts. S1-09 fills it against the fixture brief; this is the placeholder only.
-        MenuBarExtra("Laravel Executive AI", systemImage: "brain") {
-            MenuBarPlaceholderView()
-        }
+        MenuBarScene(model: menuBar)
     }
 
     /// Live dependencies, or — in DEBUG builds started with `LXAI_INSTALL_SIMULATE=1` — a
@@ -74,32 +73,6 @@ struct ShellPlaceholderView: View {
         .padding(Tokens.Spacing.s6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Tokens.Colors.canvas.dynamic)
-    }
-}
-
-struct MenuBarPlaceholderView: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
-            Text("No brief yet")
-                .font(Tokens.Typography.headline)
-                .foregroundStyle(Tokens.Colors.textPrimary.dynamic)
-
-            Text("The first brief is generated once Sprint 1 services are installed.")
-                .font(Tokens.Typography.footnote)
-                .foregroundStyle(Tokens.Colors.textMuted.dynamic)
-
-            Divider()
-
-            // §1.1: "Quit UI" is not "Stop server". Today the shell runs nothing else, so quitting
-            // the UI is the whole story. From S1 on, the Supervisor LaunchAgent keeps the Laravel
-            // runtime alive after this process exits; S1-09 proves that with a test.
-            Button("Quit UI") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
-        }
-        .padding(Tokens.Spacing.s3)
-        .frame(width: Tokens.Sizing.menuBarPanelWidth, alignment: .leading)
     }
 }
 
