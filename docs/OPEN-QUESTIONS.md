@@ -23,7 +23,11 @@ Andreas personally (legal, licensing, Apple/Google accounts, budget, product pol
 | **Decide by** | `ENG` |
 
 RAM and disk minima must come from a real install on a constrained machine, not from a spec sheet.
-See also ambiguity **A4** on the "macOS 15/26" version notation.
+See also ambiguity **A5** on the "macOS 15/26" version notation.
+**Recorded in support-matrix.md 2026-10-10 (PROVISIONAL numbers until S1-14):** floor macOS 15.0,
+highest tested 26.6.2, Apple Silicon only, Intel explicitly unsupported (primary Apple source pinned);
+RAM 8 GB / free disk 2 GB are derived from measured components, not from an install, because no
+installable product exists yet — S1-14 measures them on the minimum machine (`docs/architecture/support-matrix.md` §4–§7).
 
 ---
 
@@ -230,6 +234,9 @@ macOS 26", or a typo. §2 separately says "macOS 15+". The support matrix needs 
 and a highest-tested version. **Needs:** `ENG`, recorded in S0-22. **Proposed 2026-10-10 (ADR-001
 D5):** read as the range macOS 15 through 26 — floor 15.0, highest tested 26.x; Apple Silicon only,
 Intel explicitly unsupported. S0-22 confirms with measurements.
+**Recorded in support-matrix.md 2026-10-10 (PROVISIONAL numbers until S1-14):** range 15–26 confirmed;
+highest tested is 26.6.2 (25G83) on the M4 Max prototype machine; 15.x becomes "tested" only when the
+minimum machine runs S1-14.
 
 ### A6 — No `docs` label exists
 §16 step 1 lists ten labels; the repo has eleven (`adr` was added). Workstream J (docs/community) has
