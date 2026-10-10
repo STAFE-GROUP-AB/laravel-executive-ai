@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Validates the frozen contracts (S0-13 brief schema, S0-14 health contract) and every committed
-// fixture against them. CI step: `node packaging/fixtures/validate-schema.mjs` (see S0-05).
+// Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-20 install-timer
+// record) and every committed fixture against them. CI step:
+// `node packaging/fixtures/validate-schema.mjs` (see S0-05).
 //
 // Exit code 0 when everything passes, 1 on any failure. No network access.
 
@@ -26,6 +27,13 @@ const suites = [
         schema: join(here, 'health.schema.json'),
         fixturesDir: join(here, 'health'),
         extraChecks: [],
+    },
+    {
+        // S0-20 install-timer record (the tool also validates with its own dependency-free
+        // validator; this ajv pass catches drift between the two).
+        schema: join(here, '..', 'manifest', 'install-timer', 'record.schema.json'),
+        fixturesDir: join(here, '..', 'manifest', 'install-timer', 'results', 'example'),
+        extraChecks: [checkInstallTimerRecordIsSynthetic],
     },
 ];
 
@@ -154,6 +162,22 @@ function checkBriefReferentialIntegrity(subject, brief) {
 
     if (problems.length > 0) {
         fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    return true;
+}
+
+function checkInstallTimerRecordIsSynthetic(subject, record) {
+    if (record.synthetic !== true) {
+        fail(subject, 'records under results/example/ must be marked "synthetic": true; real runs belong in a campaign directory');
+
+        return false;
+    }
+
+    if (record.async_post_core.counted_in_core_ready_ms !== false) {
+        fail(subject, 'async_post_core.counted_in_core_ready_ms must be false');
 
         return false;
     }

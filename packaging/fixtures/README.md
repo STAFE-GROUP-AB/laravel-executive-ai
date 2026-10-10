@@ -17,9 +17,11 @@ npm ci --prefix packaging/fixtures          # pinned ajv + ajv-formats; lockfile
 node packaging/fixtures/validate-schema.mjs
 ```
 
-Validates both schema files as JSON Schema draft 2020-12 (ajv strict mode), every `briefs/*.json`
-(schema, `content_hash`, referential integrity, single `sent` delivery per channel and recipient)
-and every `health/*.json`. Exit code 1 on any failure.
+Validates the schema files as JSON Schema draft 2020-12 (ajv strict mode), every `briefs/*.json`
+(schema, `content_hash`, referential integrity, single `sent` delivery per channel and recipient),
+every `health/*.json`, and the S0-20 install-timer record schema
+(`packaging/manifest/install-timer/record.schema.json`) against its synthetic example. Exit code 1
+on any failure.
 
 The fixture **freeze policy** (byte-stable fixtures, changes only via a PR that updates the affected
 snapshots deliberately) is defined by S0-18.
