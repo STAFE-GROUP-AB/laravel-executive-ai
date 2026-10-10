@@ -1,0 +1,89 @@
+# Dependabot — blueprint §11 (pinned Composer/npm/Swift dependencies), backlog S0-05.
+# Weekly, grouped, Conventional Commits prefixes. Until S0-26 (composer.json, package.json)
+# and S0-25 (apps/macos) land, Dependabot reports "manifest not found" for those ecosystems;
+# that is expected and non-blocking.
+#
+# Swift note: the `swift` ecosystem reads a Package.swift. If the Mac app keeps its SwiftPM
+# dependencies only inside the .xcodeproj (Package.resolved without a Package.swift), either
+# move them into a local Swift package under apps/macos or drop that entry.
+
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Stockholm
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    commit-message:
+      prefix: build
+      prefix-development: build
+    groups:
+      composer-production:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      composer-development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Stockholm
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    commit-message:
+      prefix: build
+      prefix-development: build
+    groups:
+      npm-production:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      npm-development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Stockholm
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: swift
+    directory: /apps/macos
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Stockholm
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+    groups:
+      swift:
+        update-types:
+          - minor
+          - patch

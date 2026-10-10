@@ -1,0 +1,397 @@
+# CI — blueprint §13.2 (required checks on protected main), §14 (required suites),
+# backlog S0-05. Job names `php`, `swift` and `secrets-scan` are stable: they are the
+# required status checks configured in S0-27. Do not rename them.
+#
+# "Born green": the Laravel app (S0-26) and the Xcode project (S0-25) do not exist yet.
+# Each job detects its inputs and skips with a clear log line when they are absent, then
+# does real work as soon as they land. Nothing here needs a secret or a signing identity
+# (signing is S0-20). Every third-party action is pinned to a full commit SHA.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHP_VERSION: '8.4'
+  NODE_VERSION: '24'
+  # Matches the local toolchain (Xcode 26.2 / Swift 6.2.3). Bump deliberately, with S0-22.
+  XCODE_VERSION: '26.2'
+  # Leave empty to auto-detect the first shared scheme of the project in apps/macos.
+  XCODE_SCHEME: ''
+
+jobs:
+  php:
+    name: php
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect Laravel app
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          has_composer=false; has_npm=false; has_phpstan=false
+          [ -f composer.json ] && has_composer=true
+          [ -f package.json ] && has_npm=true
+          for f in phpstan.neon phpstan.neon.dist phpstan.dist.neon; do
+            [ -f "$f" ] && has_phpstan=true
+          done
+          {
+            echo "has_composer=$has_composer"
+            echo "has_npm=$has_npm"
+            echo "has_phpstan=$has_phpstan"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$has_composer" = false ]; then
+            echo "::notice title=php::No composer.json at the repo root yet (lands with S0-26). Skipping PHP lint, static analysis and tests."
+          fi
+
+      - name: Require committed lockfiles
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f composer.lock ]; then
+            echo "::error file=composer.json::composer.lock is missing. Pinned dependencies are required (blueprint §11)."
+            exit 1
+          fi
+          if [ -f package.json ] && [ ! -f package-lock.json ]; then
+            echo "::error file=package.json::package-lock.json is missing. Pinned dependencies are required (blueprint §11)."
+            exit 1
+          fi
+
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        if: steps.detect.outputs.has_composer == 'true'
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, dom, ctype, curl, fileinfo, intl, bcmath, zip, pdo_sqlite, sqlite3, gd
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json and lockfile freshness
+        if: steps.detect.outputs.has_composer == 'true'
+        run: composer validate --strict --no-interaction
+
+      - name: Resolve Composer cache directory
+        if: steps.detect.outputs.has_composer == 'true'
+        id: composer-cache
+        shell: bash
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        if: steps.detect.outputs.has_composer == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-
+
+      - name: Prepare environment file
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .env ] && [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+
+      - name: Install Composer dependencies
+        if: steps.detect.outputs.has_composer == 'true'
+        run: composer install --no-interaction --prefer-dist --no-progress --no-ansi
+
+      - name: Generate application key
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f artisan ] && [ -f .env ]; then
+            php artisan key:generate --ansi --no-interaction
+          fi
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        if: steps.detect.outputs.has_npm == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install npm dependencies
+        if: steps.detect.outputs.has_npm == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend assets
+        if: steps.detect.outputs.has_npm == 'true'
+        run: npm run build --if-present
+
+      - name: Fail on dirty lockfiles
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- composer.lock package-lock.json; then
+            echo "::error::Installing dependencies modified a lockfile. Commit the updated composer.lock / package-lock.json."
+            exit 1
+          fi
+
+      - name: Pint (code style)
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x vendor/bin/pint ]; then
+            echo "::error::laravel/pint is not installed. Add it to require-dev; PSR-12 is mandatory (CONTRIBUTING.md)."
+            exit 1
+          fi
+          vendor/bin/pint --test
+
+      - name: Larastan / PHPStan (static analysis)
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.detect.outputs.has_phpstan }}" != true ]; then
+            echo "::notice title=php::No phpstan.neon found; static analysis skipped until it is configured."
+            exit 0
+          fi
+          if [ ! -x vendor/bin/phpstan ]; then
+            echo "::error::phpstan.neon exists but vendor/bin/phpstan is missing. Add larastan/larastan to require-dev."
+            exit 1
+          fi
+          vendor/bin/phpstan analyse --no-progress --no-interaction --memory-limit=1G
+
+      - name: Pest (test suite)
+        if: steps.detect.outputs.has_composer == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x vendor/bin/pest ]; then
+            echo "::error::vendor/bin/pest is missing. Pest is the chosen test framework (docs/OPEN-QUESTIONS.md A7)."
+            exit 1
+          fi
+          vendor/bin/pest --ci
+
+  swift:
+    name: swift
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect Xcode project
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          kind=none; container=''
+          workspace=$(find apps/macos -maxdepth 3 -name '*.xcworkspace' -not -path '*.xcodeproj/*' 2>/dev/null | sort | head -n 1 || true)
+          project=$(find apps/macos -maxdepth 3 -name '*.xcodeproj' 2>/dev/null | sort | head -n 1 || true)
+          if [ -n "$workspace" ]; then
+            kind=workspace; container="$workspace"
+          elif [ -n "$project" ]; then
+            kind=project; container="$project"
+          elif [ -f apps/macos/Package.swift ]; then
+            kind=package; container=apps/macos
+          fi
+          {
+            echo "kind=$kind"
+            echo "container=$container"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$kind" = none ]; then
+            echo "::notice title=swift::No .xcworkspace, .xcodeproj or Package.swift under apps/macos yet (lands with S0-25). Skipping the Swift build."
+          else
+            echo "Found $kind: $container"
+          fi
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        if: steps.detect.outputs.kind != 'none'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache Swift packages
+        if: steps.detect.outputs.kind != 'none'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/SourcePackages
+            apps/macos/.build
+          key: spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('apps/macos/**/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-
+
+      - name: Resolve scheme
+        if: steps.detect.outputs.kind == 'project' || steps.detect.outputs.kind == 'workspace'
+        id: scheme
+        shell: bash
+        env:
+          KIND: ${{ steps.detect.outputs.kind }}
+          CONTAINER: ${{ steps.detect.outputs.container }}
+        run: |
+          set -euo pipefail
+          scheme="$XCODE_SCHEME"
+          if [ -z "$scheme" ]; then
+            scheme=$(xcodebuild -list -json "-$KIND" "$CONTAINER" | jq -r ".$KIND.schemes[0] // empty")
+          fi
+          if [ -z "$scheme" ]; then
+            echo "::error::No shared scheme found in $CONTAINER. Share the app scheme (xcshareddata) or set XCODE_SCHEME in ci.yml."
+            exit 1
+          fi
+          echo "Using scheme: $scheme"
+          echo "name=$scheme" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test (no signing)
+        if: steps.detect.outputs.kind == 'project' || steps.detect.outputs.kind == 'workspace'
+        shell: bash
+        env:
+          KIND: ${{ steps.detect.outputs.kind }}
+          CONTAINER: ${{ steps.detect.outputs.container }}
+          SCHEME: ${{ steps.scheme.outputs.name }}
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          set -o pipefail
+          xcodebuild \
+            "-$KIND" "$CONTAINER" \
+            -scheme "$SCHEME" \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -resultBundlePath build/ci.xcresult \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build test \
+            | xcbeautify --renderer github-actions
+
+      - name: Build and test Swift package (no signing)
+        if: steps.detect.outputs.kind == 'package'
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.container }}
+        run: |
+          set -euo pipefail
+          swift --version
+          swift build
+          swift test
+
+      - name: Upload xcresult bundle
+        if: failure() && (steps.detect.outputs.kind == 'project' || steps.detect.outputs.kind == 'workspace')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: xcresult-${{ github.run_id }}
+          path: build/ci.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+  secrets-scan:
+    name: secrets-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # gitleaks CLI (MIT) pinned by version and SHA-256. The gitleaks-action wrapper is not
+      # used because it requires a GITLEAKS_LICENSE secret for organisation repositories.
+      GITLEAKS_VERSION: '8.30.1'
+      GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks ${{ env.GITLEAKS_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      - name: Scan git history for committed secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          gitleaks version
+          gitleaks git . \
+            --redact \
+            --no-banner \
+            --exit-code 1 \
+            --report-format sarif \
+            --report-path gitleaks.sarif
+
+      - name: Upload gitleaks report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitleaks-${{ github.run_id }}
+          path: gitleaks.sarif
+          if-no-files-found: ignore
+          retention-days: 7
+
+  fixtures:
+    name: fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect fixture tooling
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          has_validator=false; has_contrast=false
+          [ -f packaging/fixtures/package.json ] && [ -f packaging/fixtures/validate-schema.mjs ] && has_validator=true
+          [ -f packaging/fixtures/design/contrast-check.mjs ] && has_contrast=true
+          {
+            echo "has_validator=$has_validator"
+            echo "has_contrast=$has_contrast"
+          } >> "$GITHUB_OUTPUT"
+          [ "$has_validator" = true ] || echo "::notice title=fixtures::No schema validator yet (lands with S0-13/S0-14). Skipping."
+          [ "$has_contrast" = true ] || echo "::notice title=fixtures::No contrast check yet (lands with S0-24). Skipping."
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        if: steps.detect.outputs.has_validator == 'true' || steps.detect.outputs.has_contrast == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate brief and health schemas and fixtures (S0-13, S0-14)
+        if: steps.detect.outputs.has_validator == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix packaging/fixtures --no-audit --no-fund
+          git diff --exit-code -- packaging/fixtures/package-lock.json
+          node packaging/fixtures/validate-schema.mjs
+
+      - name: Design token contrast gate (S0-24)
+        if: steps.detect.outputs.has_contrast == 'true'
+        run: node packaging/fixtures/design/contrast-check.mjs

@@ -36,6 +36,16 @@ apps/macos/**/*.dSYM.zip
 /packaging/dist/
 *.dmg
 
+# Benchmark / prototype databases (ADR evidence scripts write here)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite.stop
+packaging/fixtures/prototypes/**/tmp/
+
+# Fixture validation tooling (packaging/fixtures/package.json); lockfile is committed
+/packaging/fixtures/node_modules/
+
 # Local models, data, secrets — never in git
 *.gguf
 *.mlmodelc
