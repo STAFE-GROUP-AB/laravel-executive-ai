@@ -423,3 +423,174 @@ jobs:
       - name: Runtime assembler tests (S1-06)
         if: hashFiles('packaging/runtime/test/*.test.mjs') != ''
         run: node --test 'packaging/runtime/test/*.test.mjs'
+
+  # S1-10 tri-surface brief parity gate (docs/architecture/brief-parity.md §3). One macOS job so
+  # the Swift export and the PHP comparison share a filesystem: (a) only the Swift parity test runs
+  # and writes one JCS export per brief fixture into build/parity, then (b) Pest renders the mail
+  # and the PWA from the same fixtures and compares all three surfaces byte for byte.
+  #
+  # Runs on every pull request rather than behind a `paths` filter: in GitHub Actions a filter is
+  # workflow-wide (it would gate php/swift/fixtures too), and it would have to list every file a
+  # renderer depends on (view models, locale tables, the document mapper, fixtures, snapshots) —
+  # a missed path is a silent hole in the gate. The `php` lane runs the same Pest file with the
+  # committed-snapshot oracle; this job is the one that compares against the live Swift export.
+  # Not in the S0-27 required-check list yet; the job name `parity` is stable so it can be added.
+  parity:
+    name: parity
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect the three surfaces
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=true
+          [ -f tests/E2E/BriefParityTest.php ] || ready=false
+          [ -f apps/macos/LaravelExecutiveAITests/MenuBar/BriefParitySnapshotTests.swift ] || ready=false
+          [ -d apps/macos/LaravelExecutiveAI.xcodeproj ] || ready=false
+          [ -f composer.json ] || ready=false
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+          if [ "$ready" = false ]; then
+            echo "::notice title=parity::The S1-10 parity harness (tests/E2E/BriefParityTest.php + BriefParitySnapshotTests.swift) is not present. Skipping."
+          fi
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        if: steps.detect.outputs.ready == 'true'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache Swift packages
+        if: steps.detect.outputs.ready == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/SourcePackages
+            apps/macos/.build
+          key: spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('apps/macos/**/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-
+
+      - name: Resolve scheme
+        if: steps.detect.outputs.ready == 'true'
+        id: scheme
+        shell: bash
+        run: |
+          set -euo pipefail
+          scheme="$XCODE_SCHEME"
+          if [ -z "$scheme" ]; then
+            scheme=$(xcodebuild -list -json -project apps/macos/LaravelExecutiveAI.xcodeproj | jq -r '.project.schemes[0] // empty')
+          fi
+          if [ -z "$scheme" ]; then
+            echo "::error::No shared scheme found in apps/macos/LaravelExecutiveAI.xcodeproj."
+            exit 1
+          fi
+          echo "Using scheme: $scheme"
+          echo "name=$scheme" >> "$GITHUB_OUTPUT"
+
+      # (a) The menu bar surface. Only the parity test runs; the whole Swift suite is the `swift`
+      # job's. The test writes to build/parity under the repository root: an app-hosted XCTest on
+      # macOS does not receive xcodebuild's TEST_RUNNER_* environment, so the location is fixed
+      # (BriefParitySnapshotTests.defaultExportPath) and emptied here first.
+      - name: Swift parity export (menu bar surface)
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        env:
+          SCHEME: ${{ steps.scheme.outputs.name }}
+        run: |
+          set -euo pipefail
+          rm -rf build/parity
+          xcodebuild -version
+          set -o pipefail
+          xcodebuild \
+            -project apps/macos/LaravelExecutiveAI.xcodeproj \
+            -scheme "$SCHEME" \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -resultBundlePath build/parity.xcresult \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            -only-testing:LaravelExecutiveAITests/BriefParitySnapshotTests \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test \
+            | xcbeautify --renderer github-actions
+
+      - name: Require one export per fixture
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixtures=$(find packaging/fixtures/briefs -name 'brief-*.json' | wc -l | tr -d ' ')
+          exports=$(find build/parity -name 'brief-*.parity.json' | wc -l | tr -d ' ')
+          ls -la build/parity
+          if [ "$fixtures" != "$exports" ] || [ "$exports" = 0 ]; then
+            echo "::error::Expected $fixtures Swift parity exports in build/parity, found $exports."
+            exit 1
+          fi
+
+      # (b) The mail and PWA surfaces, compared against (a) by tests/E2E/BriefParityTest.php.
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        if: steps.detect.outputs.ready == 'true'
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, dom, ctype, curl, fileinfo, intl, bcmath, zip, pdo_sqlite, sqlite3, gd
+          coverage: none
+          tools: composer:v2
+
+      - name: Resolve Composer cache directory
+        if: steps.detect.outputs.ready == 'true'
+        id: composer-cache
+        shell: bash
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        if: steps.detect.outputs.ready == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-
+
+      - name: Install the Laravel app
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f .env ] || cp .env.example .env
+          composer install --no-interaction --prefer-dist --no-progress --no-ansi
+          php artisan key:generate --ansi --no-interaction
+
+      - name: Pest tri-surface parity (mail + PWA against the Swift export)
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          LXAI_SWIFT_PARITY_EXPORT_DIR="$GITHUB_WORKSPACE/build/parity" vendor/bin/pest tests/E2E/BriefParityTest.php --ci
+
+      - name: Upload the Swift parity exports
+        if: always() && steps.detect.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parity-exports-${{ github.run_id }}
+          path: build/parity
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload xcresult bundle
+        if: failure() && steps.detect.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parity-xcresult-${{ github.run_id }}
+          path: build/parity.xcresult
+          if-no-files-found: ignore
+          retention-days: 7

@@ -11,11 +11,21 @@ abstract class TestCase extends BaseTestCase
 {
     private static bool $schemaBuilt = false;
 
-    protected function setUp(): void
+    /**
+     * The schema is built before the testing traits start, so it exists outside
+     * the DatabaseTransactions transaction. Building it afterwards put the DDL of
+     * a fresh database/testing.sqlite inside the first test's transaction, where
+     * the rollback took the tables with it and every later test in the process
+     * failed with "no such table" (seen when a single DatabaseTransactions file
+     * is the first to run on a fresh checkout, S1-10 `parity` job).
+     *
+     * @return array<string, string>
+     */
+    protected function setUpTraits(): array
     {
-        parent::setUp();
-
         $this->buildSchemaOnce();
+
+        return parent::setUpTraits();
     }
 
     /**
