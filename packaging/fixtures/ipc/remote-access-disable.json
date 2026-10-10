@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "remote-access.disable",
+  "description": "POST /ipc/v1/remote-access/disable: `serve --https=443 off`; handlers the app did not create are listed, not removed (ADR-006 D2, §6.7).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/remote-access/disable",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "cmVtb3RlLWFjY2Vzcy1kaQ",
+      "X-Lxai-Signature": "v1=7ea6ebd93b790bd1d6256f8ec51cae83b3c08a74eafb2c7c60767b83c64bc254",
+      "X-Lxai-Request-Id": "01M4G0CFQN6YHYE1ZGQ7890BCE",
+      "Content-Type": "application/json"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0CFQN6YHYE1ZGQ7890BCE",
+      "X-Lxai-Signature": "v1=3ad4cfcfb241f0dd9c47d19cd3f0c739c19671e8be4f3b8e9adb3f9490ec79e9",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0CFQN6YHYE1ZGQ7890BCE",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "state": "Ready",
+        "origin": null,
+        "remaining_handlers": []
+      }
+    }
+  }
+}

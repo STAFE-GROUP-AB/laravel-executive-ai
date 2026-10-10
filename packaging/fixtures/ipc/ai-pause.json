@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "ai.pause",
+  "description": "POST /ipc/v1/ai/pause from the menu bar: flips the global cancellation token (ADR-004 D7); one in-flight run was cancelled (§6.4).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/ai/pause",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "YWktcGF1c2UuLi4uLi4uLg",
+      "X-Lxai-Signature": "v1=7f8d1019ebd43373e84ebecf5405ee106e1443d519ea8a83fe4850264960eca7",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P32",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "reason": "user_menubar"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P32",
+      "X-Lxai-Signature": "v1=2a584d08804afbcbfdc2d43823bf2d6fa128b155cb18aad1eeaa8bd110602a3a",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0PT40SQ5H1AFST1HB6P32",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "ai_actions": "paused",
+        "changed_at": "2026-10-10T18:02:11+02:00",
+        "paused_since": "2026-10-10T18:02:11+02:00",
+        "in_flight_runs_cancelled": 1
+      }
+    }
+  }
+}

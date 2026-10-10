@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-20 install-timer
-// record) and every committed fixture against them. CI step:
+// Validates the frozen contracts (S0-13 brief schema, S0-14 health contract, S0-15 IPC contract,
+// S0-20 install-timer record) and every committed fixture against them. CI step:
 // `node packaging/fixtures/validate-schema.mjs` (see S0-05).
 //
 // Exit code 0 when everything passes, 1 on any failure. No network access.
@@ -12,6 +12,19 @@ import { fileURLToPath } from 'node:url';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+
+import {
+    TEST_KEY,
+    UNSIGNED_ERROR_CODES,
+    bodyBytes,
+    elevationMac,
+    parseElevation,
+    parseToken,
+    signRequest,
+    signResponse,
+    signingKey,
+    tokenMac,
+} from './ipc-signing.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -34,6 +47,13 @@ const suites = [
         schema: join(here, '..', 'manifest', 'install-timer', 'record.schema.json'),
         fixturesDir: join(here, '..', 'manifest', 'install-timer', 'results', 'example'),
         extraChecks: [checkInstallTimerRecordIsSynthetic],
+    },
+    {
+        schema: join(here, 'ipc.schema.json'),
+        fixturesDir: join(here, 'ipc'),
+        // ipc.schema.json $refs the brief and health schemas by $id; they are registered when the
+        // suites above compile, so this suite must come after them.
+        extraChecks: [checkIpcSignatures, checkIpcEmbeddedBrief],
     },
 ];
 
@@ -183,6 +203,118 @@ function checkInstallTimerRecordIsSynthetic(subject, record) {
     }
 
     return true;
+}
+
+// IPC contract §3.3, §4.2, §4.5, §7.3: every fixture is signed with the all-zero test key (§4.6).
+// Recomputing here makes this file the reference the Swift and PHP implementations must match.
+function checkIpcSignatures(subject, exchange) {
+    const { request, response } = exchange;
+    const problems = [];
+    const token = parseToken(request.headers.Authorization.replace(/^Bearer /, ''));
+
+    if (! token) {
+        fail(subject, 'Authorization is not a parseable lxai1 token');
+
+        return false;
+    }
+
+    if (token.mac !== tokenMac(TEST_KEY, token.client, token.sessionId, token.expiresAt)) {
+        problems.push('token mac does not match the test key (run sign-ipc-fixtures.mjs)');
+    }
+
+    const errorCode = response.body?.ok === false ? response.body.error.code : null;
+    const key = signingKey(TEST_KEY, token.client, token.sessionId);
+    const expectedRequest = signRequest(
+        key,
+        request.method,
+        request.path,
+        request.headers['X-Lxai-Timestamp'],
+        request.headers['X-Lxai-Nonce'],
+        bodyBytes(request.body),
+    );
+
+    if (errorCode === 'signature_invalid') {
+        if (request.headers['X-Lxai-Signature'] === expectedRequest) {
+            problems.push('a signature_invalid fixture must carry a request signature that does not verify');
+        }
+    } else if (request.headers['X-Lxai-Signature'] !== expectedRequest) {
+        problems.push(`request signature mismatch: fixture ${request.headers['X-Lxai-Signature']}, expected ${expectedRequest}`);
+    }
+
+    const elevation = request.headers['X-Lxai-Elevation'];
+
+    if (elevation) {
+        const parsed = parseElevation(elevation);
+
+        if (parsed.nonce !== request.headers['X-Lxai-Nonce']) {
+            problems.push('elevation nonce must equal X-Lxai-Nonce (§7.3)');
+        }
+
+        if (parsed.mac !== elevationMac(TEST_KEY, token.sessionId, parsed.operation, parsed.nonce, parsed.expiresAt)) {
+            problems.push('elevation mac does not match the test key');
+        }
+    }
+
+    if (exchange.operation === 'remote-access.enable' && ! elevation && response.status === 200) {
+        problems.push('remote-access.enable succeeded without X-Lxai-Elevation (§7.3)');
+    }
+
+    const responseSignature = response.headers['X-Lxai-Signature'];
+
+    if (errorCode && UNSIGNED_ERROR_CODES.has(errorCode)) {
+        if (responseSignature !== undefined) {
+            problems.push(`a ${errorCode} response is emitted before a signing key exists and must not be signed (§4.5)`);
+        }
+    } else {
+        const expectedResponse = signResponse(key, response.status, request.headers['X-Lxai-Nonce'], bodyBytes(response.body));
+
+        if (responseSignature !== expectedResponse) {
+            problems.push(`response signature mismatch: fixture ${responseSignature}, expected ${expectedResponse}`);
+        }
+    }
+
+    if (response.status === 304 && request.headers['If-None-Match'] === undefined) {
+        problems.push('304 without If-None-Match on the request');
+    }
+
+    if (response.headers.ETag !== undefined && exchange.operation !== 'briefs.latest') {
+        problems.push('ETag is only defined for briefs.latest (§6.2)');
+    }
+
+    if (response.body?.ok === true && response.body.request_id !== response.headers['X-Lxai-Request-Id']) {
+        problems.push('request_id in the body must equal X-Lxai-Request-Id');
+    }
+
+    if (problems.length > 0) {
+        fail(subject, problems.join('\n      '));
+
+        return false;
+    }
+
+    return true;
+}
+
+// briefs.latest carries a full brief: run the brief-specific checks on it as well.
+function checkIpcEmbeddedBrief(subject, exchange) {
+    if (exchange.operation !== 'briefs.latest' || exchange.response.body?.ok !== true) {
+        return true;
+    }
+
+    const brief = exchange.response.body.data;
+    const etag = exchange.response.headers.ETag;
+    let ok = checkBriefContentHash(subject, brief) && checkBriefReferentialIntegrity(subject, brief);
+
+    if (etag !== `"${brief.id}:${brief.version}"`) {
+        fail(subject, `ETag must be "<id>:<version>" of the returned brief, got ${etag}`);
+        ok = false;
+    }
+
+    if (brief.delivery_state === 'draft') {
+        fail(subject, 'briefs.latest never returns a draft (§6.2)');
+        ok = false;
+    }
+
+    return ok;
 }
 
 function listJsonFiles(dir) {

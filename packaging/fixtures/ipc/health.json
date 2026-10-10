@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "health",
+  "description": "GET /ipc/v1/health while core-ready and AI-ready: the health contract ready document inside the success envelope (§6.1). Mirrors packaging/fixtures/health/ready-ai-ready.json.",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/health",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "aGVhbHRoLi4uLi4uLi4uLg",
+      "X-Lxai-Signature": "v1=54225b7aaf0d57c7541ade5df97fc2b889ecb62fc500a8a9c74c7c43fb09c52e",
+      "X-Lxai-Request-Id": "01M4G06BJDY51YZX0PWRBQ8EBJ"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G06BJDY51YZX0PWRBQ8EBJ",
+      "X-Lxai-Signature": "v1=4e47837f404e9b25305ee30119b9f19614e4729f9ceeb2b9ad83dc17c42b7e41",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G06BJDY51YZX0PWRBQ8EBJ",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "schema_version": "1.0.0",
+        "ready": true,
+        "checks": [
+          {
+            "name": "http",
+            "status": "ok",
+            "detail": "loopback HTTP responding",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 1
+          },
+          {
+            "name": "database_migrations",
+            "status": "ok",
+            "detail": "schema at 2026_10_01_000000_create_briefs_table; 0 pending",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 3
+          },
+          {
+            "name": "auth_login",
+            "status": "ok",
+            "detail": "owner account exists; login self-test passed 2026-10-10T17:59:00+02:00",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 2
+          },
+          {
+            "name": "menubar_integration",
+            "status": "ok",
+            "detail": "last IPC heartbeat 3s ago",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 0,
+            "age_seconds": 3,
+            "threshold_seconds": 120
+          },
+          {
+            "name": "brief_placeholder",
+            "status": "ok",
+            "detail": "brief 01M4FJ7GY0PZH6YA3D9574XN5K v3 present",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 1
+          },
+          {
+            "name": "queue_worker",
+            "status": "ok",
+            "detail": "worker heartbeat 5s ago",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 0,
+            "age_seconds": 5,
+            "threshold_seconds": 90
+          },
+          {
+            "name": "scheduler_selftest",
+            "status": "ok",
+            "detail": "health:selftest ran 20s ago (interval 60s)",
+            "checked_at": "2026-10-10T18:00:05+02:00",
+            "duration_ms": 0,
+            "age_seconds": 20,
+            "threshold_seconds": 180
+          }
+        ],
+        "ai_ready": true,
+        "ai_state": "ready",
+        "ai_provider": "ollama",
+        "ai_last_success_at": "2026-10-10T17:45:12+02:00",
+        "brief_state": "fresh",
+        "latest_brief": {
+          "id": "01M4FJ7GY0PZH6YA3D9574XN5K",
+          "version": 3,
+          "generated_at": "2026-10-10T17:45:30+02:00",
+          "stale_after": "2026-10-11T17:45:30+02:00"
+        },
+        "connectivity": "online",
+        "privacy_mode": "LOCAL_ONLY",
+        "pending_approvals": 2,
+        "checked_at": "2026-10-10T18:00:05+02:00",
+        "duration_ms": 8
+      }
+    }
+  }
+}

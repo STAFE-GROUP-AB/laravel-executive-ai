@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "heartbeat",
+  "description": "Heartbeat over its 6/min budget: 429 with Retry-After and retry_after_seconds (§9).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/heartbeat",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "ZXJyb3ItcmF0ZS1saW1pdA",
+      "X-Lxai-Signature": "v1=18465793fa2b4cb7b383f740e221907e88eca2cc3f4b3ec5ace109f8b86a8c3c",
+      "X-Lxai-Request-Id": "01M4G01B937CFW3Z1H6BGRGKX1",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "client": "menubar",
+      "client_version": "1.0.0 (120)",
+      "contract_version": "1.0.0",
+      "panel_open": true,
+      "since": "2026-10-10T17:30:00+02:00"
+    }
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G01B937CFW3Z1H6BGRGKX1",
+      "X-Lxai-Signature": "v1=fa12cd98d9869db6ce08f1497decb4582e3270208725754c2ba55439873bb781",
+      "X-Lxai-Origin": "127.0.0.1:8787",
+      "Retry-After": "10"
+    },
+    "body": {
+      "ok": false,
+      "request_id": "01M4G01B937CFW3Z1H6BGRGKX1",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "error": {
+        "code": "rate_limited",
+        "message": "Too many requests for this operation.",
+        "hint": null,
+        "retry_after_seconds": 10,
+        "supported_versions": null,
+        "details": null
+      }
+    }
+  }
+}

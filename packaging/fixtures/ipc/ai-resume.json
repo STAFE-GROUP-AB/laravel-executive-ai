@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "ai.resume",
+  "description": "POST /ipc/v1/ai/resume: clears the cancellation token; idempotent (§6.4).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/ai/resume",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "YWktcmVzdW1lLi4uLi4uLg",
+      "X-Lxai-Signature": "v1=cdac1c5ac653176612523eb2e49ff3a204abd5a2cecf2a0a8b12af14f603aee9",
+      "X-Lxai-Request-Id": "01M4G0GGGXXFMYKY713S80XDB6",
+      "Content-Type": "application/json"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0GGGXXFMYKY713S80XDB6",
+      "X-Lxai-Signature": "v1=2bfae3773f8e9a0c38b329acaf773e6a6ca0d97bc89a7683f972998954292ef5",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0GGGXXFMYKY713S80XDB6",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "ai_actions": "running",
+        "changed_at": "2026-10-10T18:09:40+02:00",
+        "paused_since": null,
+        "in_flight_runs_cancelled": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "remote-access.enable",
+  "description": "POST /ipc/v1/remote-access/enable with the elevation token minted by the Supervisor after device-owner authentication (§7.3); the confirmed origin matched inspect() and the self-request verified (§6.7).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/remote-access/enable",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "cmVtb3RlLWFjY2Vzcy1lbg",
+      "X-Lxai-Signature": "v1=590a04895088d23e6b35e2199fb94e6c5d6ae9ff1742a6f4807eb91c9917534d",
+      "X-Lxai-Request-Id": "01M4G0CKT4P7HVF82FX0S7DFBY",
+      "X-Lxai-Elevation": "lxai1e.remote-access-enable.cmVtb3RlLWFjY2Vzcy1lbg.1791648180.72a0ba42699fc2f90f9b9a106c344337",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "confirmed_origin": "https://my-mac.example-tailnet.ts.net",
+      "replace_existing": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0CKT4P7HVF82FX0S7DFBY",
+      "X-Lxai-Signature": "v1=42ead4a01892fd58c5a40b2b1344a24baac90763aedab6c0b640fa8f101ee002",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0CKT4P7HVF82FX0S7DFBY",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "state": "Active",
+        "origin": "https://my-mac.example-tailnet.ts.net",
+        "verified_at": "2026-10-10T18:00:09+02:00"
+      }
+    }
+  }
+}

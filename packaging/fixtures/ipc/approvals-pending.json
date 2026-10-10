@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "approvals.pending",
+  "description": "GET /ipc/v1/approvals?state=pending&limit=20: the read-only list with PWA deep links. There is no approve/reject operation (§6.3, §11).",
+  "request": {
+    "method": "GET",
+    "path": "/ipc/v1/approvals?state=pending&limit=20",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "YXBwcm92YWxzLXBlbmRpbg",
+      "X-Lxai-Signature": "v1=6c194be32e721f3d6e69c03171b84dc79dbf9376d9bf3fb55403fa474f6fa079",
+      "X-Lxai-Request-Id": "01M4G0FXX8CSMABNN052Y7EFDN"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0FXX8CSMABNN052Y7EFDN",
+      "X-Lxai-Signature": "v1=ec523238ead8596777e84f54e31cc7a059b23f6599bc496fcd1f921fcd828890",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0FXX8CSMABNN052Y7EFDN",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "items": [
+          {
+            "id": "01M4FJ7XM84RV70ZSNAMPQ03HX",
+            "kind": "email_send",
+            "title": "Send delivery confirmation to Officina Ferrari",
+            "summary": "To giulia.ferrari@example.it · drafted from brief item 01M4FJ7KVR644NVGHTFEGR4VEY",
+            "created_at": "2026-10-10T05:31:02+02:00",
+            "expires_at": "2026-10-11T05:31:02+02:00",
+            "brief_item_id": "01M4FJ7KVR644NVGHTFEGR4VEY",
+            "open_url": "http://127.0.0.1:8787/approvals/01M4FJ7XM84RV70ZSNAMPQ03HX"
+          },
+          {
+            "id": "01M4G0ECVPA0JCEJMQ17AGRTN5",
+            "kind": "github_write",
+            "title": "Comment on STAFE-GROUP-AB/laravel-executive-ai#15",
+            "summary": "Reply drafted from brief item; no repository write beyond the comment",
+            "created_at": "2026-10-10T05:31:40+02:00",
+            "expires_at": "2026-10-11T05:31:40+02:00",
+            "brief_item_id": null,
+            "open_url": "http://127.0.0.1:8787/approvals/01M4G0ECVPA0JCEJMQ17AGRTN5"
+          }
+        ],
+        "total_pending": 2,
+        "next_cursor": null
+      }
+    }
+  }
+}
