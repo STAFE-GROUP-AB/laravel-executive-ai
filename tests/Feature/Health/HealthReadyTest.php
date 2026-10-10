@@ -7,10 +7,11 @@ use App\Support\Health\HealthService;
 use App\Support\Health\Heartbeats;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Testing\TestResponse;
 use Tests\Support\CoreReadyState;
+use Tests\Support\Ipc\IpcClient;
 use Tests\Support\JsonSchema;
 
-use function Pest\Laravel\get;
 use function Pest\Laravel\travel;
 use function Pest\Laravel\travelTo;
 
@@ -22,6 +23,12 @@ function readyFixture(string $name): array
 }
 
 const CHECK_NAMES = ['http', 'database_migrations', 'auth_login', 'menubar_integration', 'brief_placeholder', 'queue_worker', 'scheduler_selftest'];
+
+/** S1-08: /health/ready requires the IPC token, version header and origin check (health contract §6). */
+function get(string $path): TestResponse
+{
+    return IpcClient::send('GET', $path, null, ['client' => 'supervisor']);
+}
 
 beforeEach(function (): void {
     Brief::query()->forceDelete();
