@@ -117,17 +117,17 @@ final class MailTokens
         $sans = self::FONT_SANS;
 
         return [
-            'body' => "margin:0; padding:0; background-color:".self::COLOR_CANVAS."; font-family:{$sans}; color:".self::COLOR_TEXT_PRIMARY."; -webkit-text-size-adjust:100%;",
+            'body' => 'margin:0; padding:0; background-color:'.self::COLOR_CANVAS."; font-family:{$sans}; color:".self::COLOR_TEXT_PRIMARY.'; -webkit-text-size-adjust:100%;',
             'container' => 'width:100%; max-width:'.self::CONTENT_WIDTH.'px; margin:0 auto;',
             'card' => 'background-color:'.self::COLOR_SURFACE.'; border:1px solid '.self::COLOR_BORDER.'; border-radius:'.self::RADIUS_MD.'px; padding:'.self::SPACE_6.'px;',
-            'h1' => "margin:0 0 ".self::SPACE_3."px; font-family:{$sans}; font-size:".self::TEXT_2XL.'px; line-height:'.self::LEADING_2XL.'px; font-weight:600; letter-spacing:-0.01em; color:'.self::COLOR_TEXT_PRIMARY.';',
-            'h2' => "margin:".self::SPACE_6."px 0 ".self::SPACE_2."px; font-family:{$sans}; font-size:".self::TEXT_LG.'px; line-height:'.self::LEADING_LG.'px; font-weight:600; color:'.self::COLOR_TEXT_PRIMARY.';',
-            'p' => "margin:0 0 ".self::SPACE_3."px; font-family:{$sans}; font-size:".self::TEXT_MD.'px; line-height:'.self::LEADING_MD.'px; color:'.self::COLOR_TEXT_PRIMARY.';',
+            'h1' => 'margin:0 0 '.self::SPACE_3."px; font-family:{$sans}; font-size:".self::TEXT_2XL.'px; line-height:'.self::LEADING_2XL.'px; font-weight:600; letter-spacing:-0.01em; color:'.self::COLOR_TEXT_PRIMARY.';',
+            'h2' => 'margin:'.self::SPACE_6.'px 0 '.self::SPACE_2."px; font-family:{$sans}; font-size:".self::TEXT_LG.'px; line-height:'.self::LEADING_LG.'px; font-weight:600; color:'.self::COLOR_TEXT_PRIMARY.';',
+            'p' => 'margin:0 0 '.self::SPACE_3."px; font-family:{$sans}; font-size:".self::TEXT_MD.'px; line-height:'.self::LEADING_MD.'px; color:'.self::COLOR_TEXT_PRIMARY.';',
             'secondary' => "margin:0; font-family:{$sans}; font-size:".self::TEXT_SM.'px; line-height:'.self::LEADING_SM.'px; color:'.self::COLOR_TEXT_SECONDARY.';',
             'muted' => "margin:0; font-family:{$sans}; font-size:".self::TEXT_XS.'px; line-height:'.self::LEADING_XS.'px; color:'.self::COLOR_TEXT_MUTED.';',
-            'label' => "margin:0 0 ".self::SPACE_1."px; font-family:{$sans}; font-size:".self::TEXT_XS.'px; line-height:'.self::LEADING_XS.'px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:'.self::COLOR_TEXT_MUTED.';',
+            'label' => 'margin:0 0 '.self::SPACE_1."px; font-family:{$sans}; font-size:".self::TEXT_XS.'px; line-height:'.self::LEADING_XS.'px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:'.self::COLOR_TEXT_MUTED.';',
             'link' => 'color:'.self::COLOR_ACCENT.'; text-decoration:underline;',
-            'button' => "display:inline-block; min-height:".self::BUTTON_MIN_HEIGHT."px; padding:".self::SPACE_3."px ".self::SPACE_6."px; box-sizing:border-box; background-color:".self::COLOR_ACCENT."; color:".self::COLOR_TEXT_ON_ACCENT."; font-family:{$sans}; font-size:".self::TEXT_MD.'px; line-height:'.(self::BUTTON_MIN_HEIGHT - 2 * self::SPACE_3).'px; font-weight:500; text-decoration:none; border-radius:'.self::RADIUS_MD.'px;',
+            'button' => 'display:inline-block; min-height:'.self::BUTTON_MIN_HEIGHT.'px; padding:'.self::SPACE_3.'px '.self::SPACE_6.'px; box-sizing:border-box; background-color:'.self::COLOR_ACCENT.'; color:'.self::COLOR_TEXT_ON_ACCENT."; font-family:{$sans}; font-size:".self::TEXT_MD.'px; line-height:'.(self::BUTTON_MIN_HEIGHT - 2 * self::SPACE_3).'px; font-weight:500; text-decoration:none; border-radius:'.self::RADIUS_MD.'px;',
             'divider' => 'border:0; border-top:1px solid '.self::COLOR_BORDER.'; margin:'.self::SPACE_6.'px 0;',
             'code' => 'font-family:'.self::FONT_MONO.'; font-size:'.self::TEXT_SM.'px; background-color:'.self::COLOR_SURFACE_SUNKEN.'; padding:2px 6px; border-radius:'.self::RADIUS_SM.'px;',
             'badge-success' => self::badge(self::COLOR_SUCCESS_SURFACE, self::COLOR_SUCCESS_TEXT),

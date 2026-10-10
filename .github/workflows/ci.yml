@@ -84,9 +84,14 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      # Two Composer "warnings" are policy here, and --strict would turn them into failures:
+      #   --no-check-version  release-policy §2.3 requires a `version` field in composer.json
+      #                       (mirrored by config('app.version')).
+      #   --no-check-all      ADR-004 D1 pins laravel/ai to an exact version on purpose.
+      # Schema validation, publish checks and lockfile freshness remain enforced.
       - name: Validate composer.json and lockfile freshness
         if: steps.detect.outputs.has_composer == 'true'
-        run: composer validate --strict --no-interaction
+        run: composer validate --strict --no-check-all --no-check-version --no-interaction
 
       - name: Resolve Composer cache directory
         if: steps.detect.outputs.has_composer == 'true'
