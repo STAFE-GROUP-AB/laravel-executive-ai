@@ -7,9 +7,10 @@ SwiftUI Mac app: installer state machine, MenuBarExtra, launchd/SMAppService sup
 | `LaravelExecutiveAI.xcodeproj` | App target `LaravelExecutiveAI` + XCTest target `LaravelExecutiveAITests`; one shared scheme `LaravelExecutiveAI`. Folders are Xcode synchronized groups, so new `.swift` files under `LaravelExecutiveAI/` and `LaravelExecutiveAITests/` join the targets without pbxproj edits. |
 | `Config/Shared.xcconfig` | Deployment target, arch, Swift 6 / strict concurrency, versions (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`), bundle-id prefix `LXAI_BUNDLE_PREFIX` (A12), unsigned-by-default signing. |
 | `Config/App.xcconfig`, `Config/Tests.xcconfig` | Per-target settings (hardened runtime on, sandbox off, `TEST_HOST`). |
-| `LaravelExecutiveAI/` | App sources and `Info.plist`. |
+| `LaravelExecutiveAI/` | App sources and `Info.plist`. `App.swift` shows the installer until the install state is `READY`. |
+| `LaravelExecutiveAI/Install/` | S1-05 installer (`docs/architecture/installer.md`): `InstallState` + `InstallStateMachine` (transition table, cancel/resume/rollback), `InstallCheckpoint` (JSON in the user-data dir), `InstallEventLog` (install-measurement §4 NDJSON), `Preflight` + `SystemPreflightProbes` + `PreflightMessages` (the ten S0-22 checks, EN/SV), `PackageVerifier` (manifest + `SHA256SUMS` + `SecStaticCode`, fail closed), `RuntimeInstaller` (staging install + rollback; S1-06 extends), `HealthProbe` / `ServiceBooter` / `OwnerDraft` / `AiSelection` (protocols + stubs for S1-08 / S1-07 / S1-02), `InstallDependencies` (live + DEBUG simulation), `InstallerRootView` + `InstallScreens` (the six §12.3 screens). |
 | `LaravelExecutiveAI.entitlements` | Hardened-runtime-only entitlements (ADR-003 D5). |
-| `LaravelExecutiveAITests/` | XCTests hosted in the app. |
+| `LaravelExecutiveAITests/` | XCTests hosted in the app; `Install/` covers the state machine, preflight, verifier, event log and checkpoint. |
 | `DesignTokens/` | Local SwiftPM package (S0-24), linked by both targets. |
 
 Build and test exactly as CI does (unsigned):
@@ -21,3 +22,8 @@ xcodebuild -project apps/macos/LaravelExecutiveAI.xcodeproj -scheme LaravelExecu
 ```
 
 Package-only tests: `cd apps/macos/DesignTokens && swift test`.
+
+Walk the six installer screens against doubles (DEBUG build, temporary directory, nothing real is
+touched): `LXAI_INSTALL_SIMULATE=1 open <DerivedData>/Build/Products/Debug/LaravelExecutiveAI.app`.
+Without the variable the live dependencies stop at `INSTALL_CORE`/`BOOT_SERVICES`/`HEALTH_CHECK`
+with an actionable error until S1-06/S1-07/S1-08 land.

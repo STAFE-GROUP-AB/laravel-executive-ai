@@ -1,0 +1,17 @@
+{"state":"WELCOME","at":"2026-10-09T12:00:00.000+02:00"}
+{"state":"human_interaction_start","at":"2026-10-09T12:00:01.500+02:00"}
+{"state":"human_interaction_end","at":"2026-10-09T12:00:03.000+02:00"}
+{"state":"PREFLIGHT","at":"2026-10-09T12:00:04.500+02:00"}
+{"state":"PACKAGE_VERIFY","at":"2026-10-09T12:00:06.000+02:00"}
+{"state":"INSTALL_CORE","at":"2026-10-09T12:00:07.500+02:00"}
+{"state":"CREATE_OWNER","at":"2026-10-09T12:00:09.000+02:00"}
+{"state":"human_interaction_start","at":"2026-10-09T12:00:10.500+02:00"}
+{"state":"human_interaction_end","at":"2026-10-09T12:00:12.000+02:00"}
+{"state":"SELECT_AI","at":"2026-10-09T12:00:13.500+02:00"}
+{"state":"human_interaction_start","at":"2026-10-09T12:00:15.000+02:00"}
+{"state":"human_interaction_end","at":"2026-10-09T12:00:16.500+02:00"}
+{"state":"BOOT_SERVICES","at":"2026-10-09T12:00:18.000+02:00"}
+{"state":"HEALTH_CHECK","at":"2026-10-09T12:00:19.500+02:00"}
+{"state":"READY","at":"2026-10-09T12:00:21.000+02:00"}
+{"state":"CONNECT_EMAIL","marker":"start","at":"2026-10-09T12:00:22.500+02:00"}
+{"state":"CONNECT_EMAIL","marker":"end","outcome":"skipped","at":"2026-10-09T12:00:24.000+02:00"}

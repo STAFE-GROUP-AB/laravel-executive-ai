@@ -1,25 +1,58 @@
-// Laravel Executive AI — Sprint 0 app shell (S0-25, blueprint §13.1).
+// Laravel Executive AI — app shell (S0-25) with the first-run installer (S1-05, §12.3).
 //
-// Deliberately empty: one window with a placeholder and one MenuBarExtra with placeholder
-// content. No installer (S1-05), no IPC (S1-08), no Supervisor (ADR-001 D3), no networking.
-// What is here exists to prove the project layout, the DesignTokens dependency and the CI lane.
+// The window shows the installer until the install state is READY, then the placeholder that
+// S1-09 replaces. The MenuBarExtra is unchanged. No IPC (S1-08), no Supervisor (S1-07), no
+// networking: the live dependencies stop with an actionable error where those items plug in.
 
 import DesignTokens
 import SwiftUI
 
 @main
 struct LaravelExecutiveAIApp: App {
+    @State private var installer = InstallStateMachine(dependencies: LaravelExecutiveAIApp.makeDependencies())
+
     var body: some Scene {
         WindowGroup("Laravel Executive AI") {
-            ShellPlaceholderView()
+            if installer.showsInstaller {
+                InstallerRootView(machine: installer)
+            } else {
+                ShellPlaceholderView()
+            }
         }
-        .defaultSize(width: 520, height: 320)
+        .defaultSize(width: 640, height: 600)
 
         // Blueprint §1.1: the panel lists the latest brief, system status, approvals and
         // shortcuts. S1-09 fills it against the fixture brief; this is the placeholder only.
         MenuBarExtra("Laravel Executive AI", systemImage: "brain") {
             MenuBarPlaceholderView()
         }
+    }
+
+    /// Live dependencies, or — in DEBUG builds started with `LXAI_INSTALL_SIMULATE=1` — a
+    /// simulated flow under a temporary directory so the six screens can be walked locally.
+    /// As an XCTest host the app keeps everything in memory so a test run never writes to the
+    /// real user-data or log directories.
+    private static func makeDependencies() -> InstallDependencies {
+        let environment = ProcessInfo.processInfo.environment
+
+        #if DEBUG
+        if environment["LXAI_INSTALL_SIMULATE"] == "1" {
+            let root = FileManager.default.temporaryDirectory.appending(path: "lxai-install-simulation-\(UUID().uuidString)")
+
+            if let simulated = try? InstallDependencies.simulated(root: root) {
+                return simulated
+            }
+        }
+        #endif
+
+        var live = InstallDependencies.live()
+
+        if environment["XCTestBundlePath"] != nil || environment["XCTestConfigurationFilePath"] != nil {
+            live.checkpointStore = InMemoryInstallCheckpointStore()
+            live.eventLogURL = { _ in nil }
+        }
+
+        return live
     }
 }
 
