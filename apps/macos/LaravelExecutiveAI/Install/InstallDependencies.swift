@@ -50,6 +50,12 @@ struct InstallDependencies: Sendable {
             signatureChecker = FailClosedSignatureChecker(reason: error.userFacingReason)
         }
 
+        // S1-07: BOOT_SERVICES registers the Supervisor LaunchAgent and hands the SELECT_AI key
+        // to it over XPC; the installer itself never touches launchd state outside the
+        // registrar nor the Keychain at all.
+        let pendingSecret = PendingSecretHandoff()
+        let control = SupervisorControlClientFactory.live(bundle: bundle)
+
         return InstallDependencies(
             paths: paths,
             productVersion: version,
@@ -63,9 +69,13 @@ struct InstallDependencies: Sendable {
             packageVerifier: PackageVerifier(signatureChecker: signatureChecker),
             runtimeInstaller: RuntimeInstaller(backupExclusion: TimeMachineBackupExclusion()),
             ownerCreator: UnavailableOwnerCreator(),
-            aiSelectionApplier: SkipOnlyAiSelectionApplier(),
+            aiSelectionApplier: SupervisorAiSelectionApplier(pending: pendingSecret),
             localAiRuntimeDetector: FileSystemLocalAiRuntimeDetector(),
-            serviceBooter: UnavailableServiceBooter(),
+            serviceBooter: LaunchAgentServiceBooter(
+                registrar: SMAppServiceRegistrar(plistName: supervisorPlistName(bundlePrefix: bundlePrefix)),
+                control: control,
+                pending: pendingSecret
+            ),
             healthProbe: UnavailableHealthProbe(),
             healthPolicy: HealthPollingPolicy(),
             checkpointStore: FileInstallCheckpointStore(url: paths.checkpointURL),

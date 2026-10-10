@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented (S1-06, #34): `apps/macos/LaravelExecutiveAI/Install/{InstallPaths,RuntimeInstaller}.swift`, `app/Support/Runtime/RuntimeLayout.php`, `packaging/runtime/`, `packaging/manifest/runtime.json`. The Supervisor that consumes §3 is S1-07; the signed artefact that fills `runtime.json#package` is S1-12; the uninstall UI is S1-13. |
+| **Status** | Implemented (S1-06, #34): `apps/macos/LaravelExecutiveAI/Install/{InstallPaths,RuntimeInstaller}.swift`, `app/Support/Runtime/RuntimeLayout.php`, `packaging/runtime/`, `packaging/manifest/runtime.json`. The Supervisor that consumes §3 is S1-07 ([services.md](services.md)); the signed artefact that fills `runtime.json#package` is S1-12; the uninstall UI is S1-13. |
 | **Blueprint** | §12.1 (app-owned, immutable, versioned runtime; separate mutable data directory with managed backups), §9 (binary rollback), §12.2 (data-preserving reinstall, uninstall), §6 (verify before execute) |
 | **Decisions** | ADR-001 D1 (one FrankenPHP static binary), D3 (Supervisor verifies on every boot), **D4 (this layout)**; ADR-002 D5 (Time Machine exclusion of the live database); ADR-003 D7 row 12 (no secret in any child's environment); ADR-007 D2 (bundled-binary licence allowlist); OPEN-QUESTIONS A12 (bundle prefix placeholder), A21 (answered in §4) |
 | **Tests** | `apps/macos/LaravelExecutiveAITests/Install/RuntimeInstallerTests.swift`, `tests/Feature/Install/RuntimeLayoutTest.php`, `packaging/runtime/test/assemble-runtime.test.mjs`, the `runtime.json` suite in `packaging/fixtures/validate-schema.mjs` |
@@ -104,6 +104,7 @@ reference. Every PHP child (HTTP, `queue:work`, `schedule:work`) gets exactly:
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` | Laravel |
 | `APP_URL` | `http://127.0.0.1:<port>` | Laravel |
 | `LEA_BACKEND_PROFILE` | `local` | `config/lea.php` |
+| `LEA_SECRETS_SOCKET` | `…/Application Support/<bundle id>/run/secrets.sock` — the Supervisor's secrets broker (ADR-003 D3; added by S1-07, `RuntimeEnvironment.secretsSocketKey`) | `config/secrets.php` selects the `supervisor` driver when it is present; `App\Security\Secrets\SupervisorSecretStore` connects to it |
 
 Commands, from ADR-001 D3, with the working directory set to `LEA_RUNTIME_DIR`:
 `frankenphp run --config Caddyfile`, `frankenphp php-cli app/artisan queue:work database …`,

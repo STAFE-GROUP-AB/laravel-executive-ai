@@ -424,6 +424,12 @@ jobs:
         if: hashFiles('packaging/runtime/test/*.test.mjs') != ''
         run: node --test 'packaging/runtime/test/*.test.mjs'
 
+      # Dependency-free node:test suite for the Supervisor LaunchAgent plist template (S1-07):
+      # well-formed plist XML, the ADR-001 D3 keys, no user path and no secret.
+      - name: LaunchAgent plist tests (S1-07)
+        if: hashFiles('packaging/manifest/launchd/test/*.test.mjs') != ''
+        run: node --test 'packaging/manifest/launchd/test/*.test.mjs'
+
   # S1-10 tri-surface brief parity gate (docs/architecture/brief-parity.md §3). One macOS job so
   # the Swift export and the PHP comparison share a filesystem: (a) only the Swift parity test runs
   # and writes one JCS export per brief fixture into build/parity, then (b) Pest renders the mail

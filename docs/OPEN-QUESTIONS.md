@@ -412,3 +412,14 @@ things the ADRs do not cover (`docs/architecture/runtime-layout.md` §5):
    and that binary must not be signed or shipped. Options: patch the libxml2 recipe to use the macOS
    system iconv, or obtain the L-1 opinion on LGPL §6 for a static link. **Needs:** `DECISION` —
    Andreas (with L-1); blocks S1-12 (the signed artefact).
+
+### A24 — The Supervisor's container: bare tool (ADR-001 D3) or helper bundle (ADR-003 D5)
+ADR-001 D3 places the Supervisor at `Contents/MacOS/LaravelExecutiveAISupervisor` (a bare Mach-O,
+`BundleProgram` points straight at it); ADR-003 D5 says it "must be packaged as a bundle
+(`Contents/Helpers/LaravelExecutiveAISupervisor.app`) … with a Developer ID provisioning profile
+embedded" because `keychain-access-groups` is a restricted entitlement, and claims ADR-001 D3 "now
+specifies" that — it does not. S1-07 built ADR-001 D3 literally (`docs/architecture/services.md` §1):
+a `com.apple.product-type.tool` target embedded by the app. If the data-protection keychain refuses a
+bare tool on the signed build, the fix is a product-type change and a one-line `BundleProgram` change,
+nothing in the code. **Needs:** `ENG` — A with H, decided by the S1-12 signing prototype; whichever
+ADR is wrong gets amended in the same PR.

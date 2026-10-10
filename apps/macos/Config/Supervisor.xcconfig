@@ -1,0 +1,21 @@
+// Settings for the `LaravelExecutiveAISupervisor` launch-agent executable (S1-07). Inherits
+// Shared.xcconfig.
+//
+// ADR-001 D3: a headless tool embedded at `Contents/MacOS/LaravelExecutiveAISupervisor` inside
+// the app bundle, so `SMAppService.agent(plistName:)` can own it through the plist in
+// `Contents/Library/LaunchAgents/`. ADR-003 D5: hardened runtime on, App Sandbox off, and it is
+// the ONE executable that carries `keychain-access-groups` (the entitlements file). Unsigned
+// builds (CI, local dev) never get the entitlement applied, which is why every Keychain and
+// launchd call in the code sits behind a protocol with a test double.
+
+#include "Shared.xcconfig"
+
+PRODUCT_NAME = LaravelExecutiveAISupervisor
+PRODUCT_BUNDLE_IDENTIFIER = $(LXAI_BUNDLE_PREFIX).supervisor
+
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_APP_SANDBOX = NO
+CODE_SIGN_ENTITLEMENTS = LaravelExecutiveAISupervisor.entitlements
+
+// The tool is a build product of the app, never installed on its own.
+SKIP_INSTALL = YES
