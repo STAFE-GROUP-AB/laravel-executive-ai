@@ -1,0 +1,22 @@
+// Settings for the `LaravelExecutiveAI` GUI app target (S0-25). Inherits Shared.xcconfig.
+
+#include "Shared.xcconfig"
+
+PRODUCT_NAME = LaravelExecutiveAI
+PRODUCT_BUNDLE_IDENTIFIER = $(LXAI_BUNDLE_PREFIX).app
+
+// Info.plist is a real file so LSUIElement and friends are reviewable in diffs; version fields
+// in it are $(MARKETING_VERSION) / $(CURRENT_PROJECT_VERSION) references (release policy §2.3).
+GENERATE_INFOPLIST_FILE = NO
+INFOPLIST_FILE = LaravelExecutiveAI/Info.plist
+INFOPLIST_KEY_NSHumanReadableCopyright =
+
+// ADR-003 D5: hardened runtime on, App Sandbox off (Accessibility, Authorization Services and
+// launchd supervision are incompatible with the sandbox). The shell carries no keychain
+// entitlement; the Supervisor (S1) owns secrets.
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_APP_SANDBOX = NO
+CODE_SIGN_ENTITLEMENTS = LaravelExecutiveAI.entitlements
+
+COMBINE_HIDPI_IMAGES = YES
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks

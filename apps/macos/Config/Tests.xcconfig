@@ -1,0 +1,15 @@
+// Settings for the `LaravelExecutiveAITests` XCTest bundle (S0-25). Inherits Shared.xcconfig.
+// Hosted in the app so tests can read the real bundle identifier and `@testable import` the app.
+
+#include "Shared.xcconfig"
+
+PRODUCT_NAME = LaravelExecutiveAITests
+PRODUCT_BUNDLE_IDENTIFIER = $(LXAI_BUNDLE_PREFIX).app.tests
+GENERATE_INFOPLIST_FILE = YES
+
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/LaravelExecutiveAI.app/Contents/MacOS/LaravelExecutiveAI
+BUNDLE_LOADER = $(TEST_HOST)
+
+ENABLE_HARDENED_RUNTIME = NO
+ENABLE_APP_SANDBOX = NO
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks
