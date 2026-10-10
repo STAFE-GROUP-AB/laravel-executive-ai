@@ -206,10 +206,13 @@ Who calls what:
 - **Menu bar** — `SupervisorServiceControl` is the live `ServiceControlling` in `PanelPorts.live`:
   "Restart services" = `stopAll` + `startAll`; "Stop services" = `stopAll`; Settings →
   "Uninstall…" = `uninstall(keepingData:)` → the `Uninstaller` (§8).
-- **S1-08 part 2** builds the loopback IPC client on `IPC/IpcSigning.swift` (`IpcSigning`,
-  `PairingGrant`, `ULID`, `SecureRandom`) and gets its grant from `pair(client: .menubar)`; the
-  installer's `HealthProbe` can be `LoopbackHealthProbe` with that grant (the Supervisor already
-  uses it with its own `supervisor` grant).
+- **S1-08 part 2** — delivered ([ipc-client.md](ipc-client.md)): `LoopbackIpcClient` builds on
+  `IPC/IpcSigning.swift` (`IpcSigning`, `PairingGrant`, `ULID`, `SecureRandom`); the one `menubar`
+  session of the GUI process (`IpcClientFactory.liveSession`) gets its grant from
+  `pair(client: .menubar)` and keeps it in the GUI's own Keychain item; `resetPairing()` hands the
+  fresh grant to that session and clears the brief cache; the installer's `HealthProbe` is
+  `IpcHealthProbe` with the same grant (the Supervisor keeps `LoopbackHealthProbe` with its own
+  `supervisor` grant).
 
 ## 8. Uninstall (S1-13: `Install/Uninstaller.swift`, in this order)
 
@@ -285,4 +288,6 @@ starts, so a crash mid-way resumes without a second sweep or a second unregister
   `LXAI_SUPERVISOR_ALLOW_UNSIGNED_PEERS=1` relaxes the two peer checks for a lab run and nothing
   else.
 - `ServiceStatus.state` uses `healthy|failed` where ipc-contract §7.2 wrote `running` and had no
-  post-bound state; S1-08 part 2 maps or the contract gains the two names in a minor bump.
+  post-bound state. S1-08 part 2 resolved it on the client side: `ServiceState.ipcContractName` maps
+  `healthy → running` and carries `failed` through as itself ([ipc-client.md](ipc-client.md) §7);
+  the contract text stays as written.

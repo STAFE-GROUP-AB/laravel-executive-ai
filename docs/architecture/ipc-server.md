@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented in `app/Security/Ipc/`, `app/Http/Controllers/Ipc/`, `routes/api.php` (S1-08 #36, server half). The Swift client half follows in a second PR once the Supervisor (S1-07) can mint pairing grants and elevations |
+| **Status** | Implemented in `app/Security/Ipc/`, `app/Http/Controllers/Ipc/`, `routes/api.php` (S1-08 #36, server half). The Swift client half is delivered in `apps/macos/LaravelExecutiveAI/IPC/` — [ipc-client.md](ipc-client.md) — and replays every fixture here byte for byte against a stub transport |
 | **Contract** | [ipc-contract.md](ipc-contract.md) 1.0.0 — frozen; this document records what was built against it, not changes to it |
 | **Fixtures** | `packaging/fixtures/ipc/*.json` — every exchange is replayed byte for byte by `tests/Feature/Ipc/IpcFixtureConformanceTest.php`; `packaging/fixtures/ipc-signing.mjs` is ported to `App\Security\Ipc\IpcSigner` |
 | **Threat model** | T-17, T-19, T-20, T-30 – T-35 (the nine named IPC tests, [threat-model.md](../security/threat-model.md)) |

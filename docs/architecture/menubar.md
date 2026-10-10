@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented in `apps/macos/LaravelExecutiveAI/MenuBar/` (S1-09, #37) against the fixture pack; the live IPC client plugs in behind `CoreClient` (S1-08 part 2); S1-11 adds the AI-state details and localisation |
+| **Status** | Implemented in `apps/macos/LaravelExecutiveAI/MenuBar/` (S1-09, #37) against the fixture pack; the live IPC client (`LoopbackIpcClient`, S1-08 part 2, [ipc-client.md](ipc-client.md)) runs behind `CoreClient` once the install checkpoint names a port; S1-11 adds the AI-state details and localisation |
 | **Blueprint** | §1.1 (panel contents, "Quit UI" ≠ "Stop server", stale/offline/error visible, badge only for real action items), §14 ("native menu opens instantly from cached brief", "no brief generation on every menu open"), §11 (no tokens in any surface), §1.3 (brief parity) |
 | **Contracts** | [health-contract.md](health-contract.md) §4/§7 (state mapping), [ipc-contract.md](ipc-contract.md) §6.1–6.5 (operations) and §6.2 (ETag, cache file), [brief-schema.md](brief-schema.md) §4/§6, [brief-parity.md](brief-parity.md) §1 (the payload), ADR-005 D1.6 (approvals never from the menu bar), threat model T-33/T-34 |
 
@@ -110,11 +110,17 @@ Errors are `CoreClientError`: `unreachable(String)` (no answer, non-JSON body �
 `invalidResponse(String)`. The live client owns the token, request signing, the nonce, origin and
 version checks; **none of that reaches the model or the view** — `PanelModel` never sees a header.
 
-Shipped implementations: `UnreachableCoreClient` (what the app runs until S1-08 part 2; every call
-throws `unreachable`) and `FixtureCoreClient` (reads `packaging/fixtures/health/<state>.json`,
-`briefs/<name>.json`, `ipc/approvals-pending.json`, `ipc/ai-pause|resume.json`, `ipc/heartbeat.json`;
-only `response.body.data` of an IPC fixture is decoded, the recorded request headers are never
-read). `LXAI_MENUBAR_FIXTURE=<health fixture name>` swaps it in for a DEBUG run.
+Shipped implementations: `LoopbackIpcClient` (S1-08 part 2, [ipc-client.md](ipc-client.md) — what
+`PanelModel.live()` runs once `install/checkpoint.json` names `preflight.port`; signed requests to the
+literal `127.0.0.1:<port>`, response signature verified before any body is parsed, the `menubar`
+grant from the Supervisor in the GUI's own Keychain item), `UnreachableCoreClient` (what the app runs
+before that; every call throws `unreachable`, so the panel stays cache-only) and `FixtureCoreClient`
+(reads `packaging/fixtures/health/<state>.json`, `briefs/<name>.json`, `ipc/approvals-pending.json`,
+`ipc/ai-pause|resume.json`, `ipc/heartbeat.json`; only `response.body.data` of an IPC fixture is
+decoded, the recorded request headers are never read). `LXAI_MENUBAR_FIXTURE=<health fixture name>`
+swaps the fixture client in for a DEBUG run. A `426` / higher wire major from the live client is the
+"Update required" row of §2 (`PanelModel.ipcVersionRefused`): no brief, approvals or heartbeat until a
+proper answer clears it (`IpcPanelIntegrationTests`).
 
 **There is no approve/reject operation.** `MenuBarCopyTests.testMenuBarSourcesDefineNoApproveOrRejectPath`
 greps every file under `MenuBar/` for `approve(` / `reject(` and friends, and the protocol above
@@ -179,11 +185,14 @@ Added (see [ai-state.md](ai-state.md) §3 for the cross-surface table):
 
 Still open:
 
-- The "Update required" flow once the IPC version header is live.
 - Visible-session state for Peekaboo automation on the icon (ADR-005 D1.10).
 - Whether the app becomes a pure menu-bar agent after READY (`LSUIElement`).
+- Whether "Quit UI" sends the ipc-contract §6.8 final heartbeat (`quitting: true`): the live client
+  offers `heartbeat(panelOpen:quitting:)`; §5's "sends nothing to the core" test still stands.
+
+Delivered by S1-08 part 2: the "Update required" flow for the IPC version header (§4).
 
 ## 9. Not decided here
 
-- The live client's transport details — ipc-contract §1–§5 (S1-08).
-- Where "Reset security pairing" is surfaced in Settings (its port, `resetPairing()`, exists) — S1-08.
+- Where "Reset security pairing" is surfaced in Settings (its port, `resetPairing()`, exists and now
+  replaces the session grant — ipc-client.md §2) — S1-08 follow-up.

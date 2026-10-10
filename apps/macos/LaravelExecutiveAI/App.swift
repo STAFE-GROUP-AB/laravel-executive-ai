@@ -2,9 +2,10 @@
 // menu bar panel (S1-09, §1.1).
 //
 // The window shows the installer until the install state is READY, then the shell placeholder.
-// The MenuBarExtra renders from the cached brief (MenuBar/); its core client stays unreachable
-// until S1-08 part 2. No Supervisor (S1-07), no networking: the live dependencies stop with an
-// actionable error where those items plug in.
+// The MenuBarExtra renders from the cached brief (MenuBar/) and refreshes through the loopback
+// IPC client (IPC/, S1-08 part 2) once the install checkpoint names a port; before that the
+// client is `UnreachableCoreClient` and the panel is cache-only. The installer's HEALTH_CHECK
+// probes `/health/ready` through the same client (`IpcClientFactory`).
 
 import DesignTokens
 import SwiftUI

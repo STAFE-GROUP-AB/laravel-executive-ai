@@ -3,9 +3,11 @@
 //
 // "Restart services" is stop-all then start-all through the Supervisor, which re-runs the
 // boot-time runtime verification before spawning. "Reset security pairing" regenerates `K` in
-// the Supervisor and clears the brief cache (ipc-contract §6.2). "Uninstall…" (S1-13) hands the
-// person's keep-or-delete choice to the `Uninstaller` (Install/Uninstaller.swift), which owns
-// the order: stop, sweep the Keychain through the Supervisor, unregister, remove, trash.
+// the Supervisor, hands the fresh grant to the GUI's `IpcSession` (S1-08 part 2, which persists
+// it in the GUI's own Keychain item) and clears the brief cache (ipc-contract §6.2). "Uninstall…"
+// (S1-13) hands the person's keep-or-delete choice to the `Uninstaller`
+// (Install/Uninstaller.swift), which owns the order: stop, sweep the Keychain through the
+// Supervisor, unregister, remove, trash.
 
 import Foundation
 
@@ -13,6 +15,8 @@ struct SupervisorServiceControl: ServiceControlling {
     let control: any SupervisorControlling
     let cache: BriefCache
     let uninstaller: any Uninstalling
+    /// The process's `menubar` IPC session; nil in a build without the loopback client.
+    var session: IpcSession? = nil
 
     func restartServices() async throws {
         do {
@@ -39,8 +43,9 @@ struct SupervisorServiceControl: ServiceControlling {
         }
     }
 
-    /// Settings → Diagnostics → "Reset security pairing" (ipc-contract §3.4, §7.1). Returns the
-    /// fresh grant; storing it in the GUI's private Keychain item is S1-08 part 2.
+    /// Settings → Diagnostics → "Reset security pairing" (ipc-contract §3.4, §7.1). The fresh
+    /// grant replaces the session's (and its Keychain item); the brief cache is cleared so no
+    /// brief fetched under the old key survives the rotation.
     func resetPairing() async throws -> PairingGrant {
         let grant: PairingGrant
 
@@ -50,6 +55,7 @@ struct SupervisorServiceControl: ServiceControlling {
             throw ServiceControlError.unavailable(Self.describe(error))
         }
 
+        await session?.replace(with: grant)
         try? cache.clear()
 
         return grant
