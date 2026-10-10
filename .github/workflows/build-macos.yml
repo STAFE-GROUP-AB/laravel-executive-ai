@@ -1,6 +1,8 @@
 # build-macos — blueprint §16 step 5 (a signed internal Mac build produced by CI), §12.1 (DMG),
-# §14 (codesign / spctl evidence), backlog S1-12 (#40). Job name `build-macos` is stable so it can
-# be added to the S0-27 required checks; do not rename it.
+# §14 (codesign / spctl evidence), backlog S1-12 (#40). Job name `build-macos` is stable; do not
+# rename it. It is NOT a required check: the `pull_request` trigger below is path-filtered, and a
+# required check that never runs on a PR outside those paths would block that PR forever. Drop the
+# `paths:` filter first if it ever becomes required (S0-27 rulesets).
 #
 # What it produces: a Release build of apps/macos (app + embedded Supervisor tool + LaunchAgent
 # plist) wrapped in a UDZO disk image, plus build/signing-report.txt with the codesign and spctl
@@ -167,7 +169,8 @@ jobs:
         shell: bash
         env:
           STATUS: ${{ steps.mode.outputs.status }}
-          SHA: ${{ github.sha }}
+          # On a pull request github.sha is the synthetic merge commit; name the image after the head.
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           packaging/signing/make-dmg.sh --app "$APP_PATH" --out-dir "$DIST_DIR" --sha "${SHA:0:7}" --status "$STATUS"
