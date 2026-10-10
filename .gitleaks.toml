@@ -1,5 +1,6 @@
 # gitleaks configuration (CI job `secrets-scan`, blueprint §11).
-# Extends the built-in rules; adds precise allowlists only. Never allowlist by path.
+# Extends the built-in rules; adds precise allowlists only. Never allowlist a path on its own: an
+# allowlist that names a path must also constrain what it matches there (`condition = "AND"`).
 
 title = "Laravel Executive AI"
 
@@ -10,3 +11,15 @@ useDefault = true
 description = "ULIDs are identifiers, not secrets (brief/health fixtures use them in *_key fields)"
 regexTarget = "secret"
 regexes = ['''^[0-7][0-9A-HJKMNP-TV-Z]{25}$''']
+
+# S0-19: the adversarial security corpora contain attacker payloads that offer the agent a
+# credential, because refusing one is the behaviour under test. Those values are deliberately
+# impossible to confuse with a live key — the literal prefix `sk-FAKE-` followed by zeroes — and the
+# allowlist matches ONLY that shape AND only inside the corpora, so a real key committed next to it
+# is still reported. The hostile-MCP and prompt-injection fixtures are the only place this shape may
+# appear; if a new provider shape is needed, add it here with the same two constraints.
+[[allowlists]]
+description = "Obviously-fake credential shapes in the S0-19 security corpora (sk-FAKE-0000…)"
+condition = "AND"
+paths = ['''^packaging/fixtures/security/.*\.json$''']
+regexes = ['''sk-FAKE-0{8,}''']

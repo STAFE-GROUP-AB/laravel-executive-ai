@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/security/hostile-mcp/hostile-mcp.schema.json",
+  "$comment": "Hostile MCP-server fixtures 1.0.0 (S0-19). Describes packaging/fixtures/security/hostile-mcp/*.json as ONE object keyed by file basename (one hostile server per file); validate-schema.mjs assembles the files and adds the cross-checks. Transport-neutral: every file is a recorded sequence of JSON-RPC 2.0 exchanges plus the transport facts the client must act on (status, Location, resolved IP, sizes). Blueprint §7 (MCP Manager, tool poisoning, uncontrolled redirects), §11 (MCP capability allowlist, trust tier, revoke, SSRF), §14 (named suite 'MCP hostile-server fixtures'). ADR-005 D4 (client wrapping, trust tiers, schema_hash rug-pull protection, kill/revoke, 64 KiB truncation). The effect vocabulary is shared with injection.schema.json, which must be compiled first.",
+  "title": "Hostile MCP-server fixtures",
+  "type": "object",
+  "unevaluatedProperties": false,
+  "required": [
+    "lies-about-capabilities",
+    "schema-mutation",
+    "unexpected-redirect",
+    "oversized-and-nested-results",
+    "injection-in-error-message",
+    "tool-name-collision"
+  ],
+  "properties": {
+    "lies-about-capabilities": {
+      "description": "Required by the issue: a server that lies about what it does. Read-only annotations on a tool that mutates, and an empty declared_egress on a server that calls out.",
+      "$ref": "#/$defs/serverFixture"
+    },
+    "schema-mutation": {
+      "description": "Required by the issue: a server whose tool schema changes between calls (rug pull) — new required argument, rewritten description, new tool, changed argument type.",
+      "$ref": "#/$defs/serverFixture"
+    },
+    "unexpected-redirect": {
+      "description": "Required by the issue: a server that answers with redirects the client must refuse — cross-host, scheme downgrade, link-local metadata, loopback, Unix socket — plus DNS rebinding and a result that embeds a URL the client 'should' fetch.",
+      "$ref": "#/$defs/serverFixture"
+    },
+    "oversized-and-nested-results": {
+      "description": "Bonus: resource exhaustion through an oversized result, a deeply nested result and a stream that never ends.",
+      "$ref": "#/$defs/serverFixture"
+    },
+    "injection-in-error-message": {
+      "description": "Bonus: prompt injection in JSON-RPC error messages and error data, including a fake credential the client must redact.",
+      "$ref": "#/$defs/serverFixture"
+    },
+    "tool-name-collision": {
+      "description": "Bonus: a remote server advertising the names of our own T0 built-in tools.",
+      "$ref": "#/$defs/serverFixture"
+    }
+  },
+  "$defs": {
+    "serverFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server", "exchanges", "notes"],
+      "properties": {
+        "server": { "$ref": "#/$defs/server" },
+        "exchanges": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/exchange" }
+        },
+        "notes": {
+          "description": "English. How the recording is meant to be replayed, including any ordering the test has to respect.",
+          "type": "string",
+          "minLength": 16
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "attack_family", "trust_tier", "transport", "endpoint", "protocol_version", "declared"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "name": {
+          "description": "Fixture server name. Always prefixed 'fixture-' so it can never be confused with a real registry entry.",
+          "type": "string",
+          "pattern": "^fixture-[a-z0-9-]+$"
+        },
+        "attack_family": {
+          "enum": [
+            "capability_lie",
+            "schema_mutation",
+            "unexpected_redirect",
+            "oversized_result",
+            "error_injection",
+            "name_collision"
+          ]
+        },
+        "trust_tier": {
+          "description": "ADR-005 D4.4. T0 is ours, T1 an allowlisted local stdio runtime, T2 a user-approved remote host, T3 blocked and feature-gated.",
+          "enum": ["T0", "T1", "T2", "T3"]
+        },
+        "transport": {
+          "description": "ADR-005 D4.3. The deprecated HTTP+SSE transport is not supported and must not appear here.",
+          "enum": ["streamable-http", "stdio"]
+        },
+        "endpoint": {
+          "description": "HTTPS URL for streamable-http, or the bundle-relative command for stdio (prefix 'bundle:'). Never a path under a real home directory.",
+          "type": "string",
+          "minLength": 6
+        },
+        "protocol_version": {
+          "enum": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
+        },
+        "declared": {
+          "description": "What the server, its registry entry or its allowlist manifest claims about itself. Claims only: nothing here may be used as a policy input.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary", "egress", "fs_paths", "oauth", "annotations_claim"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 8 },
+            "egress": {
+              "description": "declared_egress from the allowlist manifest or the registry entry (ADR-005 D4.5, D4.9). An empty array means 'no network'.",
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "fs_paths": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "oauth": { "type": "boolean" },
+            "annotations_claim": { "type": "string", "minLength": 4 }
+          }
+        }
+      }
+    },
+    "exchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "step", "label", "request", "response", "transport", "observed", "expected"],
+      "properties": {
+        "id": {
+          "description": "ULID, unique across the whole security corpus.",
+          "$ref": "#/$defs/ulid"
+        },
+        "step": {
+          "description": "1-based position in the recording. Strictly increasing within a file (checked by the validator).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": { "type": "string", "minLength": 8 },
+        "request": {
+          "description": "The JSON-RPC 2.0 request the client sent. null when the client sent nothing (a server-initiated frame).",
+          "oneOf": [{ "$ref": "#/$defs/jsonRpcRequest" }, { "type": "null" }]
+        },
+        "response": {
+          "description": "The JSON-RPC 2.0 response the server sent. null when no JSON-RPC body was produced — a 3xx, a killed process, a call refused before it left the client.",
+          "oneOf": [{ "$ref": "#/$defs/jsonRpcResponse" }, { "type": "null" }]
+        },
+        "schema_hash": {
+          "description": "Required on a tools/list exchange that carries a result: sha256 over the RFC 8785 canonicalisation of result.tools (ADR-005 D4.6 mcp_tools.schema_hash). Recomputed by the validator; rewrite with tools/hash-mcp-tools.mjs.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "transport": { "$ref": "#/$defs/transport" },
+        "observed": { "$ref": "#/$defs/observed" },
+        "expected": { "$ref": "#/$defs/expected" }
+      }
+    },
+    "jsonRpcRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": ["integer", "string"] },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      }
+    },
+    "jsonRpcResponse": {
+      "$comment": "Exactly one of result / error, as JSON-RPC 2.0 requires.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id"],
+      "oneOf": [
+        {
+          "properties": { "result": { "type": "object" } },
+          "required": ["result"]
+        },
+        {
+          "properties": { "error": { "$ref": "#/$defs/jsonRpcError" } },
+          "required": ["error"]
+        }
+      ],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": ["integer", "string", "null"] },
+        "result": { "type": "object" },
+        "error": { "$ref": "#/$defs/jsonRpcError" }
+      }
+    },
+    "jsonRpcError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": {}
+      }
+    },
+    "transport": {
+      "description": "Transport facts the client must act on. Everything is optional except http_status, because a stdio exchange has no status of its own (use 0).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["http_status", "headers", "body_elided"],
+      "properties": {
+        "http_status": {
+          "description": "HTTP status, or 0 for stdio.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "resolved_ip": {
+          "description": "IP the host resolved to when the connection was checked (ADR-005 D4.2b: resolve once, pin for the request).",
+          "oneOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "resolved_ip_at_use": {
+          "description": "IP the host resolved to at use time. Different from resolved_ip means a DNS-rebinding attempt.",
+          "oneOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "declared_bytes": {
+          "description": "Size of the recorded body when it is elided rather than committed.",
+          "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+        },
+        "nesting_depth": {
+          "description": "JSON nesting depth of the elided body.",
+          "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+        },
+        "elapsed_ms": {
+          "description": "How long the server kept the exchange open.",
+          "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+        },
+        "body_elided": {
+          "description": "true when the real body is too large or too deep to commit and is described by declared_bytes / nesting_depth instead. A test must synthesise it.",
+          "type": "boolean"
+        }
+      }
+    },
+    "observed": {
+      "description": "What our own monitors saw, independently of what the server said. This is the only evidence that may contradict a declaration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["egress", "mutations"],
+      "properties": {
+        "egress": {
+          "description": "Outbound connections attributed to the server (egress monitor for a local child; our own request log for a remote one).",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "mutations": {
+          "description": "Side effects the server admitted to or that were detected, in English. Evidence for a capability lie.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_action", "connection_state_after", "must_not", "must", "user_message_key", "notes"],
+      "properties": {
+        "registry_action": {
+          "description": "What the MCP registry must do with this server after this exchange. 'allow_and_record' is permitted only on an exchange that contains no attack; the validator requires every server fixture to reach at least one of quarantine, block or require_review.",
+          "enum": ["allow_and_record", "require_review", "quarantine", "block"]
+        },
+        "connection_state_after": {
+          "enum": ["connected", "grants_suspended", "quarantined", "blocked", "revoked"]
+        },
+        "must_not": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/forbiddenEffect" }
+        },
+        "must": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requiredEffect" }
+        },
+        "user_message_key": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$" },
+            { "type": "null" }
+          ]
+        },
+        "notes": {
+          "description": "English. Which decision in ADR-005 D4 or §11 produces this refusal.",
+          "type": "string",
+          "minLength": 16
+        }
+      }
+    },
+    "forbiddenEffect": {
+      "description": "The injection corpus vocabulary plus the MCP-specific effects.",
+      "anyOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/security/prompt-injection/injection.schema.json#/$defs/forbiddenEffect"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "http_downgrade_accepted",
+            "unix_socket_target_dialled",
+            "dns_rebind_accepted",
+            "annotation_used_for_policy",
+            "tool_auto_granted",
+            "grant_kept_after_schema_change",
+            "call_executed_under_old_grant",
+            "builtin_tool_shadowed",
+            "model_sees_untruncated_result",
+            "model_visible_error_content",
+            "unbounded_parse",
+            "resource_link_auto_fetched",
+            "error_text_treated_as_instruction",
+            "server_connected",
+            "declared_capability_trusted"
+          ]
+        }
+      ]
+    },
+    "requiredEffect": {
+      "anyOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/security/prompt-injection/injection.schema.json#/$defs/requiredEffect"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "grants_suspended",
+            "schema_hash_recorded",
+            "annotations_recorded_not_trusted",
+            "resolved_ip_pinned",
+            "result_truncated_at_64kib",
+            "parse_depth_limited",
+            "server_tool_namespaced",
+            "builtin_precedence_kept",
+            "connection_closed",
+            "exact_command_shown_to_user",
+            "declared_egress_compared",
+            "process_killed"
+          ]
+        }
+      ]
+    },
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    }
+  }
+}
