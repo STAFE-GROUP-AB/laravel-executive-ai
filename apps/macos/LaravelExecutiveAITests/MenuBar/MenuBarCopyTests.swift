@@ -65,7 +65,8 @@ final class MenuBarCopyTests: XCTestCase {
         for file in sources {
             let text = try String(contentsOf: file, encoding: .utf8)
 
-            for marker in ["/Users/", "andreaskviby", ".ts.net", "100.64."] {
+            // "/Users/" catches any hard-coded home path, whoever the user is (ADR-003 D7 row 6).
+            for marker in ["/Users/", ".ts.net", "100.64."] {
                 XCTAssertFalse(text.contains(marker), "\(file.lastPathComponent) contains \(marker)")
             }
         }
