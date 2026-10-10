@@ -53,7 +53,11 @@ Every secret is a **generic-password item in the macOS data protection keychain*
 | `kSecAttrAccessControl` | **not set** for service credentials | `userPresence`/biometry would block unattended brief generation (E6) |
 
 **Service identity inventory (v1).** The `se.stafe.executive-ai.<service>` convention is shared with
-ADR-006, which already names `se.stafe.executive-ai.webpush`.
+ADR-006, which already names `se.stafe.executive-ai.webpush`. **A12 flag:** the Team ID in the access
+group and the bundle-id prefix (ADR-001 currently uses the placeholder `com.stafe.laravelexecutiveai`)
+are Andreas's A12 decision; ADR-001, ADR-003 and ADR-006 must end up on one prefix, and the
+`kSecAttrService` names above are deliberately independent of it so that decision never forces a
+Keychain migration.
 
 | `kSecAttrService` | `kSecAttrAccount` | Envelope `kind` | Written by | Read by |
 |---|---|---|---|---|
