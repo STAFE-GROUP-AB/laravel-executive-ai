@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ADR-003 D5: hardened runtime only. No App Sandbox, no keychain-access-groups in the shell.
+	     Hardened-runtime exceptions (e.g. disable-library-validation) are added only when a
+	     concrete need is documented in an ADR. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+</dict>
+</plist>

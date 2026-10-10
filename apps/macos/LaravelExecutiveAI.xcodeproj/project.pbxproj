@@ -1,0 +1,338 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A0000000000000000000073 /* DesignTokens in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0000000000000000000071 /* DesignTokens */; };
+		0A0000000000000000000074 /* DesignTokens in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0000000000000000000072 /* DesignTokens */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0A0000000000000000000081 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0A0000000000000000000010;
+			remoteInfo = LaravelExecutiveAI;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0A0000000000000000000020 /* LaravelExecutiveAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LaravelExecutiveAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000000000000000000021 /* LaravelExecutiveAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LaravelExecutiveAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000000000000000000030 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		0A0000000000000000000031 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		0A0000000000000000000032 /* Tests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tests.xcconfig; sourceTree = "<group>"; };
+		0A0000000000000000000033 /* LaravelExecutiveAI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LaravelExecutiveAI.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0A0000000000000000000042 /* Exceptions for "LaravelExecutiveAI" folder in "LaravelExecutiveAI" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0A0000000000000000000010 /* LaravelExecutiveAI */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0A0000000000000000000040 /* LaravelExecutiveAI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0A0000000000000000000042 /* Exceptions for "LaravelExecutiveAI" folder in "LaravelExecutiveAI" target */,
+			);
+			path = LaravelExecutiveAI;
+			sourceTree = "<group>";
+		};
+		0A0000000000000000000041 /* LaravelExecutiveAITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LaravelExecutiveAITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0A0000000000000000000051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A0000000000000000000073 /* DesignTokens in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0A0000000000000000000054 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A0000000000000000000074 /* DesignTokens in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A0000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				0A0000000000000000000004 /* Config */,
+				0A0000000000000000000040 /* LaravelExecutiveAI */,
+				0A0000000000000000000041 /* LaravelExecutiveAITests */,
+				0A0000000000000000000033 /* LaravelExecutiveAI.entitlements */,
+				0A0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		0A0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000000000000000000020 /* LaravelExecutiveAI.app */,
+				0A0000000000000000000021 /* LaravelExecutiveAITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0A0000000000000000000004 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				0A0000000000000000000030 /* Shared.xcconfig */,
+				0A0000000000000000000031 /* App.xcconfig */,
+				0A0000000000000000000032 /* Tests.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0A0000000000000000000010 /* LaravelExecutiveAI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000000000000000000063 /* Build configuration list for PBXNativeTarget "LaravelExecutiveAI" */;
+			buildPhases = (
+				0A0000000000000000000050 /* Sources */,
+				0A0000000000000000000051 /* Frameworks */,
+				0A0000000000000000000052 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0A0000000000000000000040 /* LaravelExecutiveAI */,
+			);
+			name = LaravelExecutiveAI;
+			packageProductDependencies = (
+				0A0000000000000000000071 /* DesignTokens */,
+			);
+			productName = LaravelExecutiveAI;
+			productReference = 0A0000000000000000000020 /* LaravelExecutiveAI.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0A0000000000000000000011 /* LaravelExecutiveAITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0000000000000000000066 /* Build configuration list for PBXNativeTarget "LaravelExecutiveAITests" */;
+			buildPhases = (
+				0A0000000000000000000053 /* Sources */,
+				0A0000000000000000000054 /* Frameworks */,
+				0A0000000000000000000055 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0A0000000000000000000080 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0A0000000000000000000041 /* LaravelExecutiveAITests */,
+			);
+			name = LaravelExecutiveAITests;
+			packageProductDependencies = (
+				0A0000000000000000000072 /* DesignTokens */,
+			);
+			productName = LaravelExecutiveAITests;
+			productReference = 0A0000000000000000000021 /* LaravelExecutiveAITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0A0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				ORGANIZATIONNAME = "STAFE GROUP AB";
+				TargetAttributes = {
+					0A0000000000000000000010 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					0A0000000000000000000011 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 0A0000000000000000000010;
+					};
+				};
+			};
+			buildConfigurationList = 0A0000000000000000000060 /* Build configuration list for PBXProject "LaravelExecutiveAI" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0A0000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0A0000000000000000000070 /* XCLocalSwiftPackageReference "DesignTokens" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0A0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0A0000000000000000000010 /* LaravelExecutiveAI */,
+				0A0000000000000000000011 /* LaravelExecutiveAITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0A0000000000000000000052 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0A0000000000000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0A0000000000000000000050 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0A0000000000000000000053 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0A0000000000000000000080 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0A0000000000000000000010 /* LaravelExecutiveAI */;
+			targetProxy = 0A0000000000000000000081 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0A0000000000000000000061 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000030 /* Shared.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0A0000000000000000000062 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000030 /* Shared.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		0A0000000000000000000064 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000031 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0A0000000000000000000065 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000031 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		0A0000000000000000000067 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000032 /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0A0000000000000000000068 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A0000000000000000000032 /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0A0000000000000000000060 /* Build configuration list for PBXProject "LaravelExecutiveAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A0000000000000000000061 /* Debug */,
+				0A0000000000000000000062 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0A0000000000000000000063 /* Build configuration list for PBXNativeTarget "LaravelExecutiveAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A0000000000000000000064 /* Debug */,
+				0A0000000000000000000065 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0A0000000000000000000066 /* Build configuration list for PBXNativeTarget "LaravelExecutiveAITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A0000000000000000000067 /* Debug */,
+				0A0000000000000000000068 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0A0000000000000000000070 /* XCLocalSwiftPackageReference "DesignTokens" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = DesignTokens;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0A0000000000000000000071 /* DesignTokens */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DesignTokens;
+		};
+		0A0000000000000000000072 /* DesignTokens */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DesignTokens;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 0A0000000000000000000001 /* Project object */;
+}

@@ -30,6 +30,11 @@ apps/macos/**/DerivedData/
 apps/macos/**/.build/
 apps/macos/**/*.dSYM
 apps/macos/**/*.dSYM.zip
+apps/macos/build/
+# The CI command (ci.yml `swift` job) writes these at the repo root
+/build/
+/.build/
+*.xcresult
 
 # Packaging outputs
 /packaging/build/

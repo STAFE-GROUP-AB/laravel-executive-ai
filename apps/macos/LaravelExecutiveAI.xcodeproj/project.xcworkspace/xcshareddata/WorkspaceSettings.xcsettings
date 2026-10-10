@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No auto-created schemes: CI (S0-05) takes `xcodebuild -list` .schemes[0], which must be
+	     the shared LaravelExecutiveAI scheme, not the auto-generated one for the DesignTokens
+	     package. Run the package's own tests with `swift test` in apps/macos/DesignTokens. -->
+	<key>IDEWorkspaceSharedSettings_AutocreateContextsIfNeeded</key>
+	<false/>
+</dict>
+</plist>

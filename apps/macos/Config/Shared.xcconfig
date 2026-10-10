@@ -1,0 +1,62 @@
+// Build settings shared by every target in apps/macos (S0-25).
+//
+// Sources of truth, in order: docs/adrs/001-macos-runtime-packaging.md D5 (support matrix),
+// docs/adrs/003-keychain-and-secrets.md D5 (no App Sandbox), docs/operations/release-policy.md
+// §2.3 (version fields live here, never hand-edited in Info.plist), docs/OPEN-QUESTIONS.md A12
+// (bundle-id prefix). Edit this file, not the pbxproj, when one of those decisions changes.
+
+// --- Identity (A12) --------------------------------------------------------------------------
+// ONE variable for the prefix. ADR-003 / ADR-006 already build on `se.stafe.executive-ai`;
+// when A12 settles the Team ID, change this line and nothing else.
+LXAI_BUNDLE_PREFIX = se.stafe.executive-ai
+
+// --- Versions (release policy §2.3) -------------------------------------------------------------
+// CFBundleShortVersionString must equal the product version's MAJOR.MINOR.PATCH.
+MARKETING_VERSION = 0.0.0
+// CFBundleVersion: monotonically increasing integer across every signed or notarized build.
+CURRENT_PROJECT_VERSION = 1
+
+// --- Platform (ADR-001 D5: macOS 15 floor, Apple Silicon only) -----------------------------------
+SDKROOT = macosx
+MACOSX_DEPLOYMENT_TARGET = 15.0
+ARCHS = arm64
+VALID_ARCHS = arm64
+ONLY_ACTIVE_ARCH = YES
+SUPPORTED_PLATFORMS = macosx
+
+// --- Swift ---------------------------------------------------------------------------------------
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_OPTIMIZATION_LEVEL[config=Debug] = -Onone
+SWIFT_OPTIMIZATION_LEVEL[config=Release] = -O
+SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug] = DEBUG
+SWIFT_COMPILATION_MODE[config=Release] = wholemodule
+
+// --- Compiler hygiene ----------------------------------------------------------------------------
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+GCC_TREAT_WARNINGS_AS_ERRORS = NO
+ENABLE_STRICT_OBJC_MSGSEND = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+DEAD_CODE_STRIPPING = YES
+DEBUG_INFORMATION_FORMAT[config=Debug] = dwarf
+DEBUG_INFORMATION_FORMAT[config=Release] = dwarf-with-dsym
+GCC_OPTIMIZATION_LEVEL[config=Debug] = 0
+ENABLE_TESTABILITY[config=Debug] = YES
+MTL_ENABLE_DEBUG_INFO[config=Debug] = INCLUDE_SOURCE
+COPY_PHASE_STRIP = NO
+ALWAYS_SEARCH_USER_PATHS = NO
+LOCALIZATION_PREFERS_STRING_CATALOGS = YES
+ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
+
+// --- Signing -------------------------------------------------------------------------------------
+// Unsigned by default so CI (S0-05) builds and tests with CODE_SIGN_IDENTITY="" and
+// CODE_SIGNING_ALLOWED=NO. On Apple Silicon the linker ad-hoc signs, which is enough to run
+// locally and under xctest. S1-12 (signed debug DMG from CI) plugs real signing in by overriding
+// CODE_SIGN_IDENTITY / DEVELOPMENT_TEAM / PROVISIONING_PROFILE_SPECIFIER from a CI-only xcconfig
+// or `xcodebuild` arguments; nothing in this file or the pbxproj should need to change.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY =
+DEVELOPMENT_TEAM =
+PROVISIONING_PROFILE_SPECIFIER =
