@@ -7,7 +7,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 | ADR | Title | Owner | Closes | Status |
 |---|---|---|---|---|
 | [001](001-macos-runtime-packaging.md) | macOS runtime packaging | A (macOS/Swift) + B | §15.1, §15.2 | Proposed — written 2026-10-10 with measured prototype; awaits Andreas (legal L1–L4, A12) and the S1-06 clean-Mac run |
-| [002](002-local-db-and-queue.md) | Local database and queue | B (Laravel platform) | §15.3a, A3, A9 | Proposed |
+| [002](002-local-db-and-queue.md) | Local database and queue | B (Laravel platform) | §15.3a, A3 (proposed), A4, A9 | Proposed — benchmark evidence attached, awaiting review |
 | [003](003-keychain-and-secrets.md) | Keychain and secret storage | H (Security/privacy) + A | §15.3b | Proposed |
 | [004](004-provider-neutral-ai.md) | Provider-neutral AI layer on `laravel/ai` 1.2.0 | D (AI/Agents), H + B review | §15.4 (SDK half), §15.6 (runtime; licenses → ADR-007), A10 | Proposed — drafted 2026-10-10, awaits D4 egress test and D2 matrix before Accepted |
 | [005](005-peekaboo-mcp-security.md) | Peekaboo and MCP security model | G (MCP/Automation) + A | §15.4 (MCP), §15.5, A1 | Proposed |
