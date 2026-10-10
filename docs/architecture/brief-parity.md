@@ -129,10 +129,31 @@ the required checks.
 ### 3.3 Verified broken
 
 The acceptance "adding a field to one surface and not the others fails the test" was proven once by
-adding one key to the PWA payload only (`BriefPage::fromBrief()`), pushing, and letting CI fail:
+adding one key to the PWA payload only (`$payload['surface'] = 'pwa'` in `BriefPage::fromBrief()`,
+commit `3b3e551` on PR #77), pushing, and letting CI fail; the following commit reverted it.
 
-- **Verified broken on 2026-10-10:** _run URL and the failing assertion are recorded in the commit
-  that reverts the break (see the PR for S1-10 and the entry below once CI has run)._
+- **Verified broken on 2026-10-10:** run
+  <https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/runs/38077108059> —
+  `parity` job [114286321232](https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/runs/38077108059/job/114286321232)
+  (Swift export step green, 11 files; Pest step red) and `php` job
+  [114286321184](https://github.com/STAFE-GROUP-AB/laravel-executive-ai/actions/runs/38077108059/job/114286321184)
+  (15 failed, 775 passed). `swift`, `fixtures`, `secrets-scan`, `commitlint` stayed green, as they
+  should: the break was content, not presentation, and only the gate sees content.
+- **Assertion:** `FAILED Tests\E2E\BriefParityTest > it renders mail, pwa page and pwa endpoint to
+  byte-identical JCS equal to the fixture projection with ("canonical")` —
+  `pwa BriefPage export of `canonical` differs from the mail export` / `Failed asserting that two
+  strings are identical.` with the JCS diff showing the extra `"surface":"pwa"` member. In the
+  `php` lane the same assertion failed for all 11 fixtures plus the committed-snapshot test (and
+  the S1-04 `BriefsPagesTest` parity test). Locally, with the Swift export present, the run has 23
+  failures: those 12 and the 11 menu bar comparisons (`menu bar (swift export) export of … differs
+  from the pwa page export`) — in CI run 38077108059 the latter were masked by the side finding
+  below.
+- **Side finding fixed in the same PR:** on a fresh checkout the `parity` job's first test built the
+  SQLite schema *inside* its `DatabaseTransactions` transaction (`Tests\TestCase` migrated after the
+  traits had begun it), so the rollback dropped the tables and the remaining 44 tests failed with
+  `no such table: organizations` instead of the parity assertion. `TestCase::setUpTraits()` now
+  builds the schema before the traits start; the `php` lane had never hit this because a Unit test
+  without the trait always ran first.
 
 ### 3.4 Adding a fixture, changing the payload
 
