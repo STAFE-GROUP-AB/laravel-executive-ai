@@ -181,3 +181,19 @@ LXAI_SWIFT_PARITY_EXPORT_DIR="$PWD/build/parity" vendor/bin/pest tests/E2E/Brief
 # without the Swift side (what the `php` lane does; 36 tests, committed-snapshot oracle)
 vendor/bin/pest tests/E2E/BriefParityTest.php
 ```
+
+### 3.6 The vertical slice extends the gate (S1-15)
+
+§3.1–§3.5 compare the three surfaces over the **fixture pack imported into the suite's database**.
+[`tests/E2E/VerticalSliceTest.php`](../../tests/E2E/VerticalSliceTest.php) (blueprint §16 step 8,
+[`docs/operations/vertical-slice.md`](../operations/vertical-slice.md)) runs the same comparison
+once more **on a freshly installed core**: a second application booted on a throwaway
+`LEA_DATA_DIR`, migrated from nothing, owner created through the real form, signed in through the
+real one-time code, the canonical fixture imported as the seeded brief. It then reads the brief back
+the way each surface does in production — `GET /briefs/{brief}/parity.json` as the owner's session,
+`GET /ipc/v1/briefs/latest` as the signed menu bar client (projected through
+`BriefParityPayload::fromDocument`), `GET /briefs/{brief}/preview/mail` and `lea:brief:preview` —
+and asserts one `version` and one `content_hash` across all three, equal to the fixture's. The menu
+bar oracle is the same as §3.2's (`MenuBarParityExport`): the committed snapshot in the `php` lane,
+the live export in the `parity` lane, where the slice is step (c) after the Swift export (a) and
+this gate (b). It does not replace §3: §3 covers every fixture, the slice covers the install path.

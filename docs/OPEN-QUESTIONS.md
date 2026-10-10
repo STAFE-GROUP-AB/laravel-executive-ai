@@ -322,6 +322,14 @@ coordinator, after which `main-target.json` (1 approval + Code Owner review) is 
 (`docs/security/threat-model.md` §5) carries `Signature: pending — A14`. §13's workstream H
 Definition of Done ("signed risk acceptance") cannot be met until A14 is answered, and the threat
 model states that rather than implying a sign-off that has not happened.
+**Consequence for S1-15 (2026-10-10):** blueprint §16 step 9 makes the §16 step 8 vertical slice
+the gate on every Sprint 3 workstream issue. The slice runs in the `parity` CI job
+(`docs/operations/vertical-slice.md` §5), which is **not** in the required-check list of
+`docs/contributing/rulesets/main-now.json` / `main-target.json`. Before the first Sprint 3 issue is
+opened, Andreas adds `{ "context": "parity", "integration_id": 15368 }` to `required_status_checks`
+in both files and re-applies the ruleset (branch-protection.md §1.1) — the same admin action as (1)
+above; no agent calls a settings API for it. Until then the `php` lane (required) still runs the
+slice on every PR with the committed-snapshot oracle.
 
 ### A15 — The shared SSRF / egress guard has no owner and no ADR
 ADR-005 D4.2(b) specifies the guard for MCP connections and says it is *shared with `Browser/Fetch`*,

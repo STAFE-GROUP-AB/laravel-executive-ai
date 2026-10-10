@@ -440,7 +440,10 @@ jobs:
   # S1-10 tri-surface brief parity gate (docs/architecture/brief-parity.md §3). One macOS job so
   # the Swift export and the PHP comparison share a filesystem: (a) only the Swift parity test runs
   # and writes one JCS export per brief fixture into build/parity, then (b) Pest renders the mail
-  # and the PWA from the same fixtures and compares all three surfaces byte for byte.
+  # and the PWA from the same fixtures and compares all three surfaces byte for byte, then (c) the
+  # S1-15 vertical slice (blueprint §16 step 8) runs against a freshly installed core with (a) as
+  # its menu bar oracle. Not in the S0-27 required-check list yet: §16 step 9 requires it to be
+  # (docs/OPEN-QUESTIONS.md A14, docs/operations/vertical-slice.md §5) before Sprint 3 starts.
   #
   # Runs on every pull request rather than behind a `paths` filter: in GitHub Actions a filter is
   # workflow-wide (it would gate php/swift/fixtures too), and it would have to list every file a
@@ -589,6 +592,30 @@ jobs:
         run: |
           set -euo pipefail
           LXAI_SWIFT_PARITY_EXPORT_DIR="$GITHUB_WORKSPACE/build/parity" vendor/bin/pest tests/E2E/BriefParityTest.php --ci
+
+      # (c) S1-15, blueprint §16 step 8: Install → Create owner → Open PWA → Generate seeded brief →
+      # Show same brief in menu bar → Preview exact email, as one Pest run against a freshly
+      # installed core (throwaway LEA_DATA_DIR, migrated from nothing), with the live Swift export
+      # from (a) as the menu bar oracle. The driver validates the report the run writes and prints
+      # the version / content_hash triple into the job summary (docs/operations/vertical-slice.md).
+      # §16 step 9: this step, in this job, is the gate before any Sprint 3 workstream issue starts.
+      - name: Vertical slice (§16 step 8)
+        if: steps.detect.outputs.ready == 'true' && hashFiles('tests/E2E/VerticalSliceTest.php') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          LXAI_SWIFT_PARITY_EXPORT_DIR="$GITHUB_WORKSPACE/build/parity" \
+            node packaging/fixtures/e2e/vertical-slice.mjs --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the vertical slice report
+        if: always() && steps.detect.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vertical-slice-${{ github.run_id }}
+          path: build/e2e/vertical-slice.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload the Swift parity exports
         if: always() && steps.detect.outputs.ready == 'true'
