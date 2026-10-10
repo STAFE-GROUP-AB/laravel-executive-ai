@@ -52,9 +52,12 @@ struct InstallDependencies: Sendable {
 
         // S1-07: BOOT_SERVICES registers the Supervisor LaunchAgent and hands the SELECT_AI key
         // to it over XPC; the installer itself never touches launchd state outside the
-        // registrar nor the Keychain at all.
+        // registrar nor the Keychain at all. S1-08: HEALTH_CHECK probes `/health/ready` through
+        // the loopback IPC client with the process's one `menubar` session; the port is read
+        // from the checkpoint when the probe runs, because preflight records it in this run.
         let pendingSecret = PendingSecretHandoff()
         let control = SupervisorControlClientFactory.live(bundle: bundle)
+        let checkpointStore = FileInstallCheckpointStore(url: paths.checkpointURL)
 
         return InstallDependencies(
             paths: paths,
@@ -76,9 +79,9 @@ struct InstallDependencies: Sendable {
                 control: control,
                 pending: pendingSecret
             ),
-            healthProbe: UnavailableHealthProbe(),
+            healthProbe: IpcClientFactory.makeHealthProbe(bundle: bundle, checkpointStore: checkpointStore, session: IpcClientFactory.liveSession),
             healthPolicy: HealthPollingPolicy(),
-            checkpointStore: FileInstallCheckpointStore(url: paths.checkpointURL),
+            checkpointStore: checkpointStore,
             clock: MonotonicWallClock(),
             timeZone: .current,
             eventLogURL: { runID in paths.eventLogURL(runID: runID) }

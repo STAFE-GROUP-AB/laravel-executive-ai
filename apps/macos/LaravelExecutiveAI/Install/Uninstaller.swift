@@ -293,6 +293,9 @@ struct UninstallDependencies: Sendable {
     var now: @Sendable () -> Date
     /// Called after each step has been journaled. Tests throw here to simulate a crash.
     var afterStep: (@Sendable (UninstallStep) async throws -> Void)?
+    /// The GUI's own IPC session item (ipc-contract §3.4 "the GUI deletes its private item"),
+    /// cleared with the brief cache in step 5. Only the GUI can reach it: it has no access group.
+    var sessionStore: (any SessionStore)? = nil
 
     static func live(bundle: Bundle = .main, control: any SupervisorControlling) -> UninstallDependencies {
         let bundleIdentifier = bundle.bundleIdentifier ?? SupervisorIdentity.defaultBundlePrefix + ".app"
@@ -311,7 +314,8 @@ struct UninstallDependencies: Sendable {
             appBundleRemover: WorkspaceAppBundleRemover(),
             appBundleURL: bundle.bundleURL.pathExtension == "app" ? bundle.bundleURL : nil,
             now: { Date() },
-            afterStep: nil
+            afterStep: nil,
+            sessionStore: KeychainSessionStore.default(bundleIdentifier: bundleIdentifier)
         )
     }
 }
@@ -462,6 +466,11 @@ struct Uninstaller: Uninstalling {
         } catch {
             throw UninstallError.removalFailed("brief cache")
         }
+
+        // The pairing grant dies with `K` (step 2); the GUI's private item is swept here so no
+        // dead token outlives the install. A store that cannot be reached is not a reason to
+        // stop: the item is useless without `K`.
+        try? dependencies.sessionStore?.clear()
     }
 
     private func finalizeInstallDirectory(choice: UninstallDataChoice, journal: UninstallJournal) throws {

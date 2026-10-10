@@ -111,6 +111,9 @@ final class PanelModel {
 
     private(set) var health: HealthDocument?
     private(set) var reachability: Reachability = .unknown
+    /// The core answered `426` or a higher wire major (ipc-contract §5.1): the GUI is older than
+    /// the core. Cleared by the next successful health answer.
+    private(set) var ipcVersionRefused: Int?
     private(set) var brief: BriefParityPayload?
     private(set) var briefETag: String?
     private(set) var briefStoredAt: String?
@@ -147,6 +150,10 @@ final class PanelModel {
     var state: PanelState {
         if reachability == .unreachable {
             return .coreUnreachable
+        }
+
+        if let ipcVersionRefused {
+            return .error(.updateRequired(found: "ipc/\(ipcVersionRefused)"))
         }
 
         guard let health else {
@@ -369,6 +376,13 @@ final class PanelModel {
 
         do {
             document = try await client.health()
+        } catch CoreClientError.versionUnsupported(let serverMajor) {
+            // ipc-contract §5.1: no partial or best-effort behaviour. The core answered, so it
+            // is not unreachable; the panel shows "Update required" and calls nothing else.
+            reachability = .reachable
+            ipcVersionRefused = serverMajor
+
+            return
         } catch {
             reachability = .unreachable
 
@@ -376,6 +390,7 @@ final class PanelModel {
         }
 
         reachability = .reachable
+        ipcVersionRefused = nil
         health = document
 
         if let actions = document.aiActions, actions != .unknown {
@@ -485,10 +500,12 @@ final class PanelModel {
 }
 
 extension PanelModel {
-    /// What the app runs. The core client stays `UnreachableCoreClient` until S1-08 part 2; in a
-    /// DEBUG build `LXAI_MENUBAR_FIXTURE=<health fixture name>` swaps in the fixture client (how
-    /// the state screenshots are produced). Under XCTest the cache lives in a temporary directory
-    /// and no refresh loop starts, so a test run never writes to ~/Library/Caches.
+    /// What the app runs. The core client is the loopback IPC client (S1-08 part 2) once the
+    /// install checkpoint names a port, `UnreachableCoreClient` before that; in a DEBUG build
+    /// `LXAI_MENUBAR_FIXTURE=<health fixture name>` swaps in the fixture client (how the state
+    /// screenshots are produced). Under XCTest the client stays unreachable, the cache lives in a
+    /// temporary directory and no refresh loop starts, so a test run never pairs, never writes to
+    /// ~/Library/Caches and never opens a socket.
     static func live(bundle: Bundle = .main) -> PanelModel {
         let environment = ProcessInfo.processInfo.environment
         let bundleIdentifier = bundle.bundleIdentifier ?? "se.stafe.executive-ai.app"
@@ -498,6 +515,12 @@ extension PanelModel {
 
         if underTest {
             cache = BriefCache(directory: FileManager.default.temporaryDirectory.appending(path: "lxai-menubar-test-\(UUID().uuidString)"))
+        } else {
+            client = IpcClientFactory.makeCoreClient(
+                bundle: bundle,
+                checkpointStore: FileInstallCheckpointStore(url: InstallPaths.default(bundleIdentifier: bundleIdentifier).checkpointURL),
+                session: IpcClientFactory.liveSession
+            )
         }
 
         #if DEBUG

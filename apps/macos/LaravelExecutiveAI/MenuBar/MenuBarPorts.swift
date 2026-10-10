@@ -97,7 +97,8 @@ struct PanelPorts: Sendable {
             serviceControl: SupervisorServiceControl(
                 control: control,
                 cache: BriefCache.default(bundleIdentifier: bundle.bundleIdentifier ?? "se.stafe.executive-ai.app"),
-                uninstaller: Uninstaller(dependencies: .live(bundle: bundle, control: control))
+                uninstaller: Uninstaller(dependencies: .live(bundle: bundle, control: control)),
+                session: IpcClientFactory.liveSession
             )
         )
     }()
