@@ -20,7 +20,7 @@ sandboxed given Peekaboo's Screen Recording and Accessibility needs. §11 forbid
 crash dumps, prompts, push, screenshots, mailbrief eller repo."*
 
 The hard part is structural, not cryptographic. ADR-001 fixes the process model: a headless Swift
-launchd agent, the **Supervisor** (`Contents/MacOS/LaravelExecutiveAISupervisor`, registered with
+launchd agent, the **Supervisor** (`Contents/Helpers/LaravelExecutiveAISupervisor.app`, registered with
 `SMAppService.agent`), spawns and supervises three FrankenPHP children (core HTTP, queue worker,
 scheduler) from an immutable runtime directory; ADR-001 ships **no `.env`** and passes only non-secret
 configuration through the environment. PHP has no Keychain API. Something signed by us therefore has to
@@ -201,9 +201,9 @@ as a reopen condition, not pursued in v1. Mac App Store distribution is out of s
 **Packaging implication for A (verify in the S1 prototype):** `keychain-access-groups` and
 `com.apple.application-identifier` are restricted entitlements that Apple enforces "through code
 signing, provisioning profiles, and the Apple Developer Program" (E17). A bare Mach-O cannot embed a
-provisioning profile, so the Supervisor must be packaged as a bundle (an `.app` under
-`Contents/Library/LoginItems/` or `Contents/Helpers/`, referenced by the agent plist's
-`BundleProgram`) with a Developer ID provisioning profile embedded. If the prototype shows the data
+provisioning profile, so the Supervisor must be packaged as a bundle
+(`Contents/Helpers/LaravelExecutiveAISupervisor.app`, referenced by the agent plist's
+`BundleProgram`, as ADR-001 D3 now specifies) with a Developer ID provisioning profile embedded. If the prototype shows the data
 protection keychain is unusable for a Developer-ID helper, the fallback is the file-based login
 keychain with a code-signing ACL (`SecAccess` trusted application by designated requirement) in the
 Supervisor's own keychain — same broker, same contract, weaker isolation (ACL prompts, no access
