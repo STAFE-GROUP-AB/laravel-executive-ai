@@ -373,18 +373,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          has_validator=false; has_contrast=false
+          has_validator=false; has_contrast=false; has_install_timer=false
           [ -f packaging/fixtures/package.json ] && [ -f packaging/fixtures/validate-schema.mjs ] && has_validator=true
           [ -f packaging/fixtures/design/contrast-check.mjs ] && has_contrast=true
+          [ -f packaging/manifest/install-timer/install-timer.mjs ] && has_install_timer=true
           {
             echo "has_validator=$has_validator"
             echo "has_contrast=$has_contrast"
+            echo "has_install_timer=$has_install_timer"
           } >> "$GITHUB_OUTPUT"
           [ "$has_validator" = true ] || echo "::notice title=fixtures::No schema validator yet (lands with S0-13/S0-14). Skipping."
           [ "$has_contrast" = true ] || echo "::notice title=fixtures::No contrast check yet (lands with S0-24). Skipping."
+          [ "$has_install_timer" = true ] || echo "::notice title=fixtures::No install-timer runner yet (lands with S0-20). Skipping."
 
       - name: Set up Node ${{ env.NODE_VERSION }}
-        if: steps.detect.outputs.has_validator == 'true' || steps.detect.outputs.has_contrast == 'true'
+        if: steps.detect.outputs.has_validator == 'true' || steps.detect.outputs.has_contrast == 'true' || steps.detect.outputs.has_install_timer == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -401,3 +404,9 @@ jobs:
       - name: Design token contrast gate (S0-24)
         if: steps.detect.outputs.has_contrast == 'true'
         run: node packaging/fixtures/design/contrast-check.mjs
+
+      # Dependency-free node:test suite. The glob is quoted on purpose: Node >= 21 treats
+      # `--test` positionals as globs, and a bare directory path is not matched.
+      - name: Install-timer runner tests (S0-20)
+        if: steps.detect.outputs.has_install_timer == 'true'
+        run: node --test 'packaging/manifest/install-timer/**/*.test.mjs'
