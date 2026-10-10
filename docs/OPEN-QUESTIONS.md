@@ -82,6 +82,21 @@ documented either way.
 Any SDK capability the project needs but the pinned version does not support must be recorded in
 ADR-004 as a gap, with the local workaround named.
 
+**Verified against vendor docs 2026-10-10** (re-verify at pin time):
+- The official SDK is the `laravel/ai` composer package (`composer require laravel/ai`). It offers
+  streaming (`stream()`), tool calling (`HasTools`/`tools()`), structured output
+  (`HasStructuredOutput`), embeddings (`Embeddings::for()`), and text providers including OpenAI,
+  Anthropic, Gemini, Ollama, OpenRouter plus an `openai-compatible` driver (URL + key) that covers
+  LM Studio / MLX-style local endpoints, and runtime-built providers via `Ai::build([...])` — which
+  is how user-supplied keys avoid `.env`. This satisfies the §4 provider list without a custom
+  driver, **provided** `LOCAL_ONLY` enforcement wraps the adapter (the SDK itself has no such mode).
+- `laravel/mcp` (`composer require laravel/mcp`) builds MCP **servers** (tools, resources, prompts,
+  OAuth 2.1 via Sanctum, stdio and HTTP/SSE). It is **not an MCP client**. §7's MCP Manager
+  (Discover → Assess → … → Connect → Grant) therefore needs a separate client implementation or
+  library for registry discovery and for connecting to third-party servers. **ADR-005 must decide
+  the client side explicitly** — `laravel/mcp` covers only the §7 "expose own limited Laravel MCP
+  tools" half.
+
 ---
 
 ## §15.5 — Peekaboo permissions, UI-session scenarios, app/window allowlist, helper signing
@@ -201,9 +216,9 @@ no label of its own, so its issues were filed under `release`. **Resolved 2026-1
 added; `BACKLOG.md` remapped workstream J to it.
 
 ### A7 — §14 says "PHPUnit/Pest (choose one)" and never chooses
-The test scaffolding in S0-26 cannot be written twice. **Recommendation:** Pest, for the Laravel
-default and for readable security-test names; either is defensible, but it must be decided once and
-recorded. **Needs:** `ENG`, before S0-26.
+The test scaffolding in S0-26 cannot be written twice. **Resolved 2026-10-10 (ENG): Pest.** It is
+the Laravel 13 default, gives readable names for the security gates in `tests/Security/`, and
+`CONTRIBUTING.md` already names it. Recorded here and in S0-26; ADR-002 need not repeat it.
 
 ### A8 — Nine installer states versus "never more than 6 mandatory interaction steps"
 §12.1's state machine has nine states; §12.3 forbids more than six mandatory interaction steps
