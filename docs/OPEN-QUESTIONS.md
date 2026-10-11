@@ -365,9 +365,11 @@ and every ADR; for §13.2's second reviewer on security-critical modules the sta
 one used since Sprint 1 — the implementing agent's own fixture/conformance evidence is the first review
 and the coordinating agent's full-diff "second-team review" comment on the PR is the second, both
 recorded in the PR thread; the owner can overrule any merge after the fact. The `main` ruleset in
-`docs/contributing/rulesets/main-now.json` was applied the same day with **`parity`** added to the
+`docs/contributing/rulesets/main-now.json` is finalised the same day with **`parity`** added to the
 required checks (the §16 step 9 gate); `build-macos` stays optional (path-filtered); `sprint-2-exit`
-is added when S2-20 lands. One parameter changed from the S0-27 proposal:
+is added when S2-20 lands. **Applying it is the one step an agent is not permitted to perform** (a
+repository-settings API); the owner runs the single command in `branch-protection.md` §1.1. One
+parameter changed from the S0-27 proposal:
 `strict_required_status_checks_policy` is **false** — with four to six agents merging in parallel, "branch
 must be up to date" would force every open PR to rebase and re-run a 15-minute macOS lane after each
 merge; the checks still have to pass on the PR head, and the squash-only linear history keeps `main`
