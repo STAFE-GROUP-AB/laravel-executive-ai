@@ -134,9 +134,12 @@ prepare_keychain() {
 
 # Prints the SHA-1 hash of the Developer ID Application identity for APPLE_TEAM_ID.
 resolve_identity() {
-    local scope=() listing matches
-    if [ -n "$APPLE_CERTIFICATE_P12" ]; then
-        scope=("$(keychain_path)")
+    # A plain string, not an array: an empty array expands to "unbound variable" under `set -u`
+    # in the runner's bash 3.2. The temporary keychain is searched whenever it exists (the `dmg`
+    # step runs after `app` prepared it and is not given the .p12 again).
+    local scope="" listing matches
+    if [ -n "$APPLE_CERTIFICATE_P12" ] || [ -f "$(keychain_path)" ]; then
+        scope="$(keychain_path)"
     fi
 
     if [ -n "$APPLE_SIGNING_IDENTITY" ]; then
@@ -144,7 +147,7 @@ resolve_identity() {
         return 0
     fi
 
-    listing="$(security find-identity -v -p codesigning "${scope[@]}" 2>/dev/null || true)"
+    listing="$(security find-identity -v -p codesigning ${scope:+"$scope"} 2>/dev/null || true)"
     matches="$(printf '%s\n' "$listing" | grep -F "Developer ID Application:" | grep -F "($APPLE_TEAM_ID)" || true)"
 
     if [ -z "$matches" ]; then
