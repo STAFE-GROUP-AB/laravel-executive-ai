@@ -60,8 +60,11 @@ keychain_path() {
     fi
 }
 
+# The temporary keychain `app` prepares outlives that step (it is deleted by `cleanup`), so a later
+# `dmg` step that is given only APPLE_TEAM_ID — the workflow maps the .p12 into exactly one step —
+# still has an identity to sign with. The first signed CI run (2026-10-11) failed here without it.
 identity_configured() {
-    [ -n "$APPLE_TEAM_ID" ] && { [ -n "$APPLE_CERTIFICATE_P12" ] || [ -n "$APPLE_SIGNING_IDENTITY" ] || [ -z "${CI:-}" ]; }
+    [ -n "$APPLE_TEAM_ID" ] && { [ -n "$APPLE_CERTIFICATE_P12" ] || [ -n "$APPLE_SIGNING_IDENTITY" ] || [ -f "$(keychain_path)" ] || [ -z "${CI:-}" ]; }
 }
 
 # Exits 2 (fail closed) or 0 after printing the skip notice; the caller decides what to do next.
