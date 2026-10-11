@@ -139,42 +139,149 @@ delivery preview. Exit: security checks and brief identity."*
 
 **Active workstreams:** E (lead), D (lead), B, C, H. I measures. A keeps the installer current.
 
-### Key deliverables
+**Decomposed 2026-10-11** into the twenty items below (`docs/BACKLOG.md`). The six epic placeholders
+E2-1…E2-6 survive as headings; the items are numbered sequentially through **dependency order**, so
+the epic headings do not appear in numeric order.
 
-- **Local CRM as system of record (§3.2):** customers with legal identity, contacts with multiple
-  addresses, projects, tasks, communications, activity timeline with visible sources and remembered
-  promised follow-ups. CSV/JSON import/export. GDPR export + erasure. SQLite FTS5 full-text first;
-  vector search stays opt-in and post-benchmark (§3.2 — no external vector DB as a requirement).
-- **§3.1 database minimum** migrated: all listed tables, each business object carrying ULID/UUID,
-  `organization_id`, timestamps, retention policy, `source_id`/`source_uri`, sensitivity class,
-  provenance, soft-delete where needed; unique indexes for provider/account/external_id and
-  idempotency keys.
-- **Auth + authorization:** passkeys/WebAuthn or MFA, secure sessions, session revocation, device
-  management, re-auth for critical actions (§11). Policies/gates on **every** HTTP action, Livewire
-  action, queued job, MCP tool, AI tool and integration call, with IDOR and multi-tenant
-  cross-access negative tests (§11).
-- **Provider-neutral AI:** thin adapters over the Laravel AI SDK at a pinned version with contract
-  tests (§4). Neutral onboarding, no preselected brand (§4, §12.3.5). Capability-aware routing that
-  **fails closed** when the chosen model lacks the needed capability (§4).
-- **`LOCAL_ONLY` enforced for real:** no model traffic, embeddings, screenshots, tool transcripts or
-  prompts to cloud; no silent fallbacks (§4, §10.1).
-- **`PolicyGate` server-side** validating tool name, input schema, org/account/scope, data class,
-  destination, budget and approval *before* execution — the LLM proposes, never authorizes (§4).
-  This is where the §16.7 negative test turns green.
-- **Agent control plane:** maxsteps, maxcost, maxtime, dedupe, cancellation, circuit breakers,
-  redaction, trace-id, output provenance, replay against synthetic data (§4).
-- **Real brief generation** from fixtures: transactional single freeze, then render; content
-  divergence between surfaces forbidden (§1.3). Idempotent delivery; no double send on retry.
-  Local preview mode with no outgoing mail (§1.3, §5.5).
-- **Own TALL admin** — users, orgs, security rules, logs, retention, updates, backup. No Filament
-  (§1.2 `/admin`, §0).
-- **`AI unavailable` degrades gracefully:** CRM, past briefs and admin keep working (§4.2).
+### The twenty items
+
+| Item | Epic | Size | Issue | Depends on |
+|---|---|---|---|---|
+| S2-01 §3.1 CRM and source tables | E2-2 | L | #84 | S1-01 |
+| S2-02 AI, approvals, tool-run and memory tables | E2-2 | M | #85 | S2-01 |
+| S2-03 Governance, retention and operations tables | E2-2 | M | #86 | S2-01 |
+| S2-04 Encrypt sensitive attributes at rest | E2-2 | M | #87 | S2-01, S2-02, S2-03, **A25** |
+| S2-05 Passkeys, devices, re-authentication | E2-3 | L | #69 | S1-02 |
+| S2-06 Policies everywhere + IDOR/tenant tests | E2-3 | L | #88 | S2-01, S2-02, S2-03 |
+| S2-07 Server-side `PolicyGate` | E2-4 | L | #89 | S2-02, S2-06 |
+| S2-08 Approvals engine + `/approvals` (S0-21 green) | E2-4 | L | #90 | S2-07, S2-05 |
+| S2-09 CRM CRUD screens | E2-1 | L | #91 | S2-01, S2-06 |
+| S2-10 Activity timeline, sources, follow-ups | E2-1 | L | #92 | S2-09 |
+| S2-11 CSV/JSON import and export | E2-1 | M | #93 | S2-09, S2-10 |
+| S2-12 GDPR export, rectification, erasure | E2-1 | M | #94 | S2-11, S2-03 |
+| S2-13 `laravel/ai` adapter + capability registry + matrix | E2-5 | L | #95 | S2-02 |
+| S2-14 Privacy modes + shared egress/SSRF guard | E2-5 | L | #96 | S2-13, S2-03 |
+| S2-15 Agent run loop and control plane | E2-5 | L | #97 | S2-13, S2-07 |
+| S2-16 `/assistant` chat: streaming, tools, citations, cost | E2-5 | L | #98 | S2-15, S2-14 |
+| S2-17 Real brief generation | E2-6 | L | #99 | S2-10, S2-15 |
+| S2-18 Daily schedule, login catch-up, **ADR-009** | E2-6 | M | #100 | S2-17 |
+| S2-19 Own TALL `/admin` | E2-6 | L | #101 | S2-06, S2-03, S2-14 |
+| S2-20 Sprint 2 exit gate in CI | — | M | #102 | S2-04, S2-06, S2-08, S2-12, S2-14, S2-16, S2-17, S2-19 |
+
+### Critical path
+
+```text
+S2-01 ─┬─▶ S2-02 ─┬─▶ S2-06 ──▶ S2-07 ──▶ S2-08 ─────────────┐
+       ├─▶ S2-03 ─┘      │          │                        │
+       │                 │          └─▶ S2-13 ▶ S2-15 ▶ S2-16┤
+       └─▶ S2-09 ▶ S2-10 ▶ S2-11 ▶ S2-12 ───────────────────┤──▶ S2-20
+                     └──────────────▶ S2-17 ▶ S2-18          │
+  S1-02 ──▶ S2-05 ──────────────────┘                        │
+       S2-03 ▶ S2-13 ▶ S2-14 ▶ S2-19 ──────────────────────┘
+  S2-01+02+03 ──▶ S2-04  (held behind A25)
+```
+
+Read as the sprint's shape: **schema → gate and approvals → CRM, chat and brief in parallel → exit
+gate.** Two refinements the shorthand hides and the dependency lines make explicit:
+
+- **The re-auth primitive sits inside the gate step.** The *approvals engine* needs no
+  authentication work, but the `/approvals` ceremony does: §11 and ADR-005 D1.6 require an
+  authenticated, **re-authenticated** UI action, so S2-08 depends on S2-05 as well as S2-07. S2-05
+  only needs S1-02 and can therefore start in wave 1, beside the schema.
+- **S2-04 is off the critical path on purpose.** It is the only item that adds an `encrypted:` cast
+  and it is held behind owner decision **A25**. Nothing else waits for it; if A25 arrives late, S2-04
+  grows a backfill migration over rows that already exist. That is the whole cost of a late answer,
+  and it is why no other item may add a cast (enforced by `EncryptedAttributeInventoryTest`).
+
+### Parallelisation plan
+
+Three waves. The file areas are named because the point of the split is that two concurrent agents
+never edit the same file.
+
+**Wave 1 — four items, no shared files, all unblocked when the sprint opens.**
+
+| Item | Owns these file areas |
+|---|---|
+| **S2-01** #84 | `database/migrations/` (CRM tables), `app/Models/CRM/`, `app/CRM/Search/`, `docs/architecture/data-model.md` |
+| **S2-05** #69 | `app/Security/Authorization/{Passkeys,Reauthentication}/`, `app/Livewire/Auth/`, `resources/views/livewire/auth/`, `docs/architecture/auth.md` |
+| **S2-13** #95 | `app/AI/Providers/`, `app/AI/Routing/`, `resources/ai/models.json`, `packaging/fixtures/ai-providers/`, `docs/architecture/ai-providers.md` |
+| **S2-18**'s ADR half #100 | `docs/adrs/009-*.md` only — the ADR can be written before the code it governs |
+
+S2-13 touches `database/migrations/` **not at all**; S2-01 touches `app/AI/` not at all. The one
+shared surface is `docs/architecture/data-model.md`, which only S2-01 writes in this wave.
+S2-13 does need the `ai_providers`/`ai_runs` tables to *run* its matrix against — it declares
+`Depends on: S2-02`, so in practice it starts with the adapter, the registry and the capability
+layer and lands the matrix once S2-02 merges. An agent that would rather not interleave takes
+**S2-02** and **S2-03** as wave 1 instead, since both only need S2-01.
+
+**Wave 2 — five items, after S2-01/S2-02/S2-03 and S2-05 merge.**
+
+| Item | Owns these file areas |
+|---|---|
+| **S2-06** #88 | `app/Policies/`, `app/Security/Authorization/Gates/`, `tests/Security/` (arch + IDOR), `docs/architecture/authorization.md` |
+| **S2-07** #89 | `app/Approvals/Policies/`, `app/AI/Providers/LaravelAi/SdkToolBridge.php`, `docs/architecture/policy-gate.md` |
+| **S2-09** #91 | `app/CRM/Eloquent/`, `app/Livewire/Crm/`, `routes/crm.php`, `resources/views/crm/`, `docs/architecture/crm.md` |
+| **S2-14** #96 | `app/Security/{Egress,Privacy}/`, `app/AI/AiServiceProvider.php`, `docs/security/egress-guard.md` |
+| **S2-15** #97 | `app/AI/Agents/`, `app/AI/Tools/`, `app/AI/Memory/`, `config/ai-agent.php`, `docs/architecture/agent-runs.md` |
+
+S2-07 and S2-14 both live under `app/AI/Providers/LaravelAi/` and `app/AI/` respectively but touch
+different files: S2-07 owns `SdkToolBridge.php`, S2-14 owns `AiServiceProvider.php`. S2-06 and S2-07
+both write under `tests/Security/`, in disjoint files — the arch/IDOR set versus the PolicyGate set.
+
+**Wave 3 — the rest, in two independent chains plus one convergence.**
+
+- CRM chain: **S2-10** #92 → **S2-11** #93 → **S2-12** #94, all inside `app/CRM/`, `app/Livewire/Crm/`
+  and `app/Security/Retention/`.
+- Brief chain: **S2-17** #99 → **S2-18** #100, inside `app/Briefs/Generation/`, `app/AI/Agents/Jobs/`
+  and `app/Briefs/Delivery/`.
+- Surfaces, concurrent with both: **S2-08** #90 (`app/Approvals/Actions/`, `routes/approvals.php`,
+  `resources/views/approvals/`), **S2-16** #98 (`app/AI/Chat/`, `app/Livewire/Assistant/`,
+  `resources/views/assistant/`), **S2-19** #101 (`app/Livewire/Admin/`, `routes/admin.php`,
+  `resources/views/admin/`). Three Livewire namespaces, three route files, three view directories —
+  no overlap.
+- Then **S2-04** #87 (whenever A25 lands) and finally **S2-20** #102, which is the only item that
+  edits `.github/workflows/ci.yml` and `packaging/fixtures/e2e/`.
+
+Two files are contended across waves and need a convention rather than a lock:
+`docs/security/threat-model.md` (S2-05, S2-06, S2-08, S2-14 each move their own T-rows) and
+`docs/OPEN-QUESTIONS.md` (S2-04 → A25, S2-14 → A15/A18, S2-18 → §15.9/A2). Each item edits **only its
+own rows**, so a merge conflict there is a signal that two agents claimed the same threat.
+
+### Owner decisions that gate specific items
+
+| Decision | Gates | Nature | Wave |
+|---|---|---|---|
+| **A25** — a keep-data uninstall deletes `core.app-key` (ADR-003 D8) | **S2-04 hard block.** Must be answered before the first `encrypted:` cast lands | `DECISION` — H with A. Recommended: option (a), keep `core.app-key` and only it when data is kept | 3 — but answer it in wave 1, because a late answer costs a backfill migration |
+| **§15.9 / A2** — ADR-009 scope, and whether a *suggested* daily brief time ships at all | **S2-18 scope confirmation only.** The no-default-schedule build is correct either way and does not wait | `ENG+ANDREAS` — the recommendation is already recorded in `OPEN-QUESTIONS.md` §15.9 | 3 |
+| **A14** — who approves, and the required-check list | **S2-20's final step:** adding `sprint-2-exit` (and the still-pending `parity`) to `required_status_checks` in both ruleset files | Repository admin. No agent calls a settings API | after 3 |
+| **A10** — which two external AI adapters | **Already resolved** (ENG, ADR-004 D6): OpenAI and Anthropic; OpenRouter only if S2-13 passes matrix rows 1–9 with no adapter-specific code; Gemini post-v1 | closed | — |
+| **A11** — real provider test accounts | **Not a Sprint 2 blocker.** A11 is the eight *email* accounts for Sprint 3. S2-13's remote adapters need a key only for the **lab** half of the contract matrix; CI runs against a fake gateway | procurement, before Sprint 3 | — |
+
+**A15** (the shared SSRF/egress guard has no owner or specification) and **A18** (where the privacy
+mode lives, who may change it, whether the change is audited) are both `ENG` and are **closed by
+S2-14**, which amends ADR-005 D4.2(b) and ADR-004 in the same PR. **A3** and **A4** are closed by
+S2-01 and S2-03 respectively — both `ENG`, both already proposed in ADR-002 D9 and D8.
+
+### Explicitly not in Sprint 2
+
+Carried forward with a cross-reference rather than half-built: mail **delivery** (preview only until
+**E3-1**; §5.5 forbids sending before recipient and sender are confirmed); the nine `email_*` tables'
+rows (**E3-2** — S2-03 lands `email_connections` and `email_sync_cursors` empty so eight adapters do
+not force schema churn); `/about/licenses`, the sanitised diagnostics export, the recruitment
+use-case guardrail and the full UI copy-linter corpus (**E4-3**, ADR-007 D2.3, D7, D9); HSTS and the
+`TrustProxies`/`TrustHosts` half of ADR-006 D3 (**E4-1**); `sqlite-vec` (ADR-002 D4 — a benchmark
+issue before any adoption ADR, never an external vector DB); **ADR-008** email account and OAuth
+strategy (ambiguity A2's other half — written before Sprint 3 opens, blocked on §15.7 which is
+`ANDREAS`).
 
 ### Dependency gate into Sprint 3
 
-§3.1 schema stable, PolicyGate enforcing, brief identity proven across all three surfaces, and
-authorization negative tests green. Sprint 3's integrations write into the Sprint 2 data model —
-schema churn after Sprint 3 starts is expensive across eight provider adapters.
+§3.1 schema stable, `PolicyGate` enforcing, brief identity proven across all three surfaces **on a
+generated brief**, and authorization negative tests green — all of it asserted by **S2-20** rather
+than attested. Sprint 3's integrations write into the Sprint 2 data model; schema churn after Sprint 3
+starts is expensive across eight provider adapters, which is why S2-01…S2-03 land the tables E3-1 and
+E3-2 will populate. Also owed before the first Sprint 3 issue opens: **ADR-008**, and the A14 admin
+action that makes `parity` a required check (§16 step 9, `docs/operations/vertical-slice.md` §5).
 
 ---
 
@@ -298,5 +405,5 @@ Verbatim checklist from blueprint §17. No item may be waived without an ADR.
 
 ## Related documents
 
-- `docs/BACKLOG.md` — issue-ready work items for Sprint 0 and Sprint 1.
+- `docs/BACKLOG.md` — issue-ready work items for Sprint 0, Sprint 1 and Sprint 2.
 - `docs/OPEN-QUESTIONS.md` — the ten §15 unresolved decisions mapped to ADRs, owners and evidence.
