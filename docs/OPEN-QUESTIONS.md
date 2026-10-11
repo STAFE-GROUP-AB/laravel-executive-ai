@@ -188,6 +188,11 @@ generation and the login catch-up that `docs/architecture/services.md` §5 leave
 only the suggested-time default would change — one config value. ADR-009 also answers ADR-002 D7's
 deferred send-receipt durability case. Mail delivery itself stays preview-only until E3-1.
 
+**DECIDED 2026-10-11** (coordinator under the owner's delegation): the defensible default stands —
+**no default schedule**; the product shows a *suggested* time (07:00 in the Mac's zone) as a pre-filled
+field only, never enabled until the person saves it and a test message has succeeded. ADR-009's scope
+is as recommended in A2. Delivery stays preview-only until E3-1.
+
 ---
 
 ## §15.10 — MIT versus an alternative license; legal review of bundled executables and models
@@ -355,6 +360,20 @@ defined signatory, and §13.2's "2 reviewers for security-critical modules" has 
 **Needs:** `ANDREAS` — a ruling on who approves Sprint 0 exit and what counts as a review for
 security-critical modules. Without it, Sprint 0 cannot formally close.
 **Proposed configuration (S0-27, 2026-10-10):** see `docs/contributing/branch-protection.md`.
+**DECIDED 2026-10-11** (under the owner's delegation): the owner is the approver of every sprint exit
+and every ADR; for §13.2's second reviewer on security-critical modules the standing practice is the
+one used since Sprint 1 — the implementing agent's own fixture/conformance evidence is the first review
+and the coordinating agent's full-diff "second-team review" comment on the PR is the second, both
+recorded in the PR thread; the owner can overrule any merge after the fact. The `main` ruleset in
+`docs/contributing/rulesets/main-now.json` was applied the same day with **`parity`** added to the
+required checks (the §16 step 9 gate); `build-macos` stays optional (path-filtered); `sprint-2-exit`
+is added when S2-20 lands. One parameter changed from the S0-27 proposal:
+`strict_required_status_checks_policy` is **false** — with four to six agents merging in parallel, "branch
+must be up to date" would force every open PR to rebase and re-run a 15-minute macOS lane after each
+merge; the checks still have to pass on the PR head, and the squash-only linear history keeps `main`
+bisectable. Direct pushes to `main` are over: every change, including the coordinator's doc fixes, goes
+through a PR. The repository's pre-existing "Standard" ruleset carried no rules and was
+left in place. Sprint 0 and Sprint 1 are formally closed on that basis.
 The coordinator reviews every agent PR as the "second team" (review comment); Andreas is DRI and
 posts `LGTM` on PRs that touch a security-critical path. Needs Andreas to (1) apply the `main`
 ruleset (`gh api --method POST repos/STAFE-GROUP-AB/laravel-executive-ai/rulesets --input
@@ -557,3 +576,11 @@ by `sensitivity_class`. **Answer it in wave 1 even though S2-04 runs in wave 3:*
 S2-04 a backfill migration that re-writes rows which by then already exist. S2-04 amends ADR-003 D8
 and `docs/operations/uninstall.md` §5 in the same PR. See `docs/ROADMAP.md` "Owner decisions that gate
 specific items".
+
+**DECIDED 2026-10-11 — option (a)** (taken by the coordinator under the owner's delegation of the
+same day, recorded here as the owner's decision): a keep-data uninstall keeps **`core.app-key` and only
+it**; every other `se.stafe.executive-ai.*` item is still deleted. ADR-003 D8's wording becomes "every
+item except the application key when data is kept"; a delete-everything uninstall deletes the key too.
+S2-04 (#87) is unblocked and amends ADR-003 D8 and `uninstall.md` §5 in its PR; S1-13's `Uninstaller`
+gains the one exception in the same PR (the Supervisor's `removeAllSecrets` takes a `keepApplicationKey`
+flag, default false).
