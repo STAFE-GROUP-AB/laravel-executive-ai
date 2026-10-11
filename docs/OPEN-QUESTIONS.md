@@ -299,6 +299,20 @@ images on `main`: **`APPLE_TEAM_ID`** (the 10-character Team ID), **`APPLE_CERTI
 `packaging/signing/README.md` §2. Pull requests never sign. Until the secrets exist every run produces
 `*-unsigned.dmg` and says so; nothing else in the repo changes when they are added — the Team ID is
 read at signing time and never committed.
+**DECIDED (Andreas, 2026-10-11):** the app is signed and distributed under Andreas's **personal
+Apple Developer team** (the one that ships the games), Team ID `KVH252HXD2`; the source repository
+stays with the **STAFE-GROUP-AB** GitHub organisation; the bundle-id / Keychain prefix stays
+`se.stafe.executive-ai` (a bundle id is not bound to the team's name, only registered under the team,
+so no prefix change follows — ADR-001/ADR-003/ADR-006 keep their current values and the Keychain access
+group becomes `KVH252HXD2.se.stafe.executive-ai.secrets`). `APPLE_TEAM_ID` was set as a repository
+secret the same day (a Team ID is public — it is in every signed binary — but it travels through the
+same secret so the workflow has one source). **Still open, Andreas only:** the team currently holds an
+*Apple Distribution* certificate (App Store) and no *Developer ID Application* certificate, which a DMG
+outside the App Store needs; only the Account Holder can create one (developer.apple.com →
+Certificates → Developer ID Application), after which `APPLE_CERTIFICATE_P12` and
+`APPLE_CERTIFICATE_PASSWORD` are set per `packaging/signing/README.md` §2. For Sprint 4 notarization
+the team's existing App Store Connect API key can be reused with `notarytool`. ADR-001 L4 / RR-15 are
+closed as to custody; the certificate is the remaining item.
 
 ### A13 — Third-party penetration test before v1.0
 §11 makes it a blocking gate and §13 requires H to sign a risk acceptance. Vendor selection, budget
