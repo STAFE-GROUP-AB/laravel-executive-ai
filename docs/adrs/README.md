@@ -14,7 +14,7 @@ Every architectural degree of freedom in the blueprint is closed by an ADR here,
 | [006](006-private-remote-access.md) | Private remote access via Tailscale Serve (never Funnel) | A + C, H reviews | §15.8 | Proposed |
 | [007](007-license-and-compliance.md) | License and compliance boundaries — MIT, notice-only binaries, no bundled model weights, claim boundaries; inventory in [`docs/compliance/third-party-licenses.md`](../compliance/third-party-licenses.md) | J (Docs/community) + H; Owner for legal items L-1…L-10 | §15.10, §15.6 (licenses) | Proposed — drafted 2026-10-10, awaits legal review before Accepted |
 | 008 | Email account and OAuth strategy | F (Integrations) + H | §15.7, A2 | Planned — Sprint 2, gates Sprint 3 |
-| 009 | Brief scheduling and send consent | D + F + H | §15.9, A2 | Planned — Sprint 2, gates Sprint 3 |
+| [009](009-brief-scheduling-and-send-consent.md) | Brief scheduling and send consent — no default schedule, one brief per organization per local day by unique constraint, catch-up after login, test-message-backed consent for one recipient and one content type, durable send receipt (answers ADR-002 D7) | D + F + H; B, A, C reviews | §15.9 (decided 2026-10-11), A2 (ADR-009 half), ADR-002 D7 | Proposed — written 2026-10-13 (S2-18, #100) on the decided §15.9 ruling (no default schedule; a suggested 07:00 in the Mac's zone, pre-filled only); Accepted on the four S2-18 tests and the health 1.1.0 fixtures |
 
 Sprint 1 may not start until ADR-001, ADR-002 and ADR-003 are Accepted (`docs/ROADMAP.md`).
 

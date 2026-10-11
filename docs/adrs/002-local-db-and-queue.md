@@ -183,7 +183,9 @@ the provider by cursor (D3.4), so the lost-last-transactions case costs a re-syn
 place this is not true — recording that an outgoing brief was **sent** — is handled in D3's rule that
 the send receipt is committed before any further side effect and dedup-checked against the
 provider's returned message id before a retry; ADR-009 owns the full send-consent design and may
-raise that single write to `fullfsync`.
+raise that single write to `fullfsync`. [ADR-009](009-brief-scheduling-and-send-consent.md) D5 takes
+that option: the `sent` receipt commits with `synchronous = FULL` and `fullfsync = ON` on that one
+transaction, and D5.3 defines the provider-side reconciliation before any retry.
 
 ### D8. Table naming — A4 resolved
 
