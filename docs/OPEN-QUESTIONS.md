@@ -181,6 +181,13 @@ needs Terminal for Gmail or Microsoft"). Andreas must choose.
 | **Defensible default** | **No default schedule at all.** Scheduling is opt-in, the user picks time and timezone, and the Mac's own timezone is the pre-filled suggestion. A test message to a verified recipient is a precondition for enabling the schedule (§5.5). This is the only default consistent with §5.5's "no email before confirmation" |
 | **Decide by** | `ENG+ANDREAS` — the no-default-schedule recommendation above is defensible from the blueprint, but whether the product ships with a suggested daily time at all is a product decision Andreas should confirm |
 
+**Sprint 2 gating (2026-10-11):** **S2-18 (#100)** writes **ADR-009 Brief scheduling and send consent**
+(A2's recommendation) and implements the no-default-schedule behaviour, the idempotent-per-day
+generation and the login catch-up that `docs/architecture/services.md` §5 leaves owed. This is a
+**scope confirmation, not a block**: the whole item is buildable on the defensible default above, and
+only the suggested-time default would change — one config value. ADR-009 also answers ADR-002 D7's
+deferred send-receipt durability case. Mail delivery itself stays preview-only until E3-1.
+
 ---
 
 ## §15.10 — MIT versus an alternative license; legal review of bundled executables and models
@@ -212,6 +219,10 @@ account strategy (§15.7) and brief scheduling/send consent (§15.9) — both wi
 requirements in §5.6 — fall between them. **Recommendation:** add **ADR-008 Email account and OAuth
 strategy** and **ADR-009 Brief scheduling and send consent**, written in Sprint 2 so they gate
 Sprint 3 rather than Sprint 0. **Needs:** `ENG+ANDREAS` (scope approval).
+**Sprint 2 gating (2026-10-11):** **ADR-009 is S2-18 (#100)**, inside Sprint 2 as recommended.
+**ADR-008 is deliberately not a Sprint 2 item** — it is email/OAuth strategy (workstream F) and its
+substance is §15.7, which is `ANDREAS`; it is owed before the first Sprint 3 issue opens and is
+recorded in `docs/ROADMAP.md`'s "Dependency gate into Sprint 3", not in the Sprint 2 backlog.
 
 ### A3 — `communications`/`messages`/`threads` (§3.1) overlap `email_messages`/`email_threads` (§5.6)
 Two table sets model the same objects at different layers, and the blueprint never says whether email
@@ -221,6 +232,13 @@ ADR, before Sprint 2's E2-2 lands. **Proposed 2026-10-10 in ADR-002 D9:** `email
 `email_threads` are the provider system of record; `communications` is the CRM timeline projection
 linked by `source_type`/`source_id` with correctable matching; no separate `messages`/`threads`
 tables. Final when E2-2 writes the schema.
+**Sprint 2 gating (2026-10-11):** **S2-01 (#84)** is that item — it moves ADR-002 D9 from *Proposed*
+to final in the same PR and lands `communications` with no foreign key to `email_messages`, since that
+table arrives with E3-2. S2-01 also amends **ADR-002 D10**, whose `migrations` contract group still
+requires `migrate:rollback` of the last batch — which contradicts the `up()`-only migration rule the
+repository already follows and `MigrationsContractTest` already reflects. `ENG`; nothing is waiting on
+the owner. **A4** (`email_connections` versus `connected_email_accounts`) is closed by **S2-03 (#86)**,
+which lands the table under the resolved name.
 
 ### A4 — `connected_email_accounts` versus `email_connections`
 §5.6 names the table `connected_email_accounts` in its security model and `email_connections` in its
@@ -276,12 +294,24 @@ same interface. **Needs:** `ENG`, recorded in ADR-004.
 OpenRouter ships as a third only if the identical contract matrix passes in Sprint 2 with no
 adapter-specific code; Gemini is post-v1. Anthropic is not `EU_RESTRICTED`-eligible today (first-party
 `inference_geo` is `us`/`global` only) and is offered in `CUSTOM` mode until that changes.
+**Sprint 2 gating (2026-10-11):** consumed by **S2-13 (#95)**, which evaluates ADR-004 D6's OpenRouter
+condition (matrix rows 1–9 green with no adapter-specific code, or post-v1 and never shown in the UI)
+and names the **recommended** model per provider in `resources/ai/models.json` — `gpt-5-mini` for
+OpenAI, `claude-opus-4-1` for Anthropic — as a recommendation the user can change, never a
+preselection. **Already resolved; nothing is waiting on the owner here.**
 
 ### A11 — Eight real provider test accounts are a procurement item, not a coding task
 §5.6 acceptance criterion 1 requires three Google, two Microsoft, one HEY, one iCloud and one generic
 IMAP account running concurrently, and §13 makes F the owner of "verkliga testkonton". A HEY account
 is a paid subscription; Microsoft tenant testing may need a paid tenant. **Needs:** `ANDREAS` —
 accounts and budget, before Sprint 3 starts.
+**Sprint 2 gating (2026-10-11): none — this is a Sprint 3 item and no S2 item waits on it.** The
+adjacent question for Sprint 2 is narrower: **S2-13 (#95)** runs ADR-004 D2's twelve-row contract
+matrix against a **fake gateway** in CI, so no account is needed to merge it. Only the *lab* half of
+the matrix — real Ollama and LM Studio on Mac A, plus a test key for OpenAI and Anthropic — needs
+credentials, and that half is recorded in ADR-004's Evidence section as a release-gate obligation, not
+claimed by CI. The same pattern applies to ADR-004 D4's packet-capture locality run, which S2-14 (#96)
+documents as a lab step in `docs/security/egress-guard.md`.
 
 ### A12 — Apple Developer team identity and signing credentials
 §16 step 5, §12.1 and §14 all depend on a signing identity and, eventually, notarization. No
@@ -344,6 +374,15 @@ opened, Andreas adds `{ "context": "parity", "integration_id": 15368 }` to `requ
 in both files and re-applies the ruleset (branch-protection.md §1.1) — the same admin action as (1)
 above; no agent calls a settings API for it. Until then the `php` lane (required) still runs the
 slice on every PR with the committed-snapshot oracle.
+**Sprint 2 gating (2026-10-11):** **S2-20 (#102)** adds a second job, `sprint-2-exit`, automating
+§13.1's Sprint 2 exit criterion ("security checks and brief identity") the way S1-15 automated §16
+step 8 — including failing when a named Sprint 2 security test class is **missing**, not only when it
+is red. It carries the same final dependency on A14: adding `sprint-2-exit` to
+`required_status_checks` alongside the still-pending `parity` entry is one repository-admin action for
+the owner, and `docs/operations/sprint-2-exit.md` names it as such. Nothing in the repository calls a
+settings API. A `Sprint 2 — Real core` GitHub milestone also does not exist yet; creating it and
+assigning #84–#102 is the same kind of repository action, and the S2 issues carry their sprint in the
+body meanwhile.
 
 ### A15 — The shared SSRF / egress guard has no owner and no ADR
 ADR-005 D4.2(b) specifies the guard for MCP connections and says it is *shared with `Browser/Fetch`*,
@@ -357,6 +396,10 @@ restrictions, per-hop redirect re-validation outside MCP, the response size and 
 what a denial logs. §11 requires all of it. **Needs:** `ENG` — H with D, as a section in a new ADR or
 in the E2-5 design. The proposed 16-row checklist is `docs/security/threat-model.md` §3.4.1 (threats
 T-23 – T-29); blocks a safe `Browser/Fetch` in E2-5.
+**Sprint 2 gating (2026-10-11):** closed **by** **S2-14 (#96)**, which amends **ADR-005 D4.2(b)** with
+the §3.4.1 checklist as a named new decision in the same PR and lands `tests/Security/SsrfGuardTest.php`
+as a table test with one row per threat, plus `NoSocketTransportArchTest` for T-27's GAP. `ENG`, so no
+owner decision is waiting — but S2-16 (#98) must not ship a `Browser/Fetch` surface before S2-14 merges.
 
 ### A16 — PWA browser-hardening headers are unspecified
 ADR-006 D3 fixes proxies, hosts, cookies and CSRF for both origins but sets no
@@ -382,6 +425,13 @@ ADR-004 D4/D5 define what `LOCAL_ONLY`, `EU_RESTRICTED` and `CUSTOM` *do*, and A
 `.env` — but no ADR says where the mode and the `LOCAL_ONLY_ALLOW_LAN` toggle are stored, who may
 change them, whether a downgrade needs re-authentication, what audit event it writes, or how the UI
 re-confirms (threat-model T-68). **Needs:** `ENG` — D with H, in E2-5.
+**Sprint 2 gating (2026-10-11):** split across two items. **S2-03 (#86)** lands the storage —
+a `privacy_policies` table holding the active mode and the `LOCAL_ONLY_ALLOW_LAN` toggle with the
+changing user and the audit event id. **S2-14 (#96)** lands the rule and amends **ADR-004** with the
+answer: a downgrade requires the S2-05 (#69) re-authentication plus a UI re-confirmation and writes a
+named audit event, proven by `PrivacyModeDowngradeTest`. **S2-19 (#101)** is where the change is made
+(the `/admin` security-rules pane), under ADR-004 D5 and ADR-007 D6's evidence-driven admission rules.
+`ENG` throughout — no owner decision is waiting.
 
 ### A19 — Contradiction: which processes may call Keychain APIs
 ADR-003 D2 says "exactly **one** process holds the shared access group: the Supervisor", its D5
@@ -497,3 +547,13 @@ surprise for exactly the person who chose to keep their data. **Recommended:** (
 first `encrypted` cast lands; the `previous[]` field of the `laravel_app_key` envelope already
 supports rotation afterwards. **Needs:** `DECISION` — H (security lead) with A; gate on the first
 Sprint 2 item that adds an encrypted column.
+
+**Sprint 2 gating (2026-10-11):** that item is now named — **S2-04 (#87)**, the only Sprint 2 item
+permitted to add an `encrypted:` cast, which `EncryptedAttributeInventoryTest` enforces for every
+other item. S2-04 is a **hard block** on this decision: nothing in it is buildable before the answer.
+Everything around it is — S2-01 (#84), S2-02 (#85) and S2-03 (#86) land every table, index and
+contract test, and the CRM, chat and brief items write to them, all with plaintext columns classified
+by `sensitivity_class`. **Answer it in wave 1 even though S2-04 runs in wave 3:** a late answer costs
+S2-04 a backfill migration that re-writes rows which by then already exist. S2-04 amends ADR-003 D8
+and `docs/operations/uninstall.md` §5 in the same PR. See `docs/ROADMAP.md` "Owner decisions that gate
+specific items".
