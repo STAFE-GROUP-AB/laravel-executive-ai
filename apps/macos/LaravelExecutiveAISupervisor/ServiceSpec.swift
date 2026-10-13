@@ -116,6 +116,18 @@ struct ServiceSpec: ProcessLaunch, Equatable, Sendable {
         var environment = RuntimeEnvironment.supervisorEnvironment(runtime: runtime, paths: paths, port: port)
         environment[RuntimeEnvironment.secretsSocketKey] = secretsSocket.path
 
+        // Where Laravel's **own** subprocesses go. `Illuminate\Support\php_binary()` is
+        // `(new PhpExecutableFinder)->find(false)`, which under FrankenPHP resolves to the
+        // `frankenphp` binary — and that has no `artisan` subcommand, so the scheduler spawned
+        // `frankenphp artisan <command>` and every scheduled command died with
+        // `unknown command "artisan" for "frankenphp"`. That is why `brief_placeholder`,
+        // `auth_login` and `scheduler_selftest` could never go green on a real install.
+        //
+        // Symfony reads `PHP_BINARY` from the environment before anything else, so pointing it at
+        // the runtime's `php` shim is the supported way in. The shim drops Laravel's script
+        // argument and hands artisan the argv it expects (runtime/templates/php).
+        environment["PHP_BINARY"] = runtime.directory.appending(path: "php").path
+
         return environment
     }
 

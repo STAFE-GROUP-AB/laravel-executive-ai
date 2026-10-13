@@ -38,9 +38,14 @@ final class SupervisorSpawnTests: XCTestCase {
         let expectedKeys: Set<String> = [
             "LEA_RUNTIME_DIR", "LEA_DATA_DIR", "LEA_CACHE_DIR", "LEA_LOG_DIR", "LEA_HTTP_PORT",
             "PHPRC", "APP_ENV", "APP_DEBUG", "APP_URL", "LEA_BACKEND_PROFILE", "LEA_SECRETS_SOCKET",
+            // Where Laravel's own subprocesses find a PHP. Without it `php_binary()` resolves to
+            // the FrankenPHP binary, which has no `artisan` subcommand, and every scheduled
+            // command dies — see `ServiceSpec.childEnvironment`.
+            "PHP_BINARY",
         ]
 
         XCTAssertEqual(Set(spec.environment.keys), expectedKeys)
+        XCTAssertEqual(spec.environment["PHP_BINARY"], spec.environment["LEA_RUNTIME_DIR"].map { "\($0)/php" })
         XCTAssertEqual(spec.environment["LEA_SECRETS_SOCKET"], "/tmp/lxai-spawn-test/Application Support/run/secrets.sock")
 
         for key in spec.environment.keys {

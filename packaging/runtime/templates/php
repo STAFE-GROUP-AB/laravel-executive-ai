@@ -1,0 +1,43 @@
+#!/bin/sh
+# The PHP CLI that Laravel's own subprocesses go through (ADR-001 D3/D4).
+#
+# Laravel composes an internal command as "<php_binary> <artisan_binary> <command> …" —
+# `Illuminate\Support\php_binary()` is `(new PhpExecutableFinder)->find(false)`, which under
+# FrankenPHP is the `frankenphp` binary itself. So the scheduler spawned
+#
+#     frankenphp artisan lea:brief:placeholder
+#
+# and got `Error: unknown command "artisan" for "frankenphp"`. Every scheduled command failed that
+# way, which is why `brief_placeholder`, `auth_login` and `scheduler_selftest` could never go green
+# on a real install (the owner's scheduler.log, 2026-10-13).
+#
+# Symfony's `PhpExecutableFinder::find()` reads `getenv('PHP_BINARY')` before anything else, so the
+# Supervisor points that at this file and Laravel's subprocesses arrive here instead.
+#
+# Two things then have to be undone:
+#
+#   1. the script argument Laravel passes (`artisan`), which this binary resolves itself;
+#   2. FrankenPHP's `php-cli` argv layout, which keeps the binary at `$argv[0]` and puts the script
+#      at `$argv[1]` — one further along than a normal CLI, so Symfony's `ArgvInput` would read the
+#      script path as the command name.
+#
+# The arguments are passed through as real arguments rather than interpolated into the `-r` source,
+# so nothing here has to escape a quote and an argument containing spaces or quotes survives intact.
+set -eu
+
+if [ -z "${LEA_RUNTIME_DIR:-}" ]; then
+    echo "php: LEA_RUNTIME_DIR is not set; this shim only runs as a child of the Supervisor" >&2
+    exit 78
+fi
+
+# Drop Laravel's `<artisan_binary>` argument; what follows is the command and its arguments.
+if [ "$#" -gt 0 ]; then
+    shift
+fi
+
+exec "${LEA_RUNTIME_DIR}/frankenphp" php-cli -r '
+$incoming = array_slice($_SERVER["argv"], 3);
+$_SERVER["argv"] = $argv = array_merge(["artisan"], $incoming);
+$_SERVER["argc"] = $argc = count($argv);
+require getenv("LEA_RUNTIME_DIR") . "/app/artisan";
+' "$@"
