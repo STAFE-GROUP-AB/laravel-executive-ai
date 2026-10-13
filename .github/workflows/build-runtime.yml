@@ -141,6 +141,18 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      # The `macos-15` runner image does not ship Go, so `build-runtime.sh` stopped at its own
+      # "go is required on the builder" check on the first dispatched run (2026-10-13). The
+      # version is not a free choice: FrankenPHP 1.13.0's `go.mod` declares `go 1.27.0`, and a
+      # toolchain below that refuses to build the module at all. `xcaddy` (installed by spc as
+      # `go-xcaddy`) and the Go SAPI are both compiled with whatever is on PATH here, so this
+      # step decides the Go that ends up recorded in `go version -m` of the finished binary.
+      - name: Set up Go 1.27
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27'
+          cache: false
+
       # The long step. LXAI_BUILD_AUTOFIX lets `spc doctor` install build tooling on the *runner*
       # (ADR-001 D1 permits build-time Homebrew on the builder; §12.1 forbids it on a user's Mac).
       # The recipe applies both A23 fixes — the `nomercure` Go build tag and the macOS system
@@ -168,7 +180,7 @@ jobs:
             echo
             echo '```'
             cat "$OUT_DIR/frankenphp-version.txt"
-            grep -E '^[[:space:]]*build[[:space:]]+-tags=' "$OUT_DIR/go-modules.txt" || true
+            grep -E '^[[:space:]]*(go|build[[:space:]]+-tags=)' "$OUT_DIR/go-modules.txt" || true
             echo "licence notice files: $notices"
             echo "GPL/LGPL/AGPL notices: $copyleft (gate requires 0)"
             echo "GNU libiconv in the notice set: $gnu_iconv (requires 0)"
