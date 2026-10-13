@@ -57,10 +57,27 @@ enum SupervisorBootError: Error, Equatable, Sendable {
         case .noRecordedPort: return "The installer did not record a loopback port; run the installer again."
         case .secretsUnavailable(let reason): return "The Keychain is not available to the Supervisor (\(reason))."
         case .verificationFailed(let reason): return "The installed runtime failed verification (\(reason))."
-        // #124: says what was being waited for *and* that the data is untouched. The bound is
-        // 120 s, so this sentence can arrive after a two-minute wait; someone reading it then
-        // needs to know their database was not half-changed.
-        case .migrationsFailed(let reason): return "The database migrations did not finish (\(reason)); no service was started and nothing was installed or changed."
+        // #124: names what was being waited for, then answers the only question the person
+        // actually has — "did I lose anything" — rather than describing the mechanism.
+        //
+        // It must **not** say the schema is unchanged. Laravel's `Migrator.runPending()` is a
+        // plain `foreach` over `runUp()` with no try/catch and no rollback of earlier
+        // migrations, and `runUp()` calls `repository->log()` as soon as each one succeeds
+        // (vendor/laravel/framework/src/Illuminate/Database/Migrations/Migrator.php:210, :258).
+        // So a migration throwing at number N leaves 1…N-1 applied *and recorded* — which is one
+        // of the two paths that produce this sentence (the other, a timeout or a spawn failure,
+        // really did change nothing). Claiming "nothing changed" to someone who then finds a
+        // part-built database is worse than saying nothing: the next thing they decide is whether
+        // it is safe to retry, and a message they do not trust sends them looking for a way to
+        // "clean up", which is the one action that could lose data.
+        //
+        // What is true on both paths: every migration here is `up()`-only and a rollback restores
+        // a verified snapshot rather than running `down()` (ADR-002 D5), so a partial run leaves
+        // the database part-built and never damaged, and `migrate --force` resumes at N. That
+        // forward-only property is pinned by `testSecondBootOverAnAlreadyMigratedDatabase…` and
+        // `testStartServicesReRunsTheMigrationInTheSameProcess`, so this sentence rests on a test
+        // rather than on a hope.
+        case .migrationsFailed(let reason): return "The database migrations did not finish (\(reason)); no service was started. Nothing was deleted and no data was lost. Trying again continues from where it stopped."
         case .brokerFailed(let reason): return "The secrets broker could not start (\(reason))."
         }
     }
