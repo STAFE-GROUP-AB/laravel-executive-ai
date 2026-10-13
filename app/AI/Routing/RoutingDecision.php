@@ -15,6 +15,12 @@ use App\AI\Providers\ProviderConnection;
  * `alternatives` are the other eligible pairs, carried only so the UI can offer
  * the owner a different choice *before* the run starts. Nothing in the run path
  * may read them.
+ *
+ * `allowLan` travels with the decision because the registry re-checks
+ * eligibility when it builds the adapter (ADR-004 D4 layer 1, independent of
+ * layer 2 on purpose). Without it the re-check would read the strict default
+ * and refuse a provider the router had just admitted — two layers disagreeing,
+ * which is worse than either (S2-14).
  */
 final readonly class RoutingDecision
 {
@@ -25,9 +31,15 @@ final readonly class RoutingDecision
         public ModelCapabilities $capabilities,
         public PrivacyMode $privacyMode,
         public array $alternatives = [],
+        public bool $allowLan = false,
     ) {}
 
     public static function for(ConfiguredModel $model, PrivacyMode $mode, ConfiguredModel ...$alternatives): self
+    {
+        return self::under($model, $mode, false, ...$alternatives);
+    }
+
+    public static function under(ConfiguredModel $model, PrivacyMode $mode, bool $allowLan, ConfiguredModel ...$alternatives): self
     {
         return new self(
             provider: $model->provider,
@@ -35,6 +47,7 @@ final readonly class RoutingDecision
             capabilities: $model->capabilities,
             privacyMode: $mode,
             alternatives: array_values($alternatives),
+            allowLan: $allowLan,
         );
     }
 }

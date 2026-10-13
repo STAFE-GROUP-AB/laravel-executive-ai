@@ -90,6 +90,7 @@ return [
             'approvals.approve' => 'en utgående åtgärd godkänns',
             'remote-access.enable' => 'privat fjärråtkomst slås på',
             'keys.rotate' => 'en nyckel roteras',
+            'privacy.mode_change' => 'sekretessläget utvidgas',
         ],
     ],
 ];

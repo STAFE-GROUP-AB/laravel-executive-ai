@@ -11,6 +11,9 @@ use App\AI\Providers\Exceptions\ProviderUnavailableException;
 use App\AI\Routing\ModelRouter;
 use App\AI\Routing\PrivacyMode;
 use App\AI\Routing\RoutingDecision;
+use App\Security\Egress\EgressGuard;
+use App\Security\Egress\LoopbackHostResolver;
+use App\Security\Privacy\ProviderEligibility;
 
 /**
  * Builds adapters from the configured providers (ADR-004 D2), and is the first
@@ -18,8 +21,10 @@ use App\AI\Routing\RoutingDecision;
  * never instantiated at all**. Not built, not callable, shown greyed out as
  * "disabled by Local Only" — so there is no object on which a mistake could
  * later make a cloud call. The HTTP-layer veto and the resolve-and-pin SSRF
- * guard are the next layers and belong to S2-14; this one holds even if they
- * are absent, and each layer has its own test.
+ * guard are the next layers and landed in S2-14 as `App\Security\Egress`;
+ * this one holds even if they are absent, and each layer has its own test.
+ * The address rule itself is not restated here — `ProviderEligibility` is the
+ * one implementation, and the refusal carries the `EgressRule` that fired.
  *
  * Adapters are memoised per provider so a run reuses one instance, and the key
  * is read from the Keychain inside the adapter at call time rather than cached
@@ -34,6 +39,7 @@ final class ProviderRegistry
         private readonly ProviderConnections $connections,
         private readonly AdapterFactory $factory,
         private readonly ModelRouter $router,
+        private readonly ProviderEligibility $eligibility = new ProviderEligibility(new EgressGuard(new LoopbackHostResolver)),
     ) {}
 
     /**
@@ -42,7 +48,7 @@ final class ProviderRegistry
      * @throws EgressBlockedException the privacy mode forbids building it
      * @throws ProviderUnavailableException the owner has not configured this provider
      */
-    public function adapterFor(string $providerId, PrivacyMode $mode): AiProviderAdapter
+    public function adapterFor(string $providerId, PrivacyMode $mode, bool $allowLan = false): AiProviderAdapter
     {
         $connection = $this->connections->find($providerId);
 
@@ -54,8 +60,12 @@ final class ProviderRegistry
             ));
         }
 
-        if (! $this->router->isEligibleUnder($connection, $mode)) {
-            throw new EgressBlockedException($connection->host() ?? $providerId);
+        if (! $this->router->isEligibleUnder($connection, $mode, null, $allowLan)) {
+            throw new EgressBlockedException(
+                blockedHost: $connection->host() ?? $providerId,
+                rule: $this->eligibility->refusalFor($connection, $mode, $allowLan),
+                reason: 'the privacy mode in force does not admit this provider',
+            );
         }
 
         return $this->adapters[$providerId] ??= $this->factory->make($connection);
@@ -67,7 +77,7 @@ final class ProviderRegistry
      */
     public function adapterForDecision(RoutingDecision $decision): AiProviderAdapter
     {
-        return $this->adapterFor($decision->provider->providerId, $decision->privacyMode);
+        return $this->adapterFor($decision->provider->providerId, $decision->privacyMode, $decision->allowLan);
     }
 
     /**
@@ -75,11 +85,11 @@ final class ProviderRegistry
      * and `/settings/ai` use it to explain why a configured provider is
      * unavailable instead of offering it and failing later.
      */
-    public function isBuildable(string $providerId, PrivacyMode $mode): bool
+    public function isBuildable(string $providerId, PrivacyMode $mode, bool $allowLan = false): bool
     {
         $connection = $this->connections->find($providerId);
 
-        return $connection !== null && $this->router->isEligibleUnder($connection, $mode);
+        return $connection !== null && $this->router->isEligibleUnder($connection, $mode, null, $allowLan);
     }
 
     /**
@@ -87,11 +97,11 @@ final class ProviderRegistry
      *
      * @return list<ProviderConnection>
      */
-    public function buildable(PrivacyMode $mode): array
+    public function buildable(PrivacyMode $mode, bool $allowLan = false): array
     {
         return array_values(array_filter(
             $this->connections->all(),
-            fn (ProviderConnection $connection): bool => $this->router->isEligibleUnder($connection, $mode),
+            fn (ProviderConnection $connection): bool => $this->router->isEligibleUnder($connection, $mode, null, $allowLan),
         ));
     }
 
@@ -101,11 +111,11 @@ final class ProviderRegistry
      *
      * @return list<ProviderConnection>
      */
-    public function disabledBy(PrivacyMode $mode): array
+    public function disabledBy(PrivacyMode $mode, bool $allowLan = false): array
     {
         return array_values(array_filter(
             $this->connections->all(),
-            fn (ProviderConnection $connection): bool => ! $this->router->isEligibleUnder($connection, $mode),
+            fn (ProviderConnection $connection): bool => ! $this->router->isEligibleUnder($connection, $mode, null, $allowLan),
         ));
     }
 }

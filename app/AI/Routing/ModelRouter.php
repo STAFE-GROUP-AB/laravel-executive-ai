@@ -12,6 +12,9 @@ use App\AI\Providers\ModelCapability;
 use App\AI\Providers\ProviderConnection;
 use App\AI\Providers\ProviderConnections;
 use App\AI\Providers\RegionEvidence;
+use App\Security\Egress\EgressGuard;
+use App\Security\Egress\LoopbackHostResolver;
+use App\Security\Privacy\ProviderEligibility;
 use DateTimeImmutable;
 
 /**
@@ -34,13 +37,14 @@ final readonly class ModelRouter
     public function __construct(
         private ProviderConnections $connections,
         private ModelCapabilityRegistry $capabilities,
+        private ProviderEligibility $eligibility = new ProviderEligibility(new EgressGuard(new LoopbackHostResolver)),
     ) {}
 
     /**
      * @throws CapabilityUnavailableException no configured model can do the job
      * @throws EgressBlockedException `LOCAL_ONLY` and the only candidates are remote
      */
-    public function resolve(JobRequirements $requirements, PrivacyMode $mode, ?DateTimeImmutable $now = null): RoutingDecision
+    public function resolve(JobRequirements $requirements, PrivacyMode $mode, ?DateTimeImmutable $now = null, bool $allowLan = false): RoutingDecision
     {
         $now ??= new DateTimeImmutable;
         $candidates = $this->configuredModels();
@@ -54,7 +58,7 @@ final readonly class ModelRouter
         $tooSmall = [];
 
         foreach ($candidates as $candidate) {
-            if (! $this->isEligibleUnder($candidate->provider, $mode, $now)) {
+            if (! $this->isEligibleUnder($candidate->provider, $mode, $now, $allowLan)) {
                 continue;
             }
 
@@ -83,7 +87,7 @@ final readonly class ModelRouter
 
         $chosen = $eligible[0];
 
-        return RoutingDecision::for($chosen, $mode, ...array_slice($eligible, 1));
+        return RoutingDecision::under($chosen, $mode, $allowLan, ...array_slice($eligible, 1));
     }
 
     /**
@@ -114,41 +118,21 @@ final readonly class ModelRouter
      * loopback host may be built at all; in `EU_RESTRICTED` the provider must
      * carry every evidence field, unexpired. The modes compose as a conjunction
      * when both are set.
+     *
+     * S2-13 answered the `LOCAL_ONLY` half here, with a literal allowlist of
+     * the three loopback spellings and a comment saying the resolve-and-pin
+     * guard was S2-14's. It is: both halves now live in
+     * `App\Security\Privacy\ProviderEligibility`, so there is one
+     * implementation of each rule rather than one per caller.
+     *
+     * `$allowLan` defaults to false — the strictest reading — so a caller that
+     * does not hold the stored policy can never widen the boundary by omission.
+     * The LAN opt-in is honoured only where the policy is actually read
+     * (`AiServiceProvider`, `EgressServiceProvider`'s middleware).
      */
-    public function isEligibleUnder(ProviderConnection $provider, PrivacyMode $mode, ?DateTimeImmutable $now = null): bool
+    public function isEligibleUnder(ProviderConnection $provider, PrivacyMode $mode, ?DateTimeImmutable $now = null, bool $allowLan = false): bool
     {
-        $now ??= new DateTimeImmutable;
-
-        return match ($mode) {
-            PrivacyMode::LocalOnly => $this->isLoopbackLocal($provider),
-            PrivacyMode::EuRestricted => ($provider->regionEvidence ?? RegionEvidence::none())->missingFor($now) === [],
-            PrivacyMode::Custom => true,
-        };
-    }
-
-    /**
-     * A local driver whose host is loopback. The allowlist is literal — the
-     * three loopback forms and nothing else — because a hostname that merely
-     * looks local is not local (D4 layer 2; the resolve-and-pin SSRF guard and
-     * the optional LAN opt-in are S2-14's).
-     */
-    private function isLoopbackLocal(ProviderConnection $provider): bool
-    {
-        if (! in_array($provider->driver, ['ollama', 'openai-compatible'], true)) {
-            return false;
-        }
-
-        $host = $provider->host();
-
-        if ($host === null) {
-            return false;
-        }
-
-        $host = strtolower(trim($host, '[]'));
-
-        return $host === 'localhost'
-            || $host === '::1'
-            || filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false && str_starts_with($host, '127.');
+        return $this->eligibility->allows($provider, $mode, $allowLan, $now ?? new DateTimeImmutable);
     }
 
     /**
@@ -184,9 +168,13 @@ final readonly class ModelRouter
         }
 
         if ($missingPerModel === [] && $mode === PrivacyMode::LocalOnly) {
-            $blocked = $candidates[0]->provider->host() ?? $candidates[0]->provider->providerId;
+            $provider = $candidates[0]->provider;
 
-            throw new EgressBlockedException($blocked);
+            throw new EgressBlockedException(
+                blockedHost: $provider->host() ?? $provider->providerId,
+                rule: $this->eligibility->refusalFor($provider, $mode),
+                reason: 'Local Only admits only a local driver on a loopback endpoint',
+            );
         }
 
         if ($missingPerModel === [] && $mode === PrivacyMode::EuRestricted) {

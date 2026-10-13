@@ -6,6 +6,7 @@ namespace App\Http\View\Composers;
 
 use App\Http\View\ShellState;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
+use App\Security\Privacy\PrivacyModeStore;
 use App\Support\Health\AiReadiness;
 use App\Support\Health\PendingApprovals;
 use Illuminate\Contracts\Auth\Guard;
@@ -23,6 +24,7 @@ final class ShellStateComposer
         private readonly PendingApprovals $pendingApprovals,
         private readonly PasskeyAuthenticator $passkeys,
         private readonly Guard $auth,
+        private readonly PrivacyModeStore $privacyModes,
     ) {}
 
     public function compose(View $view): void
@@ -39,10 +41,9 @@ final class ShellStateComposer
         ));
     }
 
+    /** The stored policy, so the shell cannot claim a stricter mode than the one in force (T-68). */
     private function privacyMode(): string
     {
-        $mode = config('lea.privacy_mode');
-
-        return in_array($mode, ['LOCAL_ONLY', 'EU_RESTRICTED', 'CUSTOM'], true) ? $mode : 'LOCAL_ONLY';
+        return $this->privacyModes->active()->configValue();
     }
 }

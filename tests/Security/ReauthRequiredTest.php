@@ -234,5 +234,5 @@ it('drives the whole thing from the component a consumer embeds', function (): v
 
 it('names every T-71 critical path, so a new one cannot be added without a case here', function (): void {
     expect(array_map(fn (CriticalAction $action): string => $action->value, CriticalAction::cases()))
-        ->toBe(['approvals.approve', 'remote-access.enable', 'keys.rotate']);
+        ->toBe(['approvals.approve', 'remote-access.enable', 'keys.rotate', 'privacy.mode_change']);
 });
