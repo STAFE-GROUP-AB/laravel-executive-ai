@@ -16,9 +16,19 @@ actor ChildProcess {
     /// Set by `run(timeout:)`'s watchdog before it stops the process.
     private var timedOut = false
 
-    init(spec: any ProcessLaunch, log: any LogSink) {
+    /// Called once, synchronously, the instant the process exists and before `start` returns.
+    ///
+    /// It exists so a caller can register the pid somewhere the child's very first action depends
+    /// on. The migration one-shot asks the secrets broker for `APP_KEY` as it boots, and the broker
+    /// refuses a pid it does not know, so "register it after `run()` returns" is too late by the
+    /// whole life of the process and "read `pid` after `start()`" is too late for the supervised
+    /// path. This is the earliest moment `Process` offers.
+    private let onSpawn: (@Sendable (pid_t) -> Void)?
+
+    init(spec: any ProcessLaunch, log: any LogSink, onSpawn: (@Sendable (pid_t) -> Void)? = nil) {
         self.spec = spec
         self.log = log
+        self.onSpawn = onSpawn
     }
 
     var pid: Int32? {
@@ -84,6 +94,10 @@ actor ChildProcess {
         }
 
         self.process = process
+
+        // Before `start` returns, so the pid is known to the caller before the child has had time
+        // to do anything that depends on being known.
+        onSpawn?(process.processIdentifier)
     }
 
     /// Spawns and returns how it left, once it has left. For the one-shots that must finish

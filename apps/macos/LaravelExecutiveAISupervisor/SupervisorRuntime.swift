@@ -215,8 +215,19 @@ actor SupervisorRuntime {
             let exit: ServiceExit
             SupervisorLog.boot.notice("applying database migrations")
 
+            // The one-shot reads `APP_KEY` from the broker exactly like the core does, and the
+            // broker refuses a peer it did not see the Supervisor spawn. It is not supervised, so
+            // the observer that publishes the three children's pids never sees it; without this it
+            // is rejected, `migrate` exits 1, and nothing is ever started. Registered before the
+            // process can act and removed on every exit path, including the timeout and the throw.
+            let spawned = PidHandle()
+            defer { spawned.release(from: pids) }
+
             do {
-                exit = try await ChildProcess(spec: migrations, log: migrationLog).run(timeout: migrationTimeout)
+                exit = try await ChildProcess(spec: migrations, log: migrationLog, onSpawn: { pid in
+                    pids.addTransient(pid)
+                    spawned.remember(pid)
+                }).run(timeout: migrationTimeout)
             } catch ChildProcessError.timedOut(_, let seconds) {
                 throw SupervisorBootError.migrationsFailed("no result after \(seconds) seconds")
             } catch {
@@ -318,16 +329,68 @@ actor SupervisorRuntime {
     }
 }
 
-/// The live child pids, updated from the supervisor's observer and read per broker connection.
+/// The live child pids, read per broker connection: the broker refuses a peer that is not one of
+/// them or a descendant of one (ADR-003 D3.2, `SecretsBroker`'s "peer is not a supervised process").
+///
+/// Two sets, because they have different lifetimes and `update` replaces rather than merges.
+/// `supervised` is the three long-lived children, republished wholesale by the supervisor's
+/// observer every time a status changes. `transient` is a one-shot that the Supervisor spawned and
+/// is waiting on — the migration pass — which is not supervised, has no status, and would be wiped
+/// by the next observer callback if it shared the same set.
+///
+/// **This is why the first install on real hardware failed** (2026-10-13): the migration one-shot
+/// asks the broker for `APP_KEY` like any other child, but its pid was never registered anywhere,
+/// so the broker rejected it, `artisan migrate` exited 1, nothing was spawned, and the installer
+/// reported that the core was not answering. Nothing in CI could show it — the broker's peer check
+/// needs a real process tree and a real signed binary.
+///
+/// Registering a one-shot is **not** a widening. The rule is unchanged: a peer is accepted only if
+/// the Supervisor spawned it (or it descends from something the Supervisor spawned). A one-shot is
+/// exactly that, and it is in the set only between its spawn and its exit.
 final class PidRegistry: Sendable {
     private let lock = NSLock()
-    nonisolated(unsafe) private var pids = Set<pid_t>()
+    nonisolated(unsafe) private var supervised = Set<pid_t>()
+    nonisolated(unsafe) private var transient = Set<pid_t>()
 
     func update(_ pids: Set<pid_t>) {
-        lock.withLock { self.pids = pids }
+        lock.withLock { self.supervised = pids }
+    }
+
+    /// Admits a one-shot the Supervisor spawned, for as long as it runs.
+    func addTransient(_ pid: pid_t) {
+        lock.withLock { _ = transient.insert(pid) }
+    }
+
+    /// Drops it again. Called from a `defer` on every path, including the timeout and the throw,
+    /// so a pid cannot outlive the process that owned it.
+    func removeTransient(_ pid: pid_t) {
+        lock.withLock { _ = transient.remove(pid) }
     }
 
     var current: Set<pid_t> {
-        lock.withLock { pids }
+        lock.withLock { supervised.union(transient) }
+    }
+}
+
+/// Remembers which pid a one-shot got, so a `defer` can give it back without knowing it in advance.
+///
+/// `onSpawn` runs inside the child process's launch and a `defer` runs at the end of the awaiting
+/// function; they cannot share a local. This is the one value between them, and it is deliberately
+/// forgiving: `release` on a handle that never got a pid does nothing, which is the spawn-failed
+/// path.
+final class PidHandle: Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var pid: pid_t?
+
+    func remember(_ pid: pid_t) {
+        lock.withLock { self.pid = pid }
+    }
+
+    func release(from registry: PidRegistry) {
+        guard let pid = lock.withLock({ self.pid }) else {
+            return
+        }
+
+        registry.removeTransient(pid)
     }
 }
