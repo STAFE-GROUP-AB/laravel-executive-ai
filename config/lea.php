@@ -41,6 +41,27 @@ return [
 
     'ai' => [
         'provider' => env('LEA_AI_PROVIDER') ?: null,
+
+        /*
+        | The per-model capability registry (ADR-004 D3). A maintained artefact
+        | with a review step per model, not a cache: `laravel/ai` 1.2.0 carries
+        | no per-model capability data at all, so this file is the only thing
+        | that lets routing fail closed instead of guessing.
+        */
+        'models_registry' => resource_path('ai/models.json'),
+
+        /*
+        | Where a selected provider listens, when it is not the driver's own
+        | default. `openai-compatible` (LM Studio, MLX-style servers, a custom
+        | endpoint) needs one; Ollama defaults to loopback. Keys are catalogue
+        | ids. A key or token is **never** configured here — those live in the
+        | Keychain under `se.stafe.executive-ai.ai-provider` (ADR-003 D1).
+        */
+        'connection' => [
+            'ollama' => ['url' => env('LEA_AI_OLLAMA_URL', 'http://127.0.0.1:11434')],
+            'lmstudio' => ['url' => env('LEA_AI_LMSTUDIO_URL', 'http://127.0.0.1:1234/v1')],
+            'custom' => ['url' => env('LEA_AI_CUSTOM_URL')],
+        ],
     ],
 
     /*

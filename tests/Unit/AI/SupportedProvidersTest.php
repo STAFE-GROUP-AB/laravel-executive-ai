@@ -43,28 +43,48 @@ it('marks a provider adapter-available if and only if an adapter is bound for it
     }
 });
 
-it('supports nothing while no adapter is bound, and says so rather than guessing', function (): void {
+/*
+ * S2-13 bound a real LaravelAiAdapter for every v1 driver, so the honesty flag is
+ * true for all five catalogue rows — which is the ADR-004 D6 option list exactly.
+ * The test above is what keeps that honest: each flag still has to agree with an
+ * actual container binding, so a row cannot be flipped without the adapter.
+ */
+it('supports every provider whose adapter this build binds', function (): void {
     $providers = app(SupportedProviders::class);
 
-    expect($providers->supported())->toBe([])
-        ->and($providers->ids())->toBe([])
-        ->and($providers->isSupported('ollama'))->toBeFalse()
+    expect($providers->ids())->toBe(['ollama', 'lmstudio', 'openai', 'anthropic', 'custom'])
+        ->and($providers->supported())->toEqual(SupportedProviders::catalogue())
+        ->and($providers->isSupported('ollama'))->toBeTrue()
+        ->and($providers->isSupported('gemini'))->toBeFalse('not in the catalogue, so never offered')
         ->and($providers->all())->toEqual(SupportedProviders::catalogue());
 });
 
+it('offers nothing at all in a build with no adapters, instead of guessing', function (): void {
+    $providers = new SupportedProviders(app(), []);
+
+    expect($providers->supported())->toBe([])
+        ->and($providers->ids())->toBe([])
+        ->and($providers->isSupported('ollama'))->toBeFalse();
+});
+
+/*
+ * Ids outside the shipped catalogue on purpose: every catalogue row now has a
+ * bound adapter, so proving that a flag alone is not enough needs a provider
+ * this build deliberately does not bind. `gemini` and `openrouter` are exactly
+ * that — ADR-004 D6 keeps both out of v1, and neither may appear in the UI.
+ */
 it('needs both the fixture flag and a real binding before a provider is offered', function (): void {
     $available = new ProviderDescriptor('ollama', 'Ollama', ProviderKind::Local, 'ollama', adapterAvailable: true);
-    $flagged = new ProviderDescriptor('anthropic', 'Anthropic', ProviderKind::Remote, 'anthropic', adapterAvailable: true);
-    $unflagged = new ProviderDescriptor('openai', 'OpenAI', ProviderKind::Remote, 'openai', adapterAvailable: false);
+    $flagged = new ProviderDescriptor('gemini', 'Gemini', ProviderKind::Remote, 'openai-compatible', adapterAvailable: true);
+    $unflagged = new ProviderDescriptor('openrouter', 'OpenRouter', ProviderKind::Remote, 'openai-compatible', adapterAvailable: false);
 
-    app()->bind(SupportedProviders::adapterBinding('ollama'), fn (): stdClass => new stdClass);
-    app()->bind(SupportedProviders::adapterBinding('openai'), fn (): stdClass => new stdClass);
+    app()->bind(SupportedProviders::adapterBinding('openrouter'), fn (): stdClass => new stdClass);
 
     $providers = new SupportedProviders(app(), [$available, $flagged, $unflagged]);
 
     expect($providers->ids())->toBe(['ollama'])
-        ->and($providers->isSupported('anthropic'))->toBeFalse('flag without binding')
-        ->and($providers->isSupported('openai'))->toBeFalse('binding without flag');
+        ->and($providers->isSupported('gemini'))->toBeFalse('flag without binding')
+        ->and($providers->isSupported('openrouter'))->toBeFalse('binding without flag');
 });
 
 it('has a display name for every provider in both languages', function (): void {

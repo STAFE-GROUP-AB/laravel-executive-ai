@@ -87,7 +87,14 @@ final class ChooseAiScreenTests: XCTestCase {
     }
 
     func testDetectedRuntimeIsSuggestedButNotSelected() {
-        let withoutAdapter = ChooseAiOptions(detected: [.ollama])
+        // A runtime whose adapter this build does not carry is shown as a
+        // suggestion that cannot be chosen. S2-13 bound an adapter for every v1
+        // driver, so the shipped catalogue no longer produces this case and it is
+        // exercised with an explicit catalogue — the behaviour has to keep
+        // working for the next runtime that arrives before its adapter.
+        let withoutAdapter = ChooseAiOptions(detected: [.ollama], catalog: [
+            AiProviderCatalogEntry(id: "ollama", displayName: "Ollama", kind: .local, driver: "ollama", adapterAvailable: false),
+        ])
         XCTAssertEqual(withoutAdapter.suggestedRuntimes, [.ollama])
         XCTAssertEqual(withoutAdapter.selectableRuntimes, [])
 
@@ -97,8 +104,14 @@ final class ChooseAiScreenTests: XCTestCase {
         XCTAssertEqual(withAdapter.selectableRuntimes, [.ollama], "with its adapter the runtime is an option")
         XCTAssertEqual(withAdapter.suggestedRuntimes, [])
 
+        // The shipped catalogue offers the detected runtime, and still selects nothing.
+        let shipped = ChooseAiOptions(detected: [.ollama])
+        XCTAssertEqual(shipped.selectableRuntimes, [.ollama])
+        XCTAssertEqual(shipped.suggestedRuntimes, [])
+
         // Either way the selection starts empty: detection never chooses.
         XCTAssertNil(ChooseAiDraft().choice)
+        XCTAssertNil(ChooseAiDraft().provider)
     }
 
     func testSkipIsAChoiceThatEnablesContinue() {

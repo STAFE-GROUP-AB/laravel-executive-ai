@@ -107,7 +107,15 @@ function sliceBootServices(Application $app): void
 
     $console = $app->make(ConsoleKernel::class);
 
-    expect($console->call('queue:work', ['--stop-when-empty' => true, '--sleep' => 0]))->toBe(0, 'queue:work --stop-when-empty')
+    // `--memory` is raised because this worker runs *inside* the test process,
+    // which by the time the suite reaches this file is holding a thousand tests'
+    // worth of state. A worker whose budget is the default 128 MB then exits 12
+    // (EXIT_MEMORY_LIMIT) having drained the queue perfectly well, and the slice
+    // would fail for a property of the harness rather than of the product. The
+    // real worker is a separate process started by the Supervisor (services.md)
+    // and keeps the default budget. S2-13 raised it when the suite crossed the
+    // threshold; see that PR.
+    expect($console->call('queue:work', ['--stop-when-empty' => true, '--sleep' => 0, '--memory' => 2048]))->toBe(0, 'queue:work --stop-when-empty')
         ->and($console->call('health:selftest'))->toBe(0, 'health:selftest');
 
     FreshInstance::ipc($app, 'POST', '/ipc/v1/heartbeat', [

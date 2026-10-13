@@ -31,11 +31,11 @@ final class SupportedProviders
      * }>
      */
     private const array CATALOGUE = [
-        ['id' => 'ollama', 'display_name' => 'Ollama', 'kind' => 'local', 'driver' => 'ollama', 'adapter_available' => false],
-        ['id' => 'lmstudio', 'display_name' => 'LM Studio', 'kind' => 'local', 'driver' => 'openai-compatible', 'adapter_available' => false],
-        ['id' => 'openai', 'display_name' => 'OpenAI', 'kind' => 'remote', 'driver' => 'openai', 'adapter_available' => false],
-        ['id' => 'anthropic', 'display_name' => 'Anthropic', 'kind' => 'remote', 'driver' => 'anthropic', 'adapter_available' => false],
-        ['id' => 'custom', 'display_name' => 'Other OpenAI-compatible endpoint', 'kind' => 'remote', 'driver' => 'openai-compatible', 'adapter_available' => false],
+        ['id' => 'ollama', 'display_name' => 'Ollama', 'kind' => 'local', 'driver' => 'ollama', 'adapter_available' => true],
+        ['id' => 'lmstudio', 'display_name' => 'LM Studio', 'kind' => 'local', 'driver' => 'openai-compatible', 'adapter_available' => true],
+        ['id' => 'openai', 'display_name' => 'OpenAI', 'kind' => 'remote', 'driver' => 'openai', 'adapter_available' => true],
+        ['id' => 'anthropic', 'display_name' => 'Anthropic', 'kind' => 'remote', 'driver' => 'anthropic', 'adapter_available' => true],
+        ['id' => 'custom', 'display_name' => 'Other OpenAI-compatible endpoint', 'kind' => 'remote', 'driver' => 'openai-compatible', 'adapter_available' => true],
     ];
 
     /** @param list<ProviderDescriptor>|null $catalogue Overrides the frozen catalogue; tests only. */
