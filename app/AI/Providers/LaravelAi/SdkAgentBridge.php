@@ -6,6 +6,8 @@ namespace App\AI\Providers\LaravelAi;
 
 use App\AI\Providers\Dto\AiRequest;
 use App\AI\Providers\Dto\AiToolDefinition;
+use App\Approvals\Policies\PolicyGate;
+use App\Approvals\Policies\ToolCallContext;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
@@ -33,7 +35,19 @@ class SdkAgentBridge implements Agent, HasTools
 {
     use Promptable;
 
-    public function __construct(protected readonly AiRequest $request, protected readonly string $instructions) {}
+    /**
+     * `$toolContext` and `$gate` are what each `SdkToolBridge` decides inside
+     * (S2-07). They are optional because Sprint 2 ships no orchestrator that knows
+     * the organization, account and trace a tool call belongs to — and a bridge
+     * built without them refuses every tool call rather than running one unchecked,
+     * so the absence is a closed door and not an open one.
+     */
+    public function __construct(
+        protected readonly AiRequest $request,
+        protected readonly string $instructions,
+        protected readonly ?ToolCallContext $toolContext = null,
+        protected readonly ?PolicyGate $gate = null,
+    ) {}
 
     public function instructions(): Stringable|string
     {
@@ -48,7 +62,11 @@ class SdkAgentBridge implements Agent, HasTools
     public function tools(): iterable
     {
         return array_map(
-            static fn (AiToolDefinition $definition): SdkToolBridge => new SdkToolBridge($definition),
+            fn (AiToolDefinition $definition): SdkToolBridge => new SdkToolBridge(
+                $definition,
+                $this->toolContext,
+                $this->gate,
+            ),
             $this->request->tools,
         );
     }

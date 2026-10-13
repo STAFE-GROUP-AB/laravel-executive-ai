@@ -226,8 +226,11 @@ right on SQLite and wrong on MySQL is a policy that is wrong in production.
 ## 9. What this does not cover
 
 - **The `PolicyGate` for tool *arguments*** — schema, destination, data class, budget (blueprint §4)
-  is **S2-07** (#90). S2-06 answers "may this user touch this row"; S2-07 answers "is this a
-  sensible call at all". Both must pass.
+  landed with **S2-07** (#89): [policy-gate.md](policy-gate.md). S2-06 answers "may this user touch
+  this row"; S2-07 answers "may this action be performed at all, and does it need a human". Both
+  must pass, they are independent, and the gate's decisions are audited through the same `AuditLog`
+  writer (`policy.<tool>` rows alongside the `authz.<ability>` ones, asserted in the same
+  `AuditCompletenessTest`).
 - **The approvals engine** — freezing, approving and executing an outbound action is **S2-08**
   (#92). The policy layer refuses an `update` to a frozen proposal; it does not implement approval.
 - **Re-authentication** — `App\Security\Authorization\Reauthentication` (S2-05) is a separate

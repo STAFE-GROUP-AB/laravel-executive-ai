@@ -137,14 +137,35 @@ it('row 03 tools: a tool call comes back as a proposal and nothing is executed',
         ->and($response->finishReason)->toBe(AiFinishReason::ToolCalls);
 })->with('drivers');
 
-it('row 03 tools: the gate is consulted before execution and the executor is unreachable', function (): void {
-    $bridge = new SdkToolBridge(new AiToolDefinition('email.send', 'Send mail.', ['to' => new StringType]));
+it('row 03 tools: the gate is consulted before execution and nothing executes either way', function (): void {
+    // S2-07 moved this decision from S2-13's blanket "every tool always requires
+    // approval" to the rule the `PolicyGate` holds for the tool. The three cases
+    // below are the whole of why that is not a loosening.
+    $mutating = new SdkToolBridge(new AiToolDefinition('email.send', 'Send mail.', ['to' => new StringType]));
+    $unknown = new SdkToolBridge(new AiToolDefinition('settings.write', 'Widen my own authority.', ['mode' => new StringType]));
+    $readOnly = new SdkToolBridge(new AiToolDefinition('crm.search', 'Search the local CRM.', ['query' => new StringType]));
 
-    // Every bridged tool is approval-gated, which is what stops the SDK's loop
-    // from running it: the PolicyGate (E2-4) decides, the model never executes.
-    expect($bridge->shouldRequestApproval(new SdkToolRequest(['to' => 'a@b.test'])))->not->toBeNull()
-        ->and(fn (): mixed => $bridge->handle(new SdkToolRequest([])))->toThrow(LogicException::class)
-        ->and(fn (): mixed => $bridge->withoutApproval())->toThrow(LogicException::class);
+    // A mutating rule, and a tool **no** rule claims, both stop the SDK's loop at
+    // `pendingApprovals` having run nothing. Fail-closed is the default.
+    expect($mutating->shouldRequestApproval(new SdkToolRequest(['to' => 'a@b.test'])))->not->toBeNull()
+        ->and($unknown->shouldRequestApproval(new SdkToolRequest(['mode' => 'auto'])))->not->toBeNull('a tool with no rule must still be gated');
+
+    // A read-only rule lets the loop reach `handle()` — and `handle()` consults the
+    // gate first. The result is a model-readable refusal rather than an exception
+    // (ADR-004 D2, contract matrix row 3) and it executed nothing: a bridged
+    // `AiToolDefinition` carries no executor, and this bridge has no scope either.
+    expect($readOnly->shouldRequestApproval(new SdkToolRequest(['query' => 'acme'])))->toBeNull();
+
+    foreach ([$mutating, $unknown, $readOnly] as $bridge) {
+        $result = (string) $bridge->handle(new SdkToolRequest(['query' => 'acme']));
+
+        expect($result)->toContain('[policy_gate]')
+            ->toContain('decision=denied')
+            ->toContain('executed=none');
+    }
+
+    // And the one method that could make a tool auto-executable still refuses.
+    expect(fn (): mixed => $mutating->withoutApproval())->toThrow(LogicException::class);
 });
 
 it('row 03 tools: a denial reaches the model as a tool result it can read', function (string $driver): void {
