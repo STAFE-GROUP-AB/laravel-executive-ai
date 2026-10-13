@@ -7,6 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -400,6 +401,49 @@ test('make-dmg.sh stages the app, an /Applications link and an honest README, an
 
     assert.match(dmg, /hdiutil create -volname "\$VOLNAME" -srcfolder "\$STAGING" -ov -format UDZO/);
     assert.match(dmg, /hdiutil verify "\$DMG_PATH"/);
+    rmSync(base, { recursive: true, force: true });
+});
+
+test('the signing report has a runtime section: the package version, the binary verdict and the SHA256SUMS check', () => {
+    // `report` shells out to codesign; it is macOS-only, like the signing it reports on.
+    if (process.platform !== 'darwin') {
+        return;
+    }
+
+    const base = mkdtempSync(join(tmpdir(), 'lxai-report-runtime-'));
+    const app = fakeApp(base);
+
+    const without = run(signScript, ['report', app, join(base, 'report.txt')]);
+    assert.equal(without.status, 0, without.stderr);
+    assert.match(readFileSync(join(base, 'report.txt'), 'utf8'), /^runtime: +no package in Contents\/Resources\/runtime/m);
+
+    // A minimal, internally consistent package, as build-macos.yml unpacks it.
+    const runtime = join(app, 'Contents', 'Resources', 'runtime');
+    mkdirSync(runtime, { recursive: true });
+    const binary = '#!/bin/sh\necho stub\n';
+    writeFileSync(join(runtime, 'frankenphp'), binary);
+    const digest = createHash('sha256').update(binary).digest('hex');
+    writeFileSync(
+        join(runtime, 'manifest.json'),
+        `${JSON.stringify({ schema_version: 1, runtime_version: '0.1.0', executable: 'frankenphp', files: [{ path: 'frankenphp', sha256: digest, bytes: binary.length }] }, null, 4)}\n`,
+    );
+    writeFileSync(join(runtime, 'SHA256SUMS'), `${digest}  frankenphp\n`);
+
+    const withRuntime = run(signScript, ['report', app, join(base, 'report2.txt')]);
+    assert.equal(withRuntime.status, 0, withRuntime.stderr);
+    const report = readFileSync(join(base, 'report2.txt'), 'utf8');
+
+    assert.match(report, /^runtime: +package 0\.1\.0 present, frankenphp verdict unsigned$/m);
+    assert.match(report, /## runtime package \(Contents\/Resources\/runtime\)/);
+    assert.match(report, /## entitlements \(runtime binary\) — ADR-001 D2: exactly allow-jit/);
+    assert.match(report, /## SHA256SUMS of the bundled package/);
+    assert.match(report, /frankenphp: OK/);
+
+    // An unsigned runtime in a build that claims to be signed must fail the report, not pass it.
+    const expected = run(signScript, ['report', app, join(base, 'report3.txt')], { LXAI_EXPECT_SIGNED: '1' });
+    assert.equal(expected.status, 1, expected.stderr);
+    assert.match(expected.stderr, /the app is 'unsigned'|bundled runtime binary is/);
+
     rmSync(base, { recursive: true, force: true });
 });
 

@@ -380,12 +380,19 @@ verdict_for() {
     fi
 }
 
+runtime_version_in() {
+    # The runtime_version of a bundled package, read from its manifest without a JSON parser.
+    sed -n 's/.*"runtime_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$1" | head -n 1
+}
+
 write_report() {
-    local app="$1" report="$2" dmg="${3:-}" supervisor profile verdict verify_status=0
+    local app="$1" report="$2" dmg="${3:-}" supervisor profile verdict verify_status=0 runtime runtime_manifest
     [ -d "$app" ] || die "$app is not a directory (expected LaravelExecutiveAI.app)."
     mkdir -p "$(dirname "$report")"
     supervisor="$app/$SUPERVISOR_BUNDLE_PATH"
     profile="$supervisor/$EMBEDDED_PROFILE_PATH"
+    runtime="$app/Contents/Resources/runtime"
+    runtime_manifest="$runtime/manifest.json"
     verdict="$(verdict_for "$app")"
     codesign --verify --deep --strict "$app" >/dev/null 2>&1 || verify_status=$?
 
@@ -400,6 +407,11 @@ write_report() {
         else
             echo "supervisor: not embedded in this bundle"
             echo "profile:    n/a"
+        fi
+        if [ -f "$runtime_manifest" ]; then
+            echo "runtime:    package $(runtime_version_in "$runtime_manifest") present, frankenphp verdict $(verdict_for "$runtime/frankenphp")"
+        else
+            echo "runtime:    no package in Contents/Resources/runtime (the installer stops at PACKAGE_VERIFY)"
         fi
         echo "expectation: $([ "$LXAI_EXPECT_SIGNED" = 1 ] && echo 'Developer ID signed' || echo 'unsigned debug build; rejections below are expected')"
         echo "notarization: not performed (Sprint 4 gate E4-6, blueprint §14); spctl is expected to reject until then"
@@ -422,6 +434,22 @@ write_report() {
             record profile_summary "$profile"
             echo "## helper bundle contents"
             record find "$supervisor" -maxdepth 3
+        fi
+        # The runtime package (ADR-001 D2/D4): signed elsewhere (build-runtime.yml) and only
+        # unpacked here, so the report records what arrived rather than what this run signed.
+        if [ -f "$runtime_manifest" ]; then
+            echo "## runtime package (Contents/Resources/runtime)"
+            record runtime_version_in "$runtime_manifest"
+            echo "## codesign --verify --strict --verbose=2 (runtime binary)"
+            record codesign --verify --strict --verbose=2 "$runtime/frankenphp"
+            echo "## codesign -dvvv (runtime binary)"
+            record codesign -dvvv "$runtime/frankenphp"
+            echo "## entitlements (runtime binary) — ADR-001 D2: exactly allow-jit"
+            record codesign -d --entitlements - --xml "$runtime/frankenphp"
+            # pipefail so a mismatch shows up as a non-zero exit in the report, not only in the
+            # lines `tail` happens to keep.
+            echo "## SHA256SUMS of the bundled package (every file, last lines shown)"
+            record bash -c "set -o pipefail; cd '$runtime' && shasum -a 256 --check --strict SHA256SUMS | tail -n 2"
         fi
         echo "## spctl --assess --type execute --verbose (app)"
         record spctl --assess --type execute --verbose "$app"
@@ -449,6 +477,11 @@ write_report() {
             if [ ! -f "$profile" ]; then
                 die "LXAI_EXPECT_SIGNED=1 but the Supervisor helper bundle carries no $EMBEDDED_PROFILE_PATH; macOS would SIGKILL it over keychain-access-groups (OPEN-QUESTIONS A24)."
             fi
+        fi
+        # A runtime that is not Developer ID signed would fail PackageVerifier on every install,
+        # so a signed image must not contain one (ADR-001 D2; it was signed by build-runtime.yml).
+        if [ -f "$runtime_manifest" ] && [ "$(verdict_for "$runtime/frankenphp")" != developer-id ]; then
+            die "LXAI_EXPECT_SIGNED=1 but the bundled runtime binary is '$(verdict_for "$runtime/frankenphp")'; the installer would refuse it at PACKAGE_VERIFY."
         fi
     fi
 }
