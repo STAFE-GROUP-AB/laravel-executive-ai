@@ -20,3 +20,10 @@ CODE_SIGN_ENTITLEMENTS = LaravelExecutiveAI.entitlements
 
 COMBINE_HIDPI_IMAGES = YES
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks
+
+// The app icon (Assets.xcassets/AppIcon.appiconset). The mark is a geometric "E" — a stem with
+// three arms, longest at the top — which reads as Executive and as the lines of a brief at 16 pt,
+// the size that decides whether an icon works at all. Its palette is the product's own
+// (DesignTokens: accent #0f5f70, headline #63bfd1, canvas #f4f4f2), so the icon belongs to the
+// same family as the interface. Regenerate with packaging/branding/make-icon.swift.
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
