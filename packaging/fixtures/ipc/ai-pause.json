@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "ai.pause",
   "description": "POST /ipc/v1/ai/pause from the menu bar: flips the global cancellation token (ADR-004 D7); one in-flight run was cancelled (§6.4).",
   "request": {

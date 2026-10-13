@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "remote-access.enable",
   "description": "POST /ipc/v1/remote-access/enable with the elevation token minted by the Supervisor after device-owner authentication (§7.3); the confirmed origin matched inspect() and the self-request verified (§6.7).",
   "request": {

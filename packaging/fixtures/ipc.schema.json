@@ -1,15 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/STAFE-GROUP-AB/laravel-executive-ai/main/packaging/fixtures/ipc.schema.json",
-  "$comment": "Swift ↔ Laravel IPC contract 1.0.0 (S0-15). One recorded exchange (request + response) per fixture. See docs/architecture/ipc-contract.md. Blueprint §2, §6, §11, §1.1. Refs: brief.schema.json (briefs.latest data), health.schema.json#/$defs/ready (health data).",
+  "$comment": "Swift ↔ Laravel IPC contract 1.1.0 (S0-15; 1.1.0 adds the §6.9 owner.create operation and the owner_exists error code, S2 #121). One recorded exchange (request + response) per fixture. See docs/architecture/ipc-contract.md. Blueprint §2, §6, §11, §1.1. Refs: brief.schema.json (briefs.latest data), health.schema.json#/$defs/ready (health data).",
   "title": "IPC contract exchange",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "operation", "description", "request", "response"],
   "properties": {
     "schema_version": {
+      "description": "The IPC contract version this exchange was recorded against (docs/architecture/ipc-contract.md §5.1).",
       "type": "string",
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "operation": { "$ref": "#/$defs/operation" },
     "description": {
@@ -110,6 +111,16 @@
           "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/remoteAccessDisableData" } } } ] } } }
         }
       }
+    },
+    {
+      "if": { "type": "object", "properties": { "operation": { "const": "owner.create" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "request": { "$ref": "#/$defs/postRequestFor", "type": "object", "properties": { "path": { "const": "/ipc/v1/owner" }, "body": { "$ref": "#/$defs/ownerCreateRequest" } } },
+          "response": { "$ref": "#/$defs/responseWithData", "type": "object", "properties": { "body": { "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/errorEnvelope" }, { "type": "object", "properties": { "data": { "$ref": "#/$defs/ownerCreateData" } } } ] } } }
+        }
+      }
     }
   ],
   "$defs": {
@@ -143,7 +154,8 @@
         "oauth.callback",
         "remote-access.status",
         "remote-access.enable",
-        "remote-access.disable"
+        "remote-access.disable",
+        "owner.create"
       ]
     },
     "requestHeaders": {
@@ -351,6 +363,7 @@
         "reauth_required",
         "not_found",
         "state_conflict",
+        "owner_exists",
         "payload_too_large",
         "unsupported_media_type",
         "validation_failed",
@@ -491,6 +504,53 @@
           "else": { "type": "object", "properties": { "paused_since": { "type": "null" }, "in_flight_runs_cancelled": { "const": 0 } } }
         }
       ]
+    },
+    "ownerCreateRequest": {
+      "$comment": "§6.9. additionalProperties: false is how §11.4 rejects a body that asserts an identity: `user_id`, `owner`, `role` and `organization_id` are unknown fields, and there is no field through which a caller can ask for anything but the single owner this install does not yet have. No credential, no code, no password — sign-in is a one-time code by mail (auth.md §1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "email"],
+      "properties": {
+        "name": {
+          "description": "Screen 4's name field. At least one non-whitespace character.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "email": {
+          "description": "Screen 4's address field. Identifies the account and receives the one-time sign-in codes and the Executive Brief; stored lower-cased.",
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "organization": {
+          "description": "Workspace name. Omitted by the Mac installer, whose screen 4 does not ask for one; the core then names the workspace after its owner.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "timezone": {
+          "description": "IANA zone the first brief is scheduled in. Omitted falls back to the core's configured zone.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "language": {
+          "description": "BCP-47 tag the briefs are written in. Omitted falls back to the core's configured locale.",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+          "maxLength": 35
+        }
+      }
+    },
+    "ownerCreateData": {
+      "$comment": "§6.9: one fact. No token, no one-time code, no user, organization or membership id, and not the address that was submitted — the installer needs none of them, and this answer is given to a caller that has not yet proved it owns anything.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created"],
+      "properties": {
+        "created": { "const": true }
+      }
     },
     "heartbeatRequest": {
       "type": "object",

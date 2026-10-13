@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Implemented in `apps/macos/LaravelExecutiveAI/IPC/` (S1-08 #36, client half; the issue text says `apps/macos/Sources/IPC/`, the real layout is the app target's `IPC/` folder next to `MenuBar/` and `Services/`). Wired into the panel (`PanelModel.live`), the installer's `HEALTH_CHECK` (`InstallDependencies.live`) and "Reset security pairing" (`SupervisorServiceControl`). The pairing XPC call and the GUI's Keychain item run for real only on the signed S1-14 lab build; every test runs against a stub `URLProtocol`, an in-memory store and a scripted Supervisor |
-| **Contract** | [ipc-contract.md](ipc-contract.md) 1.0.0 — frozen; this document records what was built against it |
+| **Contract** | [ipc-contract.md](ipc-contract.md) **1.1.0** — frozen; this document records what was built against it. `IpcOperation.contractVersion` is the pinned string and moved with the minor (§15 there) |
 | **Server** | [ipc-server.md](ipc-server.md) — the client is the mirror image of `IpcAuthenticate` + `IpcResponder`; §5 there lists what the client must send and verify, this document is the "as built" |
 | **Fixtures** | `packaging/fixtures/ipc/*.json` — every exchange is reproduced byte for byte by `IPCFixtureTests` (request headers, canonical body, signature) and its recorded answer is handled exactly as the §8.2 table says |
 | **Threat model** | T-17, T-19, T-20, T-30 – T-35 ([threat-model.md](../security/threat-model.md)); the client-side tests are listed in §11 |
@@ -16,6 +16,7 @@
 | Session: the `menubar` pairing grant, its Keychain item, renewal and replacement | `IpcSession.swift` — `IpcSession` (actor), `SessionStore`, `KeychainSessionStore`, `InMemorySessionStore` | §3.1 row 2, §3.2 step 4, §3.4 |
 | The client: `CoreClient` over `URLSession` to `http://127.0.0.1:<port>` | `LoopbackIpcClient.swift` — `LoopbackIpcClient`, `IpcOperation`, `IpcResponse`, `IpcClientError`, `ErrorEnvelope`, the log sink | §1.1, §4.1, §4.2, §4.5, §5.1, §6.1–§6.5, §8, §9, §10 |
 | The installer's health probe | `IpcHealthProbe.swift` — `IpcHealthProbe: HealthProbe` | §2 (`/health/ready` scope), health contract §1/§6 |
+| The installer's owner creation | `Install/IpcOwnerCreator.swift` — `IpcOwnerCreator: OwnerCreating` | §6.9, §2.1 (the one operation with no owner-bound gate) |
 | Composition | `IpcClientFactory.swift` — one `IpcSession` per process, the panel's `CoreClient`, the probe, the heartbeat identity | §2 "exactly one live session per client" |
 | Token, signing key, request/response signature, elevation arithmetic | `IpcSigning.swift` (S1-07; reused, not duplicated) | §3.3, §4.2, §4.5, §7.3 |
 
@@ -157,6 +158,7 @@ with its `ETag`. `PanelModel` never sees a header.
 | 403 `reauth_required` | `reauthRequired(openUrl)` | `forbidden` | open the PWA |
 | 404 `not_found` | `notFound` | `notFound` | no brief yet |
 | 409 `state_conflict` | `stateConflict` | `invalidResponse` | remote access (E4-1) |
+| 409 `owner_exists` | `ownerExists` | `invalidResponse` (never reaches the panel) | **the installer's reinstall hand-off**: `IpcOwnerCreator` turns it into `OwnerHandoff(alreadyExisted: true)` and `CREATE_OWNER` completes. Never retried |
 | 400 / 413 / 415 | `badRequest(code)` | `invalidResponse` | bug; logged |
 | 422 `validation_failed` / `oauth_state_invalid` | `validationFailed(code, details)` | `invalidResponse` | — |
 | 429 `rate_limited` | `rateLimited(retryAfterSeconds)` | `rateLimited` | next refresh |
@@ -184,6 +186,38 @@ failed attempt; a signed body that is not a health document is `invalidResponse`
 `GET /health/live` of preflight 6.8. `IpcHealthProbeTests.testTheInstallerReachesReadyThroughTheLiveProbe`
 drives `InstallStateMachine` from Welcome to `READY` through this probe against the stubbed core, so
 `HEALTH_CHECK → READY` is now reachable on a real install (installer.md §6, S1-08 row).
+
+### 6.1 The installer's owner creation (§6.9, #121)
+
+`IpcOwnerCreator` is the live `OwnerCreating` in `InstallDependencies.live`, replacing the
+`UnavailableOwnerCreator` stand-in that threw unconditionally and stopped every real install at
+screen 4. It reads the port from the checkpoint's `preflight.port` **when the call runs**, builds a
+client on the same one `menubar` session the panel and the probe use, and sends
+`POST /ipc/v1/owner` with screen 4's name and address plus the Mac's zone (`TimeZone.current`) and
+the installer's language — no workspace name, because the screen does not ask for one, and no
+credential, because there is none: sign-in is a one-time code to that address.
+
+The answer becomes one of three things:
+
+| Core says | Installer gets |
+|---|---|
+| `200 {"created": true}` | `OwnerHandoff(alreadyExisted: false)` — `CREATE_OWNER` completes |
+| `409 owner_exists` | `OwnerHandoff(alreadyExisted: true)` — a data-preserving reinstall; **the install advances**, nothing was created |
+| anything else | `OwnerCreationError`, and the state machine stops on screen 4 with the reason |
+
+The split between the two error cases is "can the person do something about it on this screen?":
+`.rejected` is the core answering that *this account* cannot be created (`422 validation_failed`,
+`403 policy_denied`, `forbidden_scope`, `origin_rejected`, `state_conflict`, `400`, an unknown
+code), and `.unavailable` is the core not answering at all (no port recorded, no answer on
+loopback, no pairing, `session_invalid`/`signature_invalid`/`skew`/`nonce` after their one retry,
+`secrets_unavailable`, `429`, `500`, a redirect) — plus the two "wrong core" codes, `404` and `426`,
+which ask for a repair rather than a different name. `IpcOwnerCreator.map` is that table and
+`IpcOwnerCreatorTests.testEveryErrorCodeLandsOnTheRightHalfOfTheSplit` pins every case.
+
+Everything §4 does still applies to this operation: a `409 owner_exists` that arrives **unsigned**
+is `unavailable`, not a hand-off, so a hijacked port cannot talk the installer out of creating the
+owner. The draft is never persisted and never logged — the log event is the operation name, the
+status and the duration, as for every other exchange (§8).
 
 ## 7. `healthy|failed` versus `running` (services.md §11)
 
@@ -214,7 +248,7 @@ error description contains the token, the signing key, the elevation, `lxai1.`/`
 |---|---|
 | `PanelModel.live()` | `IpcClientFactory.makeCoreClient(checkpointStore:session:)`: `LoopbackIpcClient` when `install/checkpoint.json` names `preflight.port`, otherwise `UnreachableCoreClient("The core is not installed yet.")`, so the panel keeps its cache-only behaviour (§14). Pairing happens lazily on the first request; before the Supervisor answers, every call is `unreachable` and the panel shows *Core unreachable* with the cached brief. Under XCTest the client stays `UnreachableCoreClient` and nothing pairs. `LXAI_MENUBAR_FIXTURE` (DEBUG) still swaps in `FixtureCoreClient` |
 | `PanelPorts.live` | `SupervisorServiceControl(control:cache:uninstaller:session: IpcClientFactory.liveSession)` so `resetPairing()` replaces the grant |
-| `InstallDependencies.live` | `healthProbe: IpcClientFactory.makeHealthProbe(bundle:checkpointStore:session:)` on the same session |
+| `InstallDependencies.live` | `healthProbe: IpcClientFactory.makeHealthProbe(bundle:checkpointStore:session:)` and `ownerCreator: IpcClientFactory.makeOwnerCreator(bundle:checkpointStore:session:language:)` on the same session |
 | `UninstallDependencies.live` | `sessionStore: KeychainSessionStore.default(bundleIdentifier:)`, cleared in step 5 |
 | `IpcClientFactory.liveSession` | `IpcSession(store: KeychainSessionStore.default, control: SupervisorControlClientFactory.live())` — one per process |
 
@@ -244,6 +278,7 @@ error description contains the token, the signing key, the elevation, `lxai1.`/`
 | `IpcOriginClientTest` | | every request targets `http://127.0.0.1:<port>` (scheme, host, port; never `localhost`); the session configuration (no proxy, no cookies, no cache, no connectivity waiting, one connection); per-operation timeouts; no browser or proxy header and only the allowed `X-Lxai-*` set; a 302 to `localhost` and a signed 307 are errors and are not followed; a grant for another port is refused before sending; `/health/live` is plain and unsigned; the `IPC/` sources never name `localhost`, `[::1]`, `print(` or `NSLog(`; the `ServiceState` → contract name mapping |
 | `IpcSessionStoreTest` | | in-memory round trip and failure injection; the Keychain item name; the base, read, add and update dictionaries (generic password, data-protection keychain, non-synchronisable, `AfterFirstUnlock`, PII-free label, **no access group**) — the real Keychain is never touched; the stored bytes are the grant's wire JSON; pairing persists once; a store that refuses writes keeps the grant in memory; a stored `supervisor` grant is ignored; concurrent first uses pair once; `forget()`; the uninstaller clears the item with the brief cache |
 | `IpcHealthProbeTests` | | ready / not-ready (`503`, failing names only) / unreachable (connection, tampered, unsigned, persistent `session_invalid`) / invalid body / no recorded port → `HealthReadiness` and `HealthProbeError` per installer.md; `/health/ready` is signed with the menubar grant; the port is read when the probe runs; `InstallStateMachine` reaches `READY` through the live probe |
+| `IpcOwnerCreatorTests` | `LaravelExecutiveAITests/Install/` | §6.1 above: the three answers map onto `OwnerHandoff` / `OwnerCreationError`; the request is exactly the five §6.9 fields and reproduces `owner.json` byte for byte; an unsigned `409 owner_exists` is refused; no recorded port and an invalid draft never reach the wire; the port is read when the call runs; the draft never reaches the log; and `InstallStateMachine` walks past `CREATE_OWNER` on both hand-offs and stops on a rejection and on an unreachable core |
 | `IpcRedactionClientTests` | | §8 above; log events are names and numbers only; every `Logger` line marks the request id `.private` and names no credential field |
 | `IpcPanelIntegrationTests` | | `PanelModel` + `LoopbackIpcClient` against the recorded exchanges: fresh state, badge 2, brief and approvals rendered (`MenuBarPanelView` and `MenuBarLabel` through `ImageRenderer`), `panel_open` in the heartbeat, cache stored; second refresh revalidates with `If-None-Match` and keeps the cache on `304`; pause/resume bodies; `426` → "Update required" with nothing else called, cleared by the next proper answer; a tampered core → *Core unreachable* with the cached brief kept |
 

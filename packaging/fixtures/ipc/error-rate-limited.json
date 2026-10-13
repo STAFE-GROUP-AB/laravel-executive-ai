@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "heartbeat",
   "description": "Heartbeat over its 6/min budget: 429 with Retry-After and retry_after_seconds (§9).",
   "request": {
@@ -12,14 +12,14 @@
       "X-Lxai-Ipc-Version": "1",
       "X-Lxai-Timestamp": "1791648005",
       "X-Lxai-Nonce": "ZXJyb3ItcmF0ZS1saW1pdA",
-      "X-Lxai-Signature": "v1=18465793fa2b4cb7b383f740e221907e88eca2cc3f4b3ec5ace109f8b86a8c3c",
+      "X-Lxai-Signature": "v1=d962201034917df91a6982647e4049113549c23e31bfab8e8a17de8a61d829d0",
       "X-Lxai-Request-Id": "01M4G01B937CFW3Z1H6BGRGKX1",
       "Content-Type": "application/json"
     },
     "body": {
       "client": "menubar",
       "client_version": "1.0.0 (120)",
-      "contract_version": "1.0.0",
+      "contract_version": "1.1.0",
       "panel_open": true,
       "since": "2026-10-10T17:30:00+02:00"
     }

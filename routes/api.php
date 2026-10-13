@@ -10,6 +10,7 @@ use App\Http\Controllers\Ipc\HealthController;
 use App\Http\Controllers\Ipc\HeartbeatController;
 use App\Http\Controllers\Ipc\LatestBriefController;
 use App\Http\Controllers\Ipc\OAuthCallbackController;
+use App\Http\Controllers\Ipc\OwnerController;
 use App\Http\Controllers\Ipc\PendingApprovalsController;
 use App\Http\Controllers\Ipc\RemoteAccessDisableController;
 use App\Http\Controllers\Ipc\RemoteAccessEnableController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Ipc\ReservedController;
 use App\Http\Middleware\LoopbackOnly;
 use App\Security\Ipc\Middleware\IpcAuthenticate;
 use App\Security\Ipc\Middleware\IpcRequireElevation;
+use App\Security\Ipc\Middleware\IpcRequireNoOwner;
 use App\Security\Ipc\Middleware\IpcThrottle;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
@@ -35,8 +37,10 @@ use Illuminate\Support\Facades\Route;
 | /ipc/v1/* operation sit behind IpcAuthenticate (IPC contract §4.4 steps
 | 1–7, scope as the parameter), then the §9 rate limit, then §7.3 elevation
 | where required; the controller validates the body and runs the §11 gate.
-| tests/Security/IpcPolicyArchTest.php fails CI for a route that breaks
-| this shape.
+| The one exception is `POST ipc/v1/owner` (§6.9), which runs before an
+| owner exists and therefore has no owner-bound gate: IpcRequireNoOwner is
+| its authorization instead. tests/Security/IpcPolicyArchTest.php fails CI
+| for a route that breaks either shape.
 |
 | The stock `api` group adds no throttle in this app (throttleApi() is never
 | called), and it must stay that way: the contract's §9 budgets are per
@@ -60,6 +64,13 @@ Route::prefix('ipc/v1')->name('ipc.')->withoutMiddleware(ThrottleRequests::class
         ->name('health');
 
     Route::middleware(IpcAuthenticate::class.':menubar')->group(function (): void {
+        // §6.9: the one operation that runs before an owner exists, so the
+        // one without an owner-bound gate. IpcRequireNoOwner is its
+        // authorization and closes the route for good once one does.
+        Route::post('owner', OwnerController::class)
+            ->middleware([IpcThrottle::class.':owner', IpcRequireNoOwner::class])
+            ->name('owner.create');
+
         Route::get('briefs/latest', LatestBriefController::class)
             ->middleware(IpcThrottle::class.':briefs-latest')
             ->name('briefs.latest');

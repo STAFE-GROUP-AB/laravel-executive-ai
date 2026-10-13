@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Implemented in `app/Security/Ipc/`, `app/Http/Controllers/Ipc/`, `routes/api.php` (S1-08 #36, server half). The Swift client half is delivered in `apps/macos/LaravelExecutiveAI/IPC/` — [ipc-client.md](ipc-client.md) — and replays every fixture here byte for byte against a stub transport |
-| **Contract** | [ipc-contract.md](ipc-contract.md) 1.0.0 — frozen; this document records what was built against it, not changes to it |
+| **Contract** | [ipc-contract.md](ipc-contract.md) **1.1.0** — frozen; this document records what was built against it, not changes to it. The 1.1.0 minor (§15) added the §6.9 owner-creation operation, #121 |
 | **Fixtures** | `packaging/fixtures/ipc/*.json` — every exchange is replayed byte for byte by `tests/Feature/Ipc/IpcFixtureConformanceTest.php`; `packaging/fixtures/ipc-signing.mjs` is ported to `App\Security\Ipc\IpcSigner` |
 | **Threat model** | T-17, T-19, T-20, T-30 – T-35 (the nine named IPC tests, [threat-model.md](../security/threat-model.md)) |
 | **ADRs** | ADR-003 D3 (how the core obtains `K`), D7 (redaction); ADR-006 D3 (origin), D6.5 (bind is a constant) |
@@ -16,6 +16,9 @@ request ─► TrustLoopbackHosts (global, S1-04)
         ─► IpcAuthenticate:<scope>        §4.4 steps 1–7, §4.1 header allowlist, §1.1 size, §5.2.5 media type
         ─► IpcThrottle:<operation>        §9, RateLimiter keyed by session_id, Retry-After
         ─► IpcRequireElevation:<op>       §7.3, remote-access-enable only
+        ─► IpcRequireNoOwner              §2.1, POST /ipc/v1/owner only — the authorization of the one
+                                          operation that runs before an owner exists; 409 owner_exists
+                                          from the moment one does, audited as auth.owner_create_refused
         ─► controller                     IpcBody::validate (§4.4 step 10) → IpcPrincipal::authorize (§11) → application service
         ◄─ IpcResponder::finalise         §4.5 headers + signature on every response, framework responses rewritten to the §8 envelope
 ```
@@ -28,7 +31,8 @@ request ─► TrustLoopbackHosts (global, S1-04)
 | Steps 1–7 in one middleware | `Middleware\IpcAuthenticate` — scope is the route parameter (`:menubar` or `:menubar,supervisor`) | §4.4, §5.1, §5.2, §2 |
 | Rate limits | `Middleware\IpcThrottle:<operation>` — per-operation and all-routes budgets from `config/ipc.php` | §9 |
 | Elevation | `IpcElevationVerifier` + `Middleware\IpcRequireElevation:<operation>` | §7.3 |
-| Principal and gates | `IpcPrincipal` (owner-bound, lazy) → `Gate::forUser($owner)->authorize($ability, [..., ['via' => 'ipc', 'client', 'session_id']])`; abilities defined once in `App\Security\Authorization\OwnerAbilities` | §2, §11 |
+| Principal and gates | `IpcPrincipal` (owner-bound, lazy) → `Gate::forUser($owner)->authorize($ability, [..., ['via' => 'ipc', 'client', 'session_id']])`; abilities defined once in `App\Security\Authorization\OwnerAbilities`. With no owner — a fresh install before `CREATE_OWNER` — `owner()` is null, `actor()` is `job:IpcServer` and `authorize()` fails closed with `policy_denied`, so every gated operation is refused on an ownerless core by construction | §2, §2.1, §11 |
+| The pre-owner guard | `Middleware\IpcRequireNoOwner` on `POST /ipc/v1/owner` only: a live `menubar` session **plus** no owner is the authorization; once one exists the route is `409 owner_exists` for every caller, for good | §2.1, §6.9 |
 | Envelopes and signing | `IpcResponder`, `IpcException` (`render()` → envelope, `report()` → audited not logged), `IpcErrorCode` (status, fixed message, hint) | §8, §4.5 |
 | Body/query schema | `IpcBody` — `additionalProperties: false` everywhere, so `user_id` / `owner` / `approver` in a body is `validation_failed` | §4.4 step 10, §11.4 |
 | Logging and audit | `IpcAuditor` — `ipc.request` log line and `audit_events{action: ipc.rejected}` with reason, `(ts, nonce)`, never the token | §10 |
@@ -45,6 +49,7 @@ request ─► TrustLoopbackHosts (global, S1-04)
 | `POST /ipc/v1/ai/pause` | `menubar` | `ai-pause` | `pauseAi` | `AiPauseSwitch` |
 | `POST /ipc/v1/ai/resume` | `menubar` | `ai-resume` | `resumeAi` | `AiPauseSwitch` |
 | `POST /ipc/v1/heartbeat` | `menubar` | `heartbeat` | — (scope only) | `Heartbeats::MENUBAR` |
+| `POST /ipc/v1/owner` | `menubar` | `owner` | — (**no gate**, §2.1) + `IpcRequireNoOwner` | `CreateOwner` (organization, user, owner membership, install marker) |
 | `POST /ipc/v1/oauth/callback` | `menubar` | `oauth-callback` | `completeOAuth` | via `OAuthCallbackHandler` |
 | `GET /ipc/v1/remote-access` | `menubar` | `remote-access` | `viewRemoteAccess` | no |
 | `POST /ipc/v1/remote-access/enable` | `menubar` | `remote-access-enable` | `enableRemoteAccess` + **elevation** | `TunnelProvider::configure` |
@@ -134,7 +139,8 @@ Known gaps against the contract, all noted rather than faked:
 | `IpcOriginTest` | `tests/Feature/Ipc/` | `Host: localhost`, `[::1]`, wrong port, no port; `X-Forwarded-*`, `Forwarded`, `Tailscale-User-*`; `Origin`, `Referer`, `Cookie`, `Sec-Fetch-*`; peer `::1` and three off-host addresses; origin runs before the token; same rules on `/health/ready`; non-JSON body → 415 |
 | `IpcBindTest` | `tests/Feature/Ipc/` | the S1-06 Caddyfile template binds `127.0.0.1` only (no `0.0.0.0`, `[::]`, `tls`); `IpcAuthenticate::LOOPBACK_PEER` is a constant; four non-loopback peers refused on four routes; `LoopbackOnly` stays on `/health/*` |
 | `IpcVersionTest` | `tests/Feature/Ipc/` | missing, `0`, `2`, `3`, `1.0.0`, `01`, text → unsigned `426` with `supported_versions: [1]` and the repair hint; version checked before the token; `/health/live` exempt |
-| `IpcPolicyArchTest` | `tests/Security/` | exactly the contract routes; `IpcAuthenticate:<scope>` on each; a throttle with a configured budget on each; every domain-touching controller calls `->authorize(OwnerAbilities::…)` and the scope-only set is exactly `{health, heartbeat, reserved}`; every ability is a defined gate; elevation on exactly `remote-access/enable`; no mutating approval route; no forbidden imports; the mutating set is exactly six POSTs |
+| `IpcPolicyArchTest` | `tests/Security/` | exactly the contract routes; `IpcAuthenticate:<scope>` on each; a throttle with a configured budget on each; every domain-touching controller calls `->authorize(OwnerAbilities::…)` and the set without an owner-bound gate is exactly `{health, heartbeat, reserved, owner}`; every ability is a defined gate; elevation on exactly `remote-access/enable`; `IpcRequireNoOwner` on exactly `POST /ipc/v1/owner`, which also names no ability; no mutating approval route; no forbidden imports; the mutating set is exactly seven POSTs |
+| `OwnerCreateTest` | `tests/Feature/Ipc/` | §6.9 end to end: the owner, its organization and the membership from one signed request; `{created: true}` and nothing else in the body; the audit record with `via: ipc` and the `job:IpcCreateOwner` actor; the workspace named after the owner when `organization` is omitted; `409 owner_exists` on every repeat, with `auth.owner_create_refused` and nothing created; two asks → one owner; the request waits on `lea:create-owner`; `supervisor`, absent and wrong-MAC tokens; ten invalid or identity-asserting bodies; the 5/min budget |
 | `IpcRedactionTest` | `tests/Security/` | corpus and live `lxai1.`/`lxai1e.` values never reach the log from an exception; the `oauth/callback` body reaches neither log, audit nor response even when the handler embeds it in an exception; the request log line carries no credential; `ipc.rejected` carries no credential |
 | `HeartbeatCheckTest` | `tests/Feature/Ipc/` | `menubar_integration` fail → ok only on an authenticated `menubar` heartbeat; `supervisor` → `forbidden_scope`; five unauthenticated shapes never write the cache; identity-asserting bodies → 422; quitting heartbeat; 6/min budget with `Retry-After` |
 | `IpcSignerTest` | `tests/Unit/Security/Ipc/` | the fixture token MACs, every recorded request and response signature, and the recorded elevation are reproduced from `K_test`; `IpcKey` refuses the zero key and serialisation |

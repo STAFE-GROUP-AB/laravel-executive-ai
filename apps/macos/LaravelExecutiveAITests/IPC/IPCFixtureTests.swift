@@ -39,6 +39,11 @@ final class IPCFixtureTests: XCTestCase {
         XCTAssertEqual(try IpcOperation.aiResume.bodyBytes(), try IpcFixture.load("ai-resume").requestBodyBytes())
         XCTAssertEqual(IpcOperation.pendingApprovals.pathAndQuery, try IpcFixture.load("approvals-pending").path)
 
+        let owner = IpcOperation.createOwner(OwnerDraft(name: "Ada Owner", email: "ada.owner@example.test"), timeZone: "Europe/Stockholm", language: "sv")
+        XCTAssertEqual(try owner.bodyBytes(), try IpcFixture.load("owner").requestBodyBytes())
+        XCTAssertEqual(owner.pathAndQuery, try IpcFixture.load("owner").path)
+        XCTAssertEqual(IpcOperation.contractVersion, "1.1.0", "§5.1: the minor that added owner.create")
+
         let quitting = IpcOperation.heartbeat(clientVersion: "1.0.0 (120)", since: "2026-10-10T17:30:00+02:00", panelOpen: false, quitting: true)
         XCTAssertTrue(String(decoding: try quitting.bodyBytes(), as: UTF8.self).contains("\"quitting\":true"))
     }
@@ -140,6 +145,11 @@ final class IPCFixtureTests: XCTestCase {
             XCTAssertEqual(result.failureValue, .signatureInvalid, fixture.name)
             XCTAssertEqual(requests.count, 2, fixture.name)
             XCTAssertEqual(control.pairCalls, 1, fixture.name)
+        case "owner_exists":
+            // §6.9: never retried, and the installer reads it as a hand-off
+            // (IpcOwnerCreatorTests), not as a failure.
+            XCTAssertEqual(result.failureValue, .ownerExists, fixture.name)
+            XCTAssertEqual(requests.count, 1, fixture.name)
         case "version_unsupported":
             XCTAssertEqual(result.failureValue, .versionUnsupported(serverMajor: 1, supportedVersions: [1], hint: "Update or repair Laravel Executive AI (Settings → Updates → Repair)."), fixture.name)
             XCTAssertEqual(requests.count, 1, fixture.name)

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Ipc\HealthController;
 use App\Http\Controllers\Ipc\HeartbeatController;
+use App\Http\Controllers\Ipc\OwnerController;
 use App\Http\Controllers\Ipc\ReservedController;
 use App\Http\Middleware\LoopbackOnly;
 use App\Security\Authorization\OwnerAbilities;
 use App\Security\Ipc\Middleware\IpcAuthenticate;
 use App\Security\Ipc\Middleware\IpcRequireElevation;
+use App\Security\Ipc\Middleware\IpcRequireNoOwner;
 use App\Security\Ipc\Middleware\IpcThrottle;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -16,19 +18,20 @@ use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
 
 /*
- * IPC contract §11 / §12 `IpcPolicyArchTest` (threat model T-19, T-35): no
- * IPC route bypasses the server-side policy layer. Every route under /ipc/
- * (and /health/ready) carries IpcAuthenticate with an explicit scope; every
- * operation that touches the domain calls a named ability through the
- * principal; the scope-only set is exactly the contract's; no route under
- * /ipc/ can mutate an approval; and no IPC controller reaches a model
- * provider, the mailer, the CRM or an MCP tool. A route that breaks this
- * shape fails CI.
+ * IPC contract §11 / §12 `IpcPolicyArchTest` (threat model T-19, T-35, T-72):
+ * no IPC route bypasses the server-side policy layer. Every route under
+ * /ipc/ (and /health/ready) carries IpcAuthenticate with an explicit scope;
+ * every operation that touches the domain calls a named ability through the
+ * principal; the scope-only set is exactly the contract's; the pre-owner set
+ * is exactly one route and carries IpcRequireNoOwner; no route under /ipc/
+ * can mutate an approval; and no IPC controller reaches a model provider,
+ * the mailer, the CRM or an MCP tool. A route that breaks this shape fails CI.
  */
 
-/** §6: method + path → ability (null = scope only, as the contract table says). */
+/** §6: method + path → ability (null = no owner-bound gate, as the contract table says). */
 const IPC_ROUTE_TABLE = [
     'GET ipc/v1/health' => null,
+    'POST ipc/v1/owner' => null,
     'GET ipc/v1/briefs/latest' => OwnerAbilities::VIEW_BRIEF,
     'GET ipc/v1/approvals' => OwnerAbilities::VIEW_APPROVALS,
     'POST ipc/v1/ai/pause' => OwnerAbilities::PAUSE_AI,
@@ -40,7 +43,15 @@ const IPC_ROUTE_TABLE = [
     'POST ipc/v1/remote-access/disable' => OwnerAbilities::DISABLE_REMOTE_ACCESS,
 ];
 
-const IPC_SCOPE_ONLY_CONTROLLERS = [HealthController::class, HeartbeatController::class, ReservedController::class];
+/** Routes that run no owner-bound gate: scope only, or §6.9's pre-owner operation. */
+const IPC_SCOPE_ONLY_CONTROLLERS = [HealthController::class, HeartbeatController::class, ReservedController::class, OwnerController::class];
+
+/**
+ * §2.1 / §6.9: the operations that may run before an owner exists. Exactly
+ * one, and it is authorised by IpcRequireNoOwner instead of a gate. Adding a
+ * second entry is a security-critical contract change, not a test edit.
+ */
+const IPC_PRE_OWNER_ROUTES = ['POST ipc/v1/owner'];
 
 const IPC_FORBIDDEN_IMPORTS = [
     'App\\AI\\', 'App\\MCP\\', 'App\\CRM\\', 'App\\Integrations\\', 'App\\Approvals\\Actions\\',
@@ -164,6 +175,23 @@ it('requires elevation for exactly the contract\'s elevated operations', functio
     }
 });
 
+it('guards exactly the pre-owner operations with IpcRequireNoOwner and gates every other one', function (): void {
+    foreach (ipcRoutes() as $key => $route) {
+        $guarded = array_values(array_filter($route->gatherMiddleware(), fn (mixed $entry): bool => $entry === IpcRequireNoOwner::class));
+
+        in_array($key, IPC_PRE_OWNER_ROUTES, true)
+            ? expect($guarded)->toBe([IpcRequireNoOwner::class], "{$key} is the pre-owner operation and must carry IpcRequireNoOwner")
+            : expect($guarded)->toBe([], "{$key} must not skip the owner-bound gate");
+    }
+
+    // A pre-owner route may not also claim an ability: there is no owner to
+    // run it as, and IpcPrincipal::authorize() would answer policy_denied.
+    foreach (IPC_PRE_OWNER_ROUTES as $key) {
+        expect(IPC_ROUTE_TABLE)->toHaveKey($key)
+            ->and(IPC_ROUTE_TABLE[$key])->toBeNull("{$key} must not name an ability");
+    }
+});
+
 it('carries no framework ThrottleRequests on any IPC or health route — only IpcThrottle', function (): void {
     foreach (ipcRoutes() as $key => $route) {
         $resolved = app('router')->gatherRouteMiddleware($route);
@@ -205,7 +233,7 @@ it('never lets an IPC controller start a model run, send mail, write the CRM, ca
     }
 });
 
-it('keeps the mutating set to exactly pause, resume, heartbeat, oauth callback and tunnel state', function (): void {
+it('keeps the mutating set to exactly owner creation, pause, resume, heartbeat, oauth callback and tunnel state', function (): void {
     $mutating = [];
 
     foreach (ipcRoutes() as $key => $route) {
@@ -223,6 +251,7 @@ it('keeps the mutating set to exactly pause, resume, heartbeat, oauth callback a
         'POST ipc/v1/ai/resume',
         'POST ipc/v1/heartbeat',
         'POST ipc/v1/oauth/callback',
+        'POST ipc/v1/owner',
         'POST ipc/v1/remote-access/disable',
         'POST ipc/v1/remote-access/enable',
     ]);

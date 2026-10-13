@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "health",
   "description": "GET /ipc/v1/health while the scheduler self-test is failing: HTTP 503 but still the success envelope — no error code — exactly as /health/ready behaves (§6.1, §8.2). Mirrors not-ready-scheduler-failing.json.",
   "request": {

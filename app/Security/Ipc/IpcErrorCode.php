@@ -25,6 +25,7 @@ enum IpcErrorCode: string
     case ReauthRequired = 'reauth_required';
     case NotFound = 'not_found';
     case StateConflict = 'state_conflict';
+    case OwnerExists = 'owner_exists';
     case PayloadTooLarge = 'payload_too_large';
     case UnsupportedMediaType = 'unsupported_media_type';
     case ValidationFailed = 'validation_failed';
@@ -43,7 +44,7 @@ enum IpcErrorCode: string
             self::SessionInvalid, self::TimestampSkew, self::NonceReplayed, self::SignatureInvalid => 401,
             self::OriginRejected, self::ForbiddenScope, self::ElevationRequired, self::ElevationInvalid, self::PolicyDenied, self::ReauthRequired => 403,
             self::NotFound => 404,
-            self::StateConflict => 409,
+            self::StateConflict, self::OwnerExists => 409,
             self::PayloadTooLarge => 413,
             self::UnsupportedMediaType => 415,
             self::ValidationFailed, self::OauthStateInvalid => 422,
@@ -70,6 +71,7 @@ enum IpcErrorCode: string
             self::ReauthRequired => 'This operation requires an authenticated session in the app.',
             self::NotFound => 'No such resource.',
             self::StateConflict => 'The operation cannot run from the current state.',
+            self::OwnerExists => 'An owner account already exists on this Mac.',
             self::PayloadTooLarge => 'The request body exceeds the allowed size.',
             self::UnsupportedMediaType => 'Request bodies must be application/json.',
             self::ValidationFailed => 'The request did not validate.',
@@ -90,6 +92,7 @@ enum IpcErrorCode: string
             self::ElevationRequired, self::ElevationInvalid => 'Run elevate on the Supervisor and retry once.',
             self::ReauthRequired => 'Open the operation in the app, where the owner re-authenticates.',
             self::StateConflict => 'Re-run the remote-access inspection and show the reported state.',
+            self::OwnerExists => 'Continue the install: the existing account is kept and signs in with a one-time code.',
             self::VersionUnsupported => 'Update or repair Laravel Executive AI (Settings → Updates → Repair).',
             self::Internal => 'Open diagnostics; the request_id is the correlation key.',
             self::SecretsUnavailable => 'The secrets broker is unavailable or locked; check the Supervisor.',

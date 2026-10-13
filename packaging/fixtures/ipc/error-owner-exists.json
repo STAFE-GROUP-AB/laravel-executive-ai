@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.1.0",
+  "operation": "owner.create",
+  "description": "POST /ipc/v1/owner on a data-preserving reinstall: an owner already exists, so the operation refuses with 409 / owner_exists, creates nothing and names nobody. The installer reads this as `alreadyExisted: true` and moves to the next screen (§6.9, threat model T-72).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/owner",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "b3duZXItZXhpc3RzLi4uLg",
+      "X-Lxai-Signature": "v1=4fefa4402c7b1bf6a9f449b7c8fe14a8d65ca4c7d3b2223e02047cbefa6e14b6",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P41",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "name": "Ada Owner",
+      "email": "ada.owner@example.test",
+      "timezone": "Europe/Stockholm",
+      "language": "sv"
+    }
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P41",
+      "X-Lxai-Signature": "v1=2e9f96657df1770647735f79614163ebe44071c7ee202bfaec5a49a9ffdc3f9e",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": false,
+      "request_id": "01M4G0PT40SQ5H1AFST1HB6P41",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "error": {
+        "code": "owner_exists",
+        "message": "An owner account already exists on this Mac.",
+        "hint": "Continue the install: the existing account is kept and signs in with a one-time code.",
+        "retry_after_seconds": null,
+        "supported_versions": null,
+        "details": null
+      }
+    }
+  }
+}

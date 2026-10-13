@@ -96,6 +96,17 @@ final class IpcException extends RuntimeException
         return new self(IpcErrorCode::StateConflict, $details);
     }
 
+    /**
+     * §6.9: the one refusal of `POST /ipc/v1/owner`. It carries no detail —
+     * not the existing owner's address, id or organization — because the
+     * client needs only the fact, and the route answers it to a caller that
+     * has not yet proved it is the owner of anything.
+     */
+    public static function ownerExists(): self
+    {
+        return new self(IpcErrorCode::OwnerExists);
+    }
+
     public static function payloadTooLarge(): self
     {
         return new self(IpcErrorCode::PayloadTooLarge);

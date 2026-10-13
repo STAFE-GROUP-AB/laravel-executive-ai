@@ -58,11 +58,12 @@ struct InstallDependencies: Sendable {
         let pendingSecret = PendingSecretHandoff()
         let control = SupervisorControlClientFactory.live(bundle: bundle)
         let checkpointStore = FileInstallCheckpointStore(url: paths.checkpointURL)
+        let language = PreflightLanguage.preferred()
 
         return InstallDependencies(
             paths: paths,
             productVersion: version,
-            language: PreflightLanguage.preferred(),
+            language: language,
             bundledRuntimeDirectory: runtimeDirectory,
             preflightProbes: SystemPreflightProbes(
                 bundle: bundle,
@@ -71,7 +72,12 @@ struct InstallDependencies: Sendable {
             ),
             packageVerifier: PackageVerifier(signatureChecker: signatureChecker),
             runtimeInstaller: RuntimeInstaller(backupExclusion: TimeMachineBackupExclusion()),
-            ownerCreator: UnavailableOwnerCreator(),
+            ownerCreator: IpcClientFactory.makeOwnerCreator(
+                bundle: bundle,
+                checkpointStore: checkpointStore,
+                session: IpcClientFactory.liveSession,
+                language: language
+            ),
             aiSelectionApplier: SupervisorAiSelectionApplier(pending: pendingSecret),
             localAiRuntimeDetector: FileSystemLocalAiRuntimeDetector(),
             serviceBooter: LaunchAgentServiceBooter(

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "briefs.latest",
   "description": "A request whose signature does not verify (here: all zeros): 401 signature_invalid. The token was valid, so the response IS signed and the client can tell this apart from a hijacked port (§4.4, §4.5).",
   "request": {

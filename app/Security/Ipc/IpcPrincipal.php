@@ -16,6 +16,16 @@ use Illuminate\Support\Facades\Gate;
  * single-owner), and every operation runs its gate as
  * `Gate::forUser($owner)->authorize(<ability>, [..., ['via' => 'ipc']])`.
  * Identity never comes from request content (§11.4).
+ *
+ * **Before CREATE_OWNER there is no owner to bind to** (§2.1). That is not
+ * an edge case to be discovered: the owner is resolved lazily, `owner()`
+ * answers null, `actor()` degrades to the `job:IpcServer` provenance actor,
+ * and `authorize()` **fails closed with `policy_denied`** — so every gated
+ * operation in §6 is refused on an ownerless core, by design and not by
+ * accident. The single operation that must work before an owner exists
+ * (`POST /ipc/v1/owner`) therefore never calls `authorize()`; it is
+ * authorised by `Middleware\IpcRequireNoOwner`, which refuses as soon as an
+ * owner does exist. `IpcPolicyArchTest` pins both halves of that rule.
  */
 final class IpcPrincipal
 {
@@ -71,7 +81,8 @@ final class IpcPrincipal
 
     /**
      * §11.1: the same gate the PWA runs, as the owner, with `via: ipc` as the
-     * last argument. No owner, or a denial, is 403 / policy_denied.
+     * last argument. No owner, or a denial, is 403 / policy_denied — the
+     * deliberate pre-owner answer for every gated operation (§2.1).
      *
      * @param  list<mixed>  $arguments
      *

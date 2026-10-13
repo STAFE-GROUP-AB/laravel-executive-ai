@@ -43,12 +43,19 @@ step, decides `core_ready` — and writes `auth.owner_created`.
 If an owner membership already exists it writes `auth.owner_create_refused` and throws
 `OwnerAlreadyExistsException`. Nothing is created, nothing is overwritten.
 
-Two front doors, same action:
+Three front doors, same action:
 
 | Door | Who uses it | Behaviour |
 |---|---|---|
-| `php artisan lea:owner:create --name= --email= --organization= [--timezone=UTC] [--language=en] [--json]` | The Mac installer (S1-05) through the Supervisor — the user never sees a Terminal | Exit `0` created · `2` invalid input · **`3` an owner already exists**. `--json` prints one line: `{"status":"created","user_id","organization_id","membership_id","email","install_state"}` or `{"status":"owner_exists"\|"invalid","message","errors"}`. Nothing printed is ever a credential. |
+| **`POST /ipc/v1/owner`** ([ipc-contract.md](ipc-contract.md) §6.9, #121) | **The Mac installer's screen 4** (`IpcOwnerCreator`), over the `menubar` session paired one state earlier at `BOOT_SERVICES` — the user never sees a Terminal | Body `{name, email, organization?, timezone?, language?}`; `organization` omitted names the workspace after its owner. `200 {"created": true}` and nothing else — no token, no id, not the submitted address. **`409 owner_exists`** when one exists, which the installer reports as "already existed" and *advances past* `CREATE_OWNER` on a data-preserving reinstall. This is the one IPC operation with no owner-bound gate (§2.1 there): a valid `menubar` token **plus** no owner is the authorization, enforced by `IpcRequireNoOwner`. Actor in the audit trail: `job:IpcCreateOwner`, with `via: ipc`. |
+| `php artisan lea:owner:create --name= --email= --organization= [--timezone=UTC] [--language=en] [--json]` | Support and developers; the fallback when there is no GUI | Exit `0` created · `2` invalid input · **`3` an owner already exists**. `--json` prints one line: `{"status":"created","user_id","organization_id","membership_id","email","install_state"}` or `{"status":"owner_exists"\|"invalid","message","errors"}`. Nothing printed is ever a credential. |
 | `GET /install/owner` (Livewire `CreateOwnerForm`) | A browser on the loopback origin before an owner exists | §12.3 screen 4: name, email, organization, time zone, brief language, one CTA. The person at this page *is* the installer, so success signs them in directly and lands on `/home`. **404 once an owner exists** (`EnsureNoOwnerExists`). |
+
+All three refuse identically once an owner exists, and all three write the same two audit actions —
+`auth.owner_created` and `auth.owner_create_refused` — differing only in the actor, which names the
+door (`job:IpcCreateOwner`, `job:OwnerCreateCommand`, `job:CreateOwnerForm`). `CreateOwner::create`
+takes an optional context array so a door with request context (the IPC operation's `via`, `client`,
+`session_id` and `request_id`) records it without a second audit writer.
 
 `OwnerDetails` validates once for both doors (`email:rfc`, `timezone:all`, BCP-47 language) and
 stores the address lower-cased. `email_verified_at` is left null until the first code is verified.

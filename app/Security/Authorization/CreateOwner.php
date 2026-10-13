@@ -34,18 +34,25 @@ final class CreateOwner
     ) {}
 
     /**
+     * `$context` is merged into whichever audit record this call writes, so
+     * a door that carries request context — the IPC operation's
+     * `{via: ipc, client, session_id, request_id}` (IPC contract §6.9, §10)
+     * — records it without a second audit writer.
+     *
+     * @param  array<string, mixed>  $context
+     *
      * @throws OwnerAlreadyExistsException
      */
-    public function create(OwnerDetails $details, string $actor = 'job:CreateOwner'): OwnerCreated
+    public function create(OwnerDetails $details, string $actor = 'job:CreateOwner', array $context = []): OwnerCreated
     {
-        return Cache::lock('lea:create-owner', 10)->block(5, function () use ($details, $actor): OwnerCreated {
+        return Cache::lock('lea:create-owner', 10)->block(5, function () use ($details, $actor, $context): OwnerCreated {
             $existing = $this->existingOwner();
 
             if ($existing !== null) {
-                $this->refuse($existing, $actor);
+                $this->refuse($existing, $actor, $context);
             }
 
-            return $this->db->transaction(fn (): OwnerCreated => $this->createWithinTransaction($details, $actor));
+            return $this->db->transaction(fn (): OwnerCreated => $this->createWithinTransaction($details, $actor, $context));
         });
     }
 
@@ -62,17 +69,21 @@ final class CreateOwner
     /**
      * Recorded outside the creation transaction so the refusal survives the
      * exception; a second check inside the transaction covers the race.
+     *
+     * @param  array<string, mixed>  $context
      */
-    private function refuse(Membership $existing, string $actor): never
+    private function refuse(Membership $existing, string $actor, array $context = []): never
     {
         $this->audit->record('auth.owner_create_refused', $actor, AuditLog::OUTCOME_REFUSED, 'membership', $existing->id, [
+            ...$context,
             'reason' => 'owner_exists',
         ], $existing->organization_id);
 
         throw new OwnerAlreadyExistsException($existing->user_id);
     }
 
-    private function createWithinTransaction(OwnerDetails $details, string $actor): OwnerCreated
+    /** @param array<string, mixed> $context */
+    private function createWithinTransaction(OwnerDetails $details, string $actor, array $context = []): OwnerCreated
     {
         $existing = $this->existingOwner();
 
@@ -109,6 +120,7 @@ final class CreateOwner
         }
 
         $this->audit->record('auth.owner_created', $actor, AuditLog::OUTCOME_OK, 'user', $user->id, [
+            ...$context,
             'organization_id' => $organization->id,
             'membership_id' => $membership->id,
             'timezone' => $details->timezone,
