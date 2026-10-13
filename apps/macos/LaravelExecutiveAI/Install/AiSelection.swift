@@ -246,11 +246,11 @@ enum AiProviderCatalog {
     static let schemaVersion = "1.0.0"
 
     static let all: [AiProviderCatalogEntry] = [
-        AiProviderCatalogEntry(id: "ollama", displayName: "Ollama", kind: .local, driver: "ollama", adapterAvailable: false),
-        AiProviderCatalogEntry(id: "lmstudio", displayName: "LM Studio", kind: .local, driver: "openai-compatible", adapterAvailable: false),
-        AiProviderCatalogEntry(id: "openai", displayName: "OpenAI", kind: .remote, driver: "openai", adapterAvailable: false),
-        AiProviderCatalogEntry(id: "anthropic", displayName: "Anthropic", kind: .remote, driver: "anthropic", adapterAvailable: false),
-        AiProviderCatalogEntry(id: "custom", displayName: "Other OpenAI-compatible endpoint", kind: .remote, driver: "openai-compatible", adapterAvailable: false),
+        AiProviderCatalogEntry(id: "ollama", displayName: "Ollama", kind: .local, driver: "ollama", adapterAvailable: true),
+        AiProviderCatalogEntry(id: "lmstudio", displayName: "LM Studio", kind: .local, driver: "openai-compatible", adapterAvailable: true),
+        AiProviderCatalogEntry(id: "openai", displayName: "OpenAI", kind: .remote, driver: "openai", adapterAvailable: true),
+        AiProviderCatalogEntry(id: "anthropic", displayName: "Anthropic", kind: .remote, driver: "anthropic", adapterAvailable: true),
+        AiProviderCatalogEntry(id: "custom", displayName: "Other OpenAI-compatible endpoint", kind: .remote, driver: "openai-compatible", adapterAvailable: true),
     ]
 
     /// Entries a real adapter supports: the only ones a screen may offer as a choice.

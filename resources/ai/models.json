@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0.0",
+  "_comment": "ADR-004 D3: per-model capabilities are ours, because laravel/ai 1.2.0 carries none. One entry per `driver/model-id`. This is a maintained artefact with a review step per model: every entry names the page it was read from and the date it was read, an entry nobody has verified carries `review_required: true` and reports no verification date at all, and a model that is not in here is treated as unknown — text and streaming only, 4096 context, everything else false, which means jobs needing more are refused rather than attempted. Adding or changing an entry is a reviewed PR, never a background update. `recommended` marks what the product suggests for a provider; it is a suggestion the owner can change and is NEVER a preselection (blueprint 12.3.5, docs/architecture/ai-state.md section 4) - the SELECT_AI screen starts with nothing chosen whatever this file says.",
+  "currency": {
+    "prices_in": "EUR per million tokens",
+    "vendor_prices_in": "USD per million tokens",
+    "eur_per_usd": null,
+    "_comment": "Vendors publish USD. No EUR conversion policy is recorded yet, so no entry carries an EUR price and every external model's cost resolves to null ('unknown') rather than to a converted guess. Local models cost 0.0 by construction. ADR-004 D7 owns the per-run and per-day budgets and needs this decided before a budget can refuse anything for a real reason; the verified USD figures are kept below as `vendor_input_price_per_mtok_usd` so the conversion is the only thing still missing."
+  },
+  "models": {
+    "openai/gpt-5-mini": {
+      "display_name": "GPT-5 mini",
+      "recommended": true,
+      "capabilities": {
+        "text": true,
+        "streaming": true,
+        "tools": true,
+        "structured_output": true,
+        "vision": true,
+        "embeddings": false
+      },
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_concurrency": 4,
+      "vendor_input_price_per_mtok_usd": 0.25,
+      "vendor_output_price_per_mtok_usd": 2.0,
+      "input_price_per_mtok_eur": null,
+      "output_price_per_mtok_eur": null,
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+      "verified_at": "2026-10-13",
+      "verified_by": "S2-13",
+      "review_required": false,
+      "notes": "Context window 400,000 and 128,000 max output tokens; function calling, structured outputs, streaming and image input all listed under Supported features. Prices $0.25 input and $2 output per 1M tokens."
+    },
+    "anthropic/claude-opus-4-1": {
+      "display_name": "Claude Opus 4.1",
+      "recommended": true,
+      "capabilities": {
+        "text": true,
+        "streaming": true,
+        "tools": true,
+        "structured_output": true,
+        "vision": true,
+        "embeddings": false
+      },
+      "context_window": null,
+      "max_output_tokens": null,
+      "max_concurrency": 4,
+      "vendor_input_price_per_mtok_usd": 15.0,
+      "vendor_output_price_per_mtok_usd": 75.0,
+      "input_price_per_mtok_eur": null,
+      "output_price_per_mtok_eur": null,
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-13",
+      "verified_by": "S2-13",
+      "review_required": true,
+      "review_reason": "OWNER DECISION NEEDED. This is the recommended Anthropic model per ADR-004 and the owner's standing model rule, and it is kept here unchanged because nothing in this repository may rename a model on its own. But the vendor's own pages, read 2026-10-13, say `claude-opus-4-1-20250805` was deprecated 2026-06-05 and RETIRED on the first-party Claude API on 2026-08-05 (recommended replacement `claude-opus-4-8`); it remains available only on Amazon Bedrock and Google Cloud, which ADR-004 D6 does not ship as v1 adapters. A request to it through the `anthropic` driver will therefore fail against a live key, so the lab half of the contract matrix cannot pass for Anthropic until the owner either confirms a Bedrock/Vertex route or names a different model. `context_window` and `max_output_tokens` are null because the model's own documentation page is gone (404) and no figure could be cited; with the window unknown the registry falls back to the fail-closed 4096, so a large prompt is refused rather than silently truncated. Prices are the vendor's published $15/$75 per MTok.",
+      "notes": "Capabilities reflect the Anthropic API's documented behaviour for the Opus line (tool use, image input, streaming). Because `review_required` is true, this entry reports no `verified_at` through ModelCapabilityRegistry and the UI shows it as unverified."
+    },
+    "ollama/llama3.2:3b": {
+      "display_name": "Llama 3.2 3B Instruct",
+      "recommended": false,
+      "capabilities": {
+        "text": true,
+        "streaming": true,
+        "tools": true,
+        "structured_output": true,
+        "vision": false,
+        "embeddings": false
+      },
+      "context_window": 131072,
+      "max_output_tokens": 4096,
+      "max_concurrency": 1,
+      "input_price_per_mtok_eur": 0.0,
+      "output_price_per_mtok_eur": 0.0,
+      "source_url": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+      "verified_at": "2026-10-13",
+      "verified_by": "S2-13",
+      "review_required": true,
+      "review_reason": "Licence review, not capability review: ADR-004 D8 lists Llama 3.2 3B as 'review required' (Llama 3.2 Community Licence with attribution and acceptable-use flow-down, not OSI), and ADR-007 owns the conclusion. Capabilities are confirmed per installed model by the Ollama `POST /api/show` probe, which may fill what this entry leaves null and may never override a false here.",
+      "notes": "Present so the local path has a worked registry entry; Ollama is a bring-your-own-model runtime, so the probe overlay is the normal source for a local model and nothing is bundled in the DMG (D8)."
+    },
+    "ollama/phi4-mini": {
+      "display_name": "Phi-4-mini-instruct 3.8B",
+      "recommended": false,
+      "capabilities": {
+        "text": true,
+        "streaming": true,
+        "tools": true,
+        "structured_output": true,
+        "vision": false,
+        "embeddings": false
+      },
+      "context_window": 131072,
+      "max_output_tokens": 4096,
+      "max_concurrency": 1,
+      "input_price_per_mtok_eur": 0.0,
+      "output_price_per_mtok_eur": 0.0,
+      "source_url": "https://huggingface.co/microsoft/Phi-4-mini-instruct",
+      "verified_at": "2026-10-13",
+      "verified_by": "S2-13",
+      "review_required": false,
+      "notes": "MIT licensed with a 128K context (ADR-004 D8), the cleanest licence fit among the D8 candidates. Listed as a known local model, not as a recommendation and not as a bundled download: no weights ship in the DMG and no download starts before READY."
+    },
+    "ollama/nomic-embed-text": {
+      "display_name": "Nomic Embed Text",
+      "recommended": false,
+      "capabilities": {
+        "text": false,
+        "streaming": false,
+        "tools": false,
+        "structured_output": false,
+        "vision": false,
+        "embeddings": true
+      },
+      "embedding_dimensions": 768,
+      "context_window": 8192,
+      "max_concurrency": 1,
+      "input_price_per_mtok_eur": 0.0,
+      "output_price_per_mtok_eur": 0.0,
+      "source_url": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+      "verified_at": "2026-10-13",
+      "verified_by": "S2-13",
+      "review_required": false,
+      "notes": "Embeddings only, and every other capability is an explicit false so a text job routed at it is refused rather than attempted. 768 dimensions is the Ollama driver's own default for this model in laravel/ai 1.2.0."
+    }
+  }
+}

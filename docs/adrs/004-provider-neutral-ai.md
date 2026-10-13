@@ -372,10 +372,61 @@ license pages are verified the same way; the SDK's own default-model string is n
   is licensed under the MIT license", 3.8B, 128K context). Mistral-7B-Instruct-v0.3 `apache-2.0`,
   https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3 ("Supports function calling").
 
-**Measured prototype** — not yet. Required before Accepted: (a) the D4 egress unit test and the
-Mac-lab pcap run; (b) rows 1–12 of the D2 matrix green against real Ollama and LM Studio on Mac A;
-(c) timed download of each D8 candidate on the lab network, recorded in `docs/architecture/
-support-matrix.md`.
+**Implementation, 2026-10-13 (S2-13, issue #95)** — the adapter, the capability registry, the router,
+the detectors and the twelve-row matrix are built; see
+[`docs/architecture/ai-providers.md`](../architecture/ai-providers.md) for the as-built page, the
+per-row status table and the lab protocol. The four facts above were re-verified against the pinned
+`1.2.0` source and all four hold:
+
+- `Promptable::withModelFailover()` iterates `iterateProvidersWithFailover()` and dispatches
+  `AgentFailedOver` only when `$provider` is an array; our adapter passes a single string, so with one
+  entry the generator yields once with `isFinalAttempt = true` and the exception is rethrown. Matrix
+  row 9 asserts no failover event is ever dispatched.
+- `config/ai.php` in the package still ships `'default' => 'openai'`; ours sets all seven `default*`
+  keys to `'unconfigured'` and row 12 asserts none of them names a defined provider.
+- `OllamaProvider::defaultTextModel()` returns `… ?? 'qwen3.5:4b'` (and `'qwen3.5:0.8b'` /
+  `'gemma4:cloud'` for cheapest/smartest). No provider entry configures `models`, `AiRequest` cannot
+  exist without a model, and the adapter passes it on every call, so the fallback is unreachable.
+- `grep -rl capabilit src/` in the package matches exactly one file —
+  `AiManager::ensureProviderSupports()`, which is provider-level only. The registry is ours.
+
+Two further facts settled while building, both recorded in the as-built page: attachments ride on
+`UserMessage` as in-memory base64 `Laravel\Ai\Files\*` objects and the trailing user turn must be sent
+as the prompt rather than as history; and `Illuminate\JsonSchema` hoists a property's `required()` flag
+into the parent object's `required` array, so our schema arrays are a true pass-through.
+
+**Measured prototype** — the CI half only. Rows 1–12 pass for all five shipped drivers against the
+SDK's `FakeTextGateway` with `Http::preventStrayRequests()` armed; there is no API key in the
+repository and CI performs no real-endpoint call. Still required before **Accepted**:
+
+- (a) the D4 egress unit test (`tests/Security/LocalOnlyEgressTest.php`, **S2-14**) and the Mac-lab
+  pcap run — layer 1 of D4 (the registry gate) is built and tested, layers 2–3 are S2-14's;
+- (b) rows 1–12 against real Ollama and real LM Studio on Mac A, and rows 1–9 with a test key per
+  external driver — **blocked for Anthropic**, see the finding below;
+- (c) timed download of each D8 candidate on the lab network, recorded in
+  `docs/architecture/support-matrix.md`.
+
+**Finding for Andreas — `claude-opus-4-1` is retired on the first-party Claude API.** Anthropic's
+pricing and deprecation pages (read 2026-10-13) record `claude-opus-4-1-20250805` as deprecated
+2026-06-05 and **retired 2026-08-05**, replacement `claude-opus-4-8`, remaining available only on
+Amazon Bedrock and Google Cloud — neither of which is a v1 adapter under D6. The model name is
+unchanged in `resources/ai/models.json` because nothing in this repository renames a model on its own;
+the entry is marked `review_required` with the finding, its verified price ($15/$75 per MTok) kept as
+evidence, and its context window left `null` because the model's documentation page is gone (so the
+registry falls back to the fail-closed 4096). Consequence: obligation (b) cannot be met for Anthropic
+until the owner either approves a Bedrock/Vertex route or names a different model.
+
+**Finding for Andreas — no EUR conversion policy.** `ModelCapabilities` prices are EUR per million
+tokens and every vendor publishes USD. The artefact records the verified USD figures as evidence and
+leaves the EUR fields `null`, so an external model's `costEur` is honestly `null` and a local model's
+is `0.0`. D7's `max_cost_per_run` and `max_cost_per_day` cannot refuse anything for a real reason until
+a conversion policy exists; that is S2-15's dependency.
+
+**D6 OpenRouter gate — evaluated, outcome post-v1.** The code condition is met (the adapter is generic;
+adding OpenRouter would be a catalogue row plus a binding, with no adapter-specific branch), but the
+rest is not: the frozen fixture schema's `driver` enum does not admit `openrouter`, rows 1–9 have not
+run against a real key, and no D5 evidence record exists for the upstream providers an `only` list
+would name. It therefore ships **post-v1 and is never shown in the UI**, per §1.1.
 
 **Legal / licensing input** — not yet. The D8 table is the inventory; the conclusion belongs to
 Andreas in ADR-007. Engineers do not accept license risk.

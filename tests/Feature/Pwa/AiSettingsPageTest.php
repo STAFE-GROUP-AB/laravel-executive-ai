@@ -39,16 +39,25 @@ it('requires an authenticated user', function (): void {
     get('/settings/ai')->assertRedirect(route('login'));
 });
 
-it('renders screen 5 with nothing preselected and says honestly that no adapter is available yet', function (): void {
+it('renders screen 5 with every bound adapter listed and nothing preselected', function (): void {
     $response = actingAs(PwaFixtures::owner())->get('/settings/ai')->assertOk();
     $html = $response->getContent();
     $xpath = PwaFixtures::xpath($html);
 
+    // S2-13 bound an adapter per v1 driver, so the honest list is now the ADR-004
+    // D6 option set. What must not change is that none of it is chosen for the
+    // owner: §12.3 screen 5 and ai-state.md §4 start from an empty selection,
+    // and a recommended model in resources/ai/models.json is a suggestion, not a
+    // preselection.
     $response->assertSee('Choose AI')
         ->assertSee('data-ai-preselected="none"', false)
         ->assertSee('data-ai-option="skip"', false)
-        ->assertSee('data-ai-option-none', false)
-        ->assertSee('No AI provider adapter is bound in this build yet')
+        ->assertSee('data-ai-option="ollama"', false)
+        ->assertSee('data-ai-option="lmstudio"', false)
+        ->assertSee('data-ai-option="openai"', false)
+        ->assertSee('data-ai-option="anthropic"', false)
+        ->assertSee('data-ai-option="custom"', false)
+        ->assertDontSee('data-ai-option-none', false)
         ->assertSee('No provider is selected.')
         ->assertDontSee('AI ready')
         ->assertDontSee('data-ai-select', false);
@@ -57,16 +66,27 @@ it('renders screen 5 with nothing preselected and says honestly that no adapter 
         ->and($xpath->query('//*[@checked]')->length)->toBe(0)
         ->and($xpath->query('//*[@aria-checked="true"]')->length)->toBe(0)
         ->and($xpath->query('//*[@aria-selected="true"]')->length)->toBe(0)
-        ->and($xpath->query('//*[@data-ai-option][not(@data-ai-option="skip")]')->length)->toBe(0)
         ->and(PwaFixtures::aiOnPhoneClaims($html))->toBe([]);
 });
 
+it('still says honestly that nothing can be chosen when no adapter is bound', function (): void {
+    app()->instance(SupportedProviders::class, new SupportedProviders(app(), []));
+
+    actingAs(PwaFixtures::owner())->get('/settings/ai')->assertOk()
+        ->assertSee('data-ai-option-none', false)
+        ->assertSee('No AI provider adapter is bound in this build yet')
+        ->assertSee('data-ai-preselected="none"', false);
+});
+
 it('lists only providers whose adapter is both flagged available and bound, still with nothing preselected', function (): void {
-    app()->bind(SupportedProviders::adapterBinding('ollama'), fn (): stdClass => new stdClass);
+    // `gemini` and `openrouter` are ADR-004 D6's post-v1 providers: neither has a
+    // bound adapter in this build, which is what makes them the honest subjects
+    // for "flagged but not bound" and "bound but not flagged".
+    app()->bind(SupportedProviders::adapterBinding('openrouter'), fn (): stdClass => new stdClass);
     app()->instance(SupportedProviders::class, new SupportedProviders(app(), [
         new ProviderDescriptor('ollama', 'Ollama', ProviderKind::Local, 'ollama', adapterAvailable: true),
-        new ProviderDescriptor('anthropic', 'Anthropic', ProviderKind::Remote, 'anthropic', adapterAvailable: true),
-        new ProviderDescriptor('openai', 'OpenAI', ProviderKind::Remote, 'openai', adapterAvailable: false),
+        new ProviderDescriptor('gemini', 'Gemini', ProviderKind::Remote, 'openai-compatible', adapterAvailable: true),
+        new ProviderDescriptor('openrouter', 'OpenRouter', ProviderKind::Remote, 'openai-compatible', adapterAvailable: false),
     ]));
 
     $response = actingAs(PwaFixtures::owner())->get('/settings/ai')->assertOk();
@@ -75,8 +95,8 @@ it('lists only providers whose adapter is both flagged available and bound, stil
     $response->assertSee('data-ai-option="ollama"', false)
         ->assertSee('data-ai-kind="local"', false)
         ->assertSee('Runs on your Mac. Nothing is sent to a provider.')
-        ->assertDontSee('data-ai-option="anthropic"', false)
-        ->assertDontSee('data-ai-option="openai"', false)
+        ->assertDontSee('data-ai-option="gemini"', false)
+        ->assertDontSee('data-ai-option="openrouter"', false)
         ->assertDontSee('data-ai-option-none', false)
         ->assertSee('data-ai-preselected="none"', false);
 
@@ -108,7 +128,8 @@ it('renders in Swedish from the same keys', function (): void {
         ->assertSee('Välj AI')
         ->assertSee('AI-konfiguration krävs')
         ->assertSee('Fortsätt utan AI')
-        ->assertSee('Ingen AI-adapter är inkopplad')
+        ->assertSee('Körs på din Mac. Inget skickas till någon leverantör.')
+        ->assertSee('Ditt eget konto och din egen API-nyckel.')
         ->assertDontSee('AI redo')
         ->assertDontSee('AI ready');
 });

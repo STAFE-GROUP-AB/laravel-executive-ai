@@ -64,10 +64,17 @@ time — it flips to `true` in the PR that lands a bound `AiProviderAdapter` for
 | Copy | `lang/en/ai.php`, `lang/sv/ai.php` `providers` | `SupportedProvidersTest` — keys equal the catalogue ids |
 
 `SupportedProviders::supported()` returns the rows whose flag is true **and** whose adapter is
-actually bound under `AiProviderAdapter::class.'@'.$id`; today that is empty, and both the PWA
-page and the installer say so instead of listing anything. Sprint 2 lands an adapter by (1) binding
-it under that abstract, (2) flipping the fixture flag, (3) nothing else — both mirrors and both
-tests then force the two sides to agree in the same PR.
+actually bound under `AiProviderAdapter::class.'@'.$id`. An adapter lands by (1) binding it under that
+abstract, (2) flipping the fixture flag, (3) nothing else — both mirrors and both tests then force the
+two sides to agree in the same PR.
+
+**S2-13 did exactly that for all five rows.** `App\Providers\AiServiceProvider` binds a
+`LaravelAiAdapter` per catalogue id and the flag is now true in the fixture, the PHP mirror and the
+Swift mirror; the binding is lazy, so "an adapter exists in this build" is answered without needing a
+URL or a Keychain key the owner may not have supplied yet. With no adapter bound at all — a build that
+lost the bindings, or a future row added ahead of its adapter — both the PWA page and the installer
+still say so instead of listing anything, and that branch keeps its own test on each side. See
+[ai-providers.md](ai-providers.md) §7.
 
 The catalogue is ADR-004 D1/D6: local `ollama` and `openai-compatible` (LM Studio, custom
 endpoints), external `openai` and `anthropic`. Gemini and OpenRouter from §1.1 are not in v1 and

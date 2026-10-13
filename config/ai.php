@@ -1,5 +1,37 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| laravel/ai 1.2.0 — the two shipped defaults we override (ADR-004 D1)
+|--------------------------------------------------------------------------
+|
+| This is the SDK's published configuration with two deliberate changes,
+| both of which exist because the shipped values would quietly pick a brand
+| for the owner (§4 brand neutrality):
+|
+| 1. Every `default*` key below is `'unconfigured'`, a provider name that is
+|    never defined. The package ships `'default' => 'openai'`, so a code path
+|    that forgot to pass a provider would silently call OpenAI with whatever
+|    `OPENAI_API_KEY` happened to be in the environment. With an undefined
+|    name the same mistake throws, which is what we want to find in CI.
+| 2. No provider entry carries a `models` key, so nothing can fall back to a
+|    driver's hard-coded default model — `OllamaProvider::defaultTextModel()`
+|    returns a hard-coded name when unconfigured. Our adapter always passes an
+|    explicit model and `AiRequest` cannot be constructed without one
+|    (contract matrix row 12).
+|
+| The provider entries themselves are unused at runtime: a provider is built
+| on demand by `App\AI\Providers\LaravelAi\LaravelAiAdapterFactory` with its
+| key read from the Keychain at call time, never from `env()` (ADR-003). They
+| stay here so the SDK's own commands and a developer's `php artisan tinker`
+| see the package's expected shape.
+|
+| The SDK's `agent_conversations` migration is never published or run:
+| conversation and memory are app-owned (§4, ADR-004 D1), and a contract test
+| proves prompting works with that table absent (matrix row 11).
+|
+*/
+
 return [
 
     /*
