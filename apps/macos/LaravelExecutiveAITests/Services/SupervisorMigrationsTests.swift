@@ -436,3 +436,138 @@ final class SupervisorMigrationsTests: XCTestCase {
         )
     }
 }
+
+// MARK: - The broker must know the one-shot (field failure, 2026-10-13)
+
+/// The first install on real hardware failed here, and nothing in CI could have shown it.
+///
+/// The migration one-shot asks the secrets broker for `APP_KEY` as it boots, exactly as the core
+/// does. The broker refuses a peer the Supervisor did not spawn (`SecretsBroker`, ADR-003 D3.2)
+/// and reads the set of spawned pids from `PidRegistry`. That set was fed **only** by the
+/// supervisor's status observer — the three long-lived children — so the one-shot's pid was in it
+/// at no point. The Supervisor's own log recorded the whole sequence in two seconds:
+///
+///     applying database migrations
+///     secrets peer rejected
+///     boot preparation failed: The database migrations did not finish (exited with status 1)
+///
+/// These cover the mechanism that was missing. What they cannot cover is the broker accepting the
+/// peer end to end, which needs a real process tree and a real signed binary — it is on the
+/// hardware list in `services.md` §10.
+extension SupervisorMigrationsTests {
+    /// A runnable script under the per-test root; same permissions the simulated runtime gets.
+    fileprivate func writeExecutable(named name: String, body: String) throws -> URL {
+        let url = root.appending(path: name)
+        try Data(body.utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+
+        return url
+    }
+
+    /// The defect itself: `update` replaces the supervised set, so a one-shot sharing it would be
+    /// evicted by the next status change. Two sets, one answer.
+    func testAOneShotStaysAdmittedWhenTheSupervisedSetIsRepublished() {
+        let registry = PidRegistry()
+        registry.update([101, 102])
+        registry.addTransient(900)
+
+        XCTAssertTrue(registry.current.contains(900), "the one-shot is admitted while it runs")
+
+        // What the supervisor's observer does on every status change.
+        registry.update([101, 102, 103])
+
+        XCTAssertTrue(
+            registry.current.contains(900),
+            "republishing the supervised children must not evict a one-shot that is still running"
+        )
+        XCTAssertEqual(registry.current, [101, 102, 103, 900])
+
+        registry.removeTransient(900)
+        XCTAssertFalse(registry.current.contains(900), "and it is gone the moment it exits")
+        XCTAssertEqual(registry.current, [101, 102, 103])
+    }
+
+    /// Registering must happen before the child can act on it, and must be undone on every exit
+    /// path. `onSpawn` fires inside the launch; the `defer` releases whatever it got.
+    func testAChildIsAdmittedBeforeItRunsAndReleasedAfterItLeaves() async throws {
+        let registry = PidRegistry()
+        let handle = PidHandle()
+        let script = try writeExecutable(named: "one-shot.sh", body: "#!/bin/sh\nexit 0\n")
+        let admitted = LockedBox<Bool>(false)
+
+        let child = ChildProcess(
+            spec: OneShotSpec(
+                logName: "probe",
+                executable: script,
+                arguments: [],
+                workingDirectory: root,
+                environment: [:]
+            ),
+            log: CapturingLogSink(),
+            onSpawn: { pid in
+                registry.addTransient(pid)
+                handle.remember(pid)
+                admitted.set(registry.current.contains(pid))
+            }
+        )
+
+        defer { handle.release(from: registry) }
+
+        let exit = try await child.run(timeout: .seconds(10))
+
+        XCTAssertEqual(exit.reason, .exited(status: 0))
+        XCTAssertTrue(admitted.value, "the pid is in the registry before the process can use it")
+
+        handle.release(from: registry)
+        XCTAssertTrue(registry.current.isEmpty, "and released once it has left")
+    }
+
+    /// A spawn that never happens must not leave a pid behind, and must not crash the release.
+    func testAChildThatCannotStartLeavesNothingRegistered() async {
+        let registry = PidRegistry()
+        let handle = PidHandle()
+
+        let child = ChildProcess(
+            spec: OneShotSpec(
+                logName: "missing",
+                executable: root.appending(path: "does-not-exist"),
+                arguments: [],
+                workingDirectory: root,
+                environment: [:]
+            ),
+            log: CapturingLogSink(),
+            onSpawn: { pid in
+                registry.addTransient(pid)
+                handle.remember(pid)
+            }
+        )
+
+        do {
+            _ = try await child.run(timeout: .seconds(5))
+            XCTFail("a missing executable must throw")
+        } catch {
+            // expected
+        }
+
+        handle.release(from: registry)
+        XCTAssertTrue(registry.current.isEmpty)
+    }
+}
+
+/// A `Sendable` box for a value an `@Sendable` closure writes and the test reads.
+private final class LockedBox<Value: Sendable>: Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var stored: Value
+
+    init(_ value: Value) {
+        stored = value
+    }
+
+    func set(_ value: Value) {
+        lock.withLock { stored = value }
+    }
+
+    var value: Value {
+        lock.withLock { stored }
+    }
+}
