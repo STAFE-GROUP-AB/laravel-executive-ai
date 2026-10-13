@@ -269,7 +269,10 @@ export function assembleRuntime({ binary, app, version, out, manifest: manifestP
 
     copyFile(binary, join(directory, EXECUTABLE_NAME), 0o755);
 
-    for (const name of ['Caddyfile', 'php.ini']) {
+    // `php` is the shim Laravel's own subprocesses go through: `php_binary()` resolves to the
+    // FrankenPHP binary, which has no `artisan` subcommand, so every scheduled command failed
+    // until `PHP_BINARY` pointed here. Executable, unlike the two configuration files.
+    for (const name of ['Caddyfile', 'php.ini', 'php']) {
         const template = join(templatesDir, name);
         const text = readFileSync(template, 'utf8');
 
@@ -278,7 +281,7 @@ export function assembleRuntime({ binary, app, version, out, manifest: manifestP
             fail(`${name} contains an unrendered placeholder or an absolute user path`);
         }
 
-        copyFile(template, join(directory, name), 0o644);
+        copyFile(template, join(directory, name), name === 'php' ? 0o755 : 0o644);
     }
 
     for (const rel of appFiles) {
@@ -286,7 +289,7 @@ export function assembleRuntime({ binary, app, version, out, manifest: manifestP
         copyFile(source, join(directory, 'app', ...rel.split('/')), rel === 'artisan' ? 0o755 : 0o644);
     }
 
-    const paths = [EXECUTABLE_NAME, 'Caddyfile', 'php.ini', ...appFiles.map((rel) => `app/${rel}`)].sort();
+    const paths = [EXECUTABLE_NAME, 'Caddyfile', 'php.ini', 'php', ...appFiles.map((rel) => `app/${rel}`)].sort();
     const files = paths.map((path) => {
         const full = join(directory, ...path.split('/'));
 

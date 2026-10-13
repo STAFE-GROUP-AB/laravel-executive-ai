@@ -85,6 +85,14 @@ final class SupervisorMigrationsTests: XCTestCase {
             XCTAssertEqual(migrations.environment, service.environment, "\(service.name) and the one-shot must share one environment")
         }
 
+        // Laravel's own subprocesses resolve their PHP through PHP_BINARY. Without this they
+        // spawn `frankenphp artisan <command>`, which is not a FrankenPHP subcommand, and every
+        // scheduled command dies — the field failure behind `brief_placeholder`, `auth_login` and
+        // `scheduler_selftest` never going green (2026-10-13).
+        let shim = try XCTUnwrap(migrations.environment["PHP_BINARY"], "PHP_BINARY is set for every child")
+        XCTAssertTrue(shim.hasSuffix("/php"), "it points at the runtime's php shim: \(shim)")
+        XCTAssertEqual(shim, migrations.environment["LEA_RUNTIME_DIR"].map { "\($0)/php" }, "inside this runtime version")
+
         for value in migrations.environment.values {
             XCTAssertFalse(value.hasPrefix("base64:"), "no APP_KEY in the environment")
 

@@ -200,6 +200,17 @@ test('Caddyfile and php.ini are static: loopback only, env placeholders, no path
     assert.match(caddy, /persist_config off/);
     assert.doesNotMatch(caddy, /\{\{[A-Z_]+\}\}|\/Users\/|:8787|0\.0\.0\.0|tls /);
 
+    // The shim Laravel's own subprocesses go through: without it `php_binary()` resolves to the
+    // FrankenPHP binary, which has no `artisan` subcommand, and every scheduled command dies.
+    const shim = join(directory, 'php');
+    assert.ok(existsSync(shim), 'the runtime ships a php shim');
+    assert.equal(statSync(shim).mode & 0o777, 0o755, 'and it is executable');
+
+    const shimText = readFileSync(shim, 'utf8');
+    assert.match(shimText, /php-cli -r/, 'it goes through php-cli');
+    assert.match(shimText, /LEA_RUNTIME_DIR/, 'and resolves the binary from the environment');
+    assert.doesNotMatch(shimText, /\/Users\/|\/home\//, 'with no absolute user path baked in');
+
     assert.match(ini, /^opcache\.enable = 1$/m);
     assert.match(ini, /^opcache\.jit = disable$/m);
     assert.match(ini, /^opcache\.validate_timestamps = 0$/m);
