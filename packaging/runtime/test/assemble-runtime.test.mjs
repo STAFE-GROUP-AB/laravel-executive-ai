@@ -195,7 +195,7 @@ test('Caddyfile and php.ini are static: loopback only, env placeholders, no path
 
     assert.match(caddy, /bind 127\.0\.0\.1/);
     assert.match(caddy, /http:\/\/127\.0\.0\.1:\{\$LEA_HTTP_PORT\}/);
-    assert.match(caddy, /root \* \{\$LEA_RUNTIME_DIR\}\/app\/public/);
+    assert.match(caddy, /root \* "\{\$LEA_RUNTIME_DIR\}\/app\/public"/);
     assert.match(caddy, /admin off/);
     assert.match(caddy, /persist_config off/);
     assert.doesNotMatch(caddy, /\{\{[A-Z_]+\}\}|\/Users\/|:8787|0\.0\.0\.0|tls /);
@@ -207,6 +207,21 @@ test('Caddyfile and php.ini are static: loopback only, env placeholders, no path
     assert.match(ini, /^expose_php = Off$/m);
     assert.match(ini, /^display_errors = Off$/m);
     assert.doesNotMatch(ini, /\/Users\/|APP_KEY|password|token|\{\{/i);
+
+    // Every path-valued variable must be quoted. `LEA_RUNTIME_DIR` expands to a path under
+    // `~/Library/Application Support/`, which contains a space, and the Caddyfile parser splits an
+    // unquoted token on whitespace: `root * {$LEA_RUNTIME_DIR}/app/public` was read as three
+    // arguments, `adapt` refused the file, and the core exited straight after "using config from
+    // file" with nothing else in its log — restarted on the backoff forever (2026-10-13, on the
+    // owner's Mac). No other test could show it, because they all run under temporary directories
+    // whose paths have no spaces, which is exactly why this one is a *shape* assertion.
+    for (const match of caddy.matchAll(/\{\$(LEA_[A-Z_]*(?:DIR|PATH|FILE|ROOT))\}/g)) {
+        const line = caddy.slice(0, match.index).split('\n').pop() + caddy.slice(match.index).split('\n')[0];
+        assert.ok(
+            /"[^"\n]*\{\$LEA_[A-Z_]+\}[^"\n]*"/.test(line),
+            `${match[1]} expands to a path that may contain a space, so it must be quoted: ${line.trim()}`
+        );
+    }
 
     assert.equal(caddy, readFileSync(join(RUNTIME_DIR, 'templates', 'Caddyfile'), 'utf8'));
     assert.equal(ini, readFileSync(join(RUNTIME_DIR, 'templates', 'php.ini'), 'utf8'));

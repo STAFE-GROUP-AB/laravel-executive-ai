@@ -10,6 +10,16 @@
 #
 # There are deliberately no defaults: a missing variable makes Caddy refuse to start, and the
 # Supervisor reports that, instead of the server quietly binding somewhere unexpected.
+#
+# LEA_RUNTIME_DIR is quoted wherever it is used, and must stay quoted. It expands to a path
+# under `~/Library/Application Support/`, which contains a space, and the Caddyfile parser
+# splits an unquoted token on whitespace. Unquoted it was read as three arguments:
+#
+#   parsing caddyfile tokens for 'root': too many arguments; should only be a matcher and a path
+#
+# The core then exited straight after "using config from file" with nothing else in its log, and
+# the Supervisor restarted it on the backoff forever (the owner's core.log, 2026-10-13). No test
+# could show it: they all run under temporary directories whose paths have no spaces.
 
 {
 	admin off
@@ -27,7 +37,7 @@
 
 http://127.0.0.1:{$LEA_HTTP_PORT} {
 	bind 127.0.0.1
-	root * {$LEA_RUNTIME_DIR}/app/public
+	root * "{$LEA_RUNTIME_DIR}/app/public"
 	encode zstd gzip
 	header {
 		-Server
