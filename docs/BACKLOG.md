@@ -1218,7 +1218,8 @@ except the application key when data is kept" — but it is H's call with A, and
 this item merges rather than discovered afterwards.
 
 Create `app/Models/Concerns/EncryptsSensitiveAttributes.php`, the casts on the named models,
-`app/Security/Secrets/AppKeyRotation.php` (ADR-003 D8's queued re-encryption job),
+`app/Security/Secrets/AppKeyRotation.php` (ADR-003 D8's re-encryption pass — **not** a queued
+job: it is tenant-wide maintenance under `authorization.md` §10, serialised by a cache lock, #127),
 `tests/Security/EncryptedAttributeInventoryTest.php`, `tests/Security/AppKeyRotationTest.php`. Extend
 `docs/architecture/data-model.md`, `docs/operations/uninstall.md` and `docs/OPEN-QUESTIONS.md` **A25**.
 
@@ -1227,7 +1228,7 @@ Create `app/Models/Concerns/EncryptsSensitiveAttributes.php`, the casts on the n
 - [ ] `EncryptedAttributeInventoryTest` enumerates every `encrypted:` cast under `app/Models/` and fails on
       one absent from the documented inventory, so ADR-003 D8's re-encryption job can never fall behind the
       casts; the same test fails on an `encrypted:` cast added by any item other than this one.
-- [ ] `AppKeyRotationTest` proves the queued rotation re-encrypts every inventoried attribute and that a row
+- [ ] `AppKeyRotationTest` proves the rotation pass re-encrypts every inventoried attribute and that a row
       written under a `previous[]` key still decrypts (ADR-003 D8, E35).
 - [ ] No cast holds a token, password, key or verifier (ADR-003 D1, Forbidden 1) — asserted by an arch test
       over the inventory, not by review.
