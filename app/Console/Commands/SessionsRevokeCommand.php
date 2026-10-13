@@ -12,7 +12,8 @@ use Illuminate\Console\Command;
  * `lea:sessions:revoke {user}` ends every session of a user server-side;
  * the user is signed out on their next request. `{user}` is a ULID or an
  * email address. The Mac app's "sign out everywhere" calls this through the
- * Supervisor; E2-3 adds the per-device variant.
+ * Supervisor; the per-device variant is the PWA's Devices page (S2-05,
+ * `App\Security\Authorization\Devices\DeviceRegistry`).
  */
 class SessionsRevokeCommand extends Command
 {

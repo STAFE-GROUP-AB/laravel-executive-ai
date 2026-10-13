@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Livewire\Auth;
 
+use App\Models\PasskeyCredential;
 use App\Models\User;
 use App\Security\Audit\AuditLog;
 use App\Security\Authorization\CreateOwner;
+use App\Security\Authorization\Devices\DeviceRegistry;
+use App\Security\Authorization\Devices\LoginMethod;
 use App\Security\Authorization\Otp\OtpAutofill;
 use App\Security\Authorization\Otp\OtpIssuer;
 use App\Security\Authorization\Otp\OtpVerification;
 use App\Security\Authorization\Otp\OtpVerifier;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
+use App\Security\Authorization\Passkeys\PasskeysUnavailableException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -21,9 +25,13 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /**
- * /login — two steps, one credential: email, then the six-digit code that
- * was mailed (docs/architecture/auth.md §2). No password field exists. The
- * response to an unknown address is identical to a known one, the send
+ * /login — two credentials, no password (docs/architecture/auth.md §2, §7).
+ * A passkey is the quick path where one is registered for this origin; the
+ * six-digit code that was mailed is the fallback and the recovery path, and
+ * remains the only way in on a device that has no passkey. No password field
+ * exists and `users.password` is never read or written.
+ *
+ * The response to an unknown address is identical to a known one, the send
  * button is disabled client-side while the request is in flight and the
  * issuer reuses a live code server-side, so a double click sends one mail.
  */
@@ -39,6 +47,9 @@ final class Login extends Component
     public string $step = 'email';
 
     public ?string $notice = null;
+
+    /** Set from the browser: false hides the passkey button on a browser that cannot run the ceremony. */
+    public bool $browserSupportsPasskeys = true;
 
     public function mount(CreateOwner $owners, OtpAutofill $autofill): void
     {
@@ -86,11 +97,11 @@ final class Login extends Component
 
         if ($autofill->isActive() && $issued->code() !== null) {
             $this->code = $issued->code();
-            $this->verify(app(OtpVerifier::class), app(AuditLog::class));
+            $this->verify(app(OtpVerifier::class), app(AuditLog::class), app(DeviceRegistry::class));
         }
     }
 
-    public function verify(OtpVerifier $verifier, AuditLog $audit): void
+    public function verify(OtpVerifier $verifier, AuditLog $audit, DeviceRegistry $devices): void
     {
         $this->validate(['code' => ['required', 'digits:'.(int) config('lea.auth.otp.length')]]);
 
@@ -112,12 +123,43 @@ final class Login extends Component
             return;
         }
 
-        Auth::guard('web')->login($user);
-        session()->regenerate();
+        $this->signIn($user, LoginMethod::Otp, $audit, $devices);
+    }
 
-        $audit->record('auth.logged_in', "user:{$user->id}", AuditLog::OUTCOME_OK, 'user', $user->id, ['method' => 'otp', 'ip_address' => request()->ip()]);
+    /** Start the passkey ceremony. The address is a hint only: the reply is the same shape for an unknown one. */
+    public function startPasskey(PasskeyAuthenticator $passkeys): void
+    {
+        $this->resetErrorBag();
 
-        $this->redirectIntended(default: route('home'));
+        try {
+            $this->dispatch('passkey:get', id: $this->getId(), options: $passkeys->authenticationOptions($this->email));
+        } catch (PasskeysUnavailableException) {
+            $this->addError('passkey', __('security.passkeys.errors.unavailable'));
+        }
+    }
+
+    /** @param array<string, mixed> $credential */
+    public function completePasskey(PasskeyAuthenticator $passkeys, AuditLog $audit, DeviceRegistry $devices, array $credential): void
+    {
+        $user = $passkeys->completeAuthentication($credential);
+
+        if ($user === null) {
+            $this->addError('passkey', __('security.passkeys.errors.not_verified'));
+
+            return;
+        }
+
+        $this->signIn($user, LoginMethod::Passkey, $audit, $devices);
+    }
+
+    public function passkeyFailed(string $reason): void
+    {
+        $this->addError('passkey', __('security.passkeys.errors.browser', ['reason' => preg_replace('/[^A-Za-z]/', '', $reason) ?? '']));
+    }
+
+    public function passkeySupportReported(bool $supported): void
+    {
+        $this->browserSupportsPasskeys = $supported;
     }
 
     public function changeEmail(): void
@@ -130,9 +172,26 @@ final class Login extends Component
 
     public function render(PasskeyAuthenticator $passkeys): View
     {
+        $status = $passkeys->status();
+
         return view('livewire.auth.login', [
-            'passkeys' => $passkeys->status(),
+            'passkeys' => $status,
+            'offerPasskey' => $status->available
+                && $this->browserSupportsPasskeys
+                && PasskeyCredential::query()->where('rp_id', $status->rpId)->exists(),
             'codeLength' => (int) config('lea.auth.otp.length'),
         ]);
+    }
+
+    private function signIn(User $user, LoginMethod $method, AuditLog $audit, DeviceRegistry $devices): void
+    {
+        Auth::guard('web')->login($user);
+        session()->regenerate();
+
+        $devices->record($user, request(), $method);
+
+        $audit->record('auth.logged_in', "user:{$user->id}", AuditLog::OUTCOME_OK, 'user', $user->id, ['method' => $method->value, 'ip_address' => request()->ip()]);
+
+        $this->redirectIntended(default: route('home'));
     }
 }

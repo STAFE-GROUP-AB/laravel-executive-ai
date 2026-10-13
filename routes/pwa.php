@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Pwa\AiSettingsController;
 use App\Http\Controllers\Pwa\BriefsController;
 use App\Http\Controllers\Pwa\HomeController;
+use App\Http\Controllers\Pwa\SecuritySettingsController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
@@ -36,6 +37,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/briefs/{brief}/parity.json', [BriefsController::class, 'parity'])->name('briefs.parity');
     // S1-11: the "Select AI" banner's target until the deep link into the Mac's SELECT_AI exists.
     Route::get('/settings/ai', AiSettingsController::class)->name('settings.ai');
+
+    // S2-05: passkeys and signed-in devices (docs/architecture/auth.md §5, §7).
+    // Never cached by the service worker, like every page in this file.
+    Route::get('/settings/security', SecuritySettingsController::class)
+        ->middleware('cache.headers:no_store')
+        ->name('settings.security');
 });
 
 // The one page the service worker precaches. No session, so the response never

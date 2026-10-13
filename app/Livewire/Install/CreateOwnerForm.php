@@ -6,6 +6,8 @@ namespace App\Livewire\Install;
 
 use App\Security\Audit\AuditLog;
 use App\Security\Authorization\CreateOwner;
+use App\Security\Authorization\Devices\DeviceRegistry;
+use App\Security\Authorization\Devices\LoginMethod;
 use App\Security\Authorization\OwnerAlreadyExistsException;
 use App\Security\Authorization\OwnerDetails;
 use DateTimeZone;
@@ -41,7 +43,7 @@ final class CreateOwnerForm extends Component
         $this->timezone = (string) config('app.timezone', 'UTC');
     }
 
-    public function create(CreateOwner $createOwner, AuditLog $audit): void
+    public function create(CreateOwner $createOwner, AuditLog $audit, DeviceRegistry $devices): void
     {
         $validated = $this->validate(OwnerDetails::rules());
 
@@ -55,6 +57,8 @@ final class CreateOwnerForm extends Component
 
         Auth::guard('web')->login($created->user);
         session()->regenerate();
+
+        $devices->record($created->user, request(), LoginMethod::OwnerCreation);
 
         $audit->record('auth.logged_in', "user:{$created->user->id}", AuditLog::OUTCOME_OK, 'user', $created->user->id, [
             'method' => 'owner_creation',

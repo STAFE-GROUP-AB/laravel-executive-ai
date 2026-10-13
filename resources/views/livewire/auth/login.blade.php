@@ -4,6 +4,10 @@
     @if($step === 'email')
         <p class="mt-2 text-sm text-secondary">Enter the owner's email address. We will mail a one-time code; there is no password.</p>
 
+        @error('passkey')
+            <p class="mt-4 rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-text" role="alert" data-login-passkey-error>{{ $message }}</p>
+        @enderror
+
         <form wire:submit="sendCode" class="mt-6 space-y-4" novalidate>
             <div>
                 <label for="email" class="block text-sm font-medium text-primary">Email address</label>
@@ -37,6 +41,22 @@
                 <span wire:loading wire:target="sendCode">Sending…</span>
             </button>
         </form>
+
+        @if($offerPasskey)
+            {{-- The quick path where a passkey is registered for this origin. The code above stays the fallback. --}}
+            <div class="mt-6 border-t border-default pt-5" data-login-passkey data-passkeys-rp="{{ $passkeys->rpId }}">
+                <button
+                    type="button"
+                    wire:click="startPasskey"
+                    wire:loading.attr="disabled"
+                    wire:target="startPasskey"
+                    class="inline-flex min-h-touch w-full items-center justify-center rounded-md border border-strong bg-surface px-4 text-md font-medium text-primary hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {{ __('security.passkeys.sign_in') }}
+                </button>
+                <p class="mt-2 text-xs text-muted">{{ __('security.passkeys.sign_in_hint') }}</p>
+            </div>
+        @endif
     @else
         <p class="mt-2 text-sm text-secondary">Enter the {{ $codeLength }}-digit code from the mail we sent to <span class="font-medium text-primary">{{ $email }}</span>.</p>
 
@@ -82,10 +102,4 @@
         </div>
     @endif
 
-    <p class="mt-8 border-t border-default pt-4 text-xs text-muted">
-        {{ $passkeys->message }}.
-        @if($passkeys->trackingUrl)
-            <a href="{{ $passkeys->trackingUrl }}" rel="noopener noreferrer" class="text-accent underline-offset-2 hover:underline">Track progress</a>
-        @endif
-    </p>
 </section>

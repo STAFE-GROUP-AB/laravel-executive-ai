@@ -70,8 +70,27 @@ return [
             'max_attempts' => 5,
             'decay_seconds' => 900,
         ],
+        /*
+        | Passkeys (S2-05, docs/architecture/auth.md §7). `rp.id` is never
+        | configured: it is the host the request arrived on, so a credential
+        | registered on the loopback origin cannot be used on the tailnet one
+        | and the reverse (ADR-006 D3). `ceremony_ttl_seconds` bounds how long
+        | a challenge stays answerable.
+        */
         'passkeys' => [
-            'tracking_issue' => 'https://github.com/STAFE-GROUP-AB/laravel-executive-ai/issues/69',
+            'ceremony_ttl_seconds' => 120,
+        ],
+
+        /*
+        | Re-authentication for critical actions (§11, threat model T-71).
+        | `challenge_ttl_seconds` is how long the owner has to answer a
+        | challenge; `window_seconds` is how long the resulting proof is good
+        | for. A proof is additionally bound to the session, the action and a
+        | single-use nonce, so a merely fresh session never satisfies one.
+        */
+        'reauth' => [
+            'challenge_ttl_seconds' => 300,
+            'window_seconds' => 120,
         ],
     ],
 

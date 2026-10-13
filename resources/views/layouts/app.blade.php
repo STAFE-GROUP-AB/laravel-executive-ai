@@ -43,7 +43,9 @@
                     <p>Signed in as <span class="font-medium break-all text-primary">{{ $shell->email }}</span></p>
                 @endif
                 <p>Privacy mode: <span class="font-medium text-primary">{{ __('brief.privacy_modes.'.$shell->privacyMode) }}</span></p>
-                <p data-passkeys-available="{{ $shell->passkeys->available ? 'true' : 'false' }}">Passkeys: {{ $shell->passkeys->message }}@if($shell->passkeys->trackingUrl !== null) <a href="{{ $shell->passkeys->trackingUrl }}" rel="noopener noreferrer" class="text-accent">(issue)</a>@endif</p>
+                <p data-passkeys-available="{{ $shell->passkeys->available ? 'true' : 'false' }}">
+                    <a href="{{ route('settings.security') }}" class="text-accent underline-offset-2 hover:underline">{{ __('security.settings.nav') }}</a>
+                </p>
                 <p class="text-xs text-muted">Core {{ config('app.version') }}. AI and the scheduler run on your Mac.</p>
                 @if(Route::has('logout'))
                     <form method="post" action="{{ route('logout') }}">
