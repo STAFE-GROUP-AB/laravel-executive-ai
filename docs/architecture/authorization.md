@@ -2,7 +2,7 @@
 
 **Status:** Living document · **Owner:** Workstream H (security/privacy) with B (Laravel platform)
 **Issues:** #88 (S2-06, this page) · #84/#85/#86 (the tables it guards) · #90 (S2-07, the `PolicyGate` for
-tool calls) · #92 (S2-08, approvals)
+tool calls) · #92 (S2-08, approvals) · #127 (the one bounded exception, §10)
 **Source of truth:** `app/Policies/`, `app/Security/Authorization/`
 **Spec:** blueprint §3.1, §4, §5.6 criterion 4, §11 · [ipc-contract §11](ipc-contract.md) ·
 [pwa.md §2](pwa.md#2-routes) · ADR-002 D1/D10 · ADR-003 D7 · ADR-005 D1.6 ·
@@ -58,6 +58,8 @@ applied to the PWA, and `IdorTest` spells out the negative case: `?organization_
 | `App\Security\Authorization\Gates\GatedTool` + `ToolAuthorizer` | a tool declares the ability and the row it wants; the gate decides before it runs |
 | `App\Security\Authorization\Gates\AuthorizationAuditor` | the Gate `after` hook that writes the audit row (§5) |
 | `App\Security\Authorization\Gates\Surface` + `SurfaceContext` | which of the five T-73 paths a decision was made on |
+| `App\Security\Authorization\Maintenance\TenantWideMaintenance` | the marker for the one category with **no user principal** (§10) |
+| `App\Security\Authorization\Maintenance\MaintenanceActor` | that category's audit actor shape, `maintenance:<Operation>` (§10.3) |
 
 Policies are **not** registered in a provider. `App\Models\CRM\Customer` resolves to
 `App\Policies\CRM\CustomerPolicy` by Laravel's own convention, and a convention cannot go stale the
@@ -202,6 +204,7 @@ seen an unguarded surface is not known to recognise one.
 | `tests/Security/AuditCompletenessTest.php` | an `audit_events` row per surface, naming actor, ability and outcome, with a refusal recorded as a refusal | `local` + `cross-account` legs |
 | `tests/Security/TenantRowFactorySelfTest.php` | the sweep's engine can build a real row for every tenant table, so no table drops out of the sweep quietly | `local` |
 | `tests/Security/IpcPolicyArchTest.php` | the `/ipc/` surface (S1-08), unchanged | `local` |
+| `tests/Security/MaintenanceCategoryArchTest.php` | §10: the members of the no-principal category are exactly the enumerated list, none is a user-facing surface, nothing user-facing reaches one, none takes an identity, and each writes a `maintenance:` actor | `local` |
 
 The `cross-account` group runs on both ADR-002 D1 profiles because the tenant boundary is a string
 comparison and a join: MySQL's default collation is case-insensitive where SQLite's `BINARY` is not,
@@ -222,6 +225,8 @@ right on SQLite and wrong on MySQL is a policy that is wrong in production.
 - **A new ability** → add it to `Abilities`, define it in `SurfaceGates` if it is not a policy
   method, and decide whether it is read-only. Anything not listed as read-only is audited on allow,
   which is the safe default.
+- **An operation that has no user at all** → read §10 first. It is a short list, it is closed, and
+  joining it is a reviewed decision rather than an import.
 
 ## 9. What this does not cover
 
@@ -240,3 +245,140 @@ right on SQLite and wrong on MySQL is a policy that is wrong in production.
   provider is **E3-1**; there is no live connector in Sprint 2.
 - **Admin surfaces** (changing a membership, renaming an organization) are **S2-19**. The policies
   refuse those writes today because nothing grants them.
+- **Operations with no user principal at all** are the one exception to §1, and they are bounded
+  rather than uncovered: §10.
+
+## 10. Tenant-wide maintenance — authorised by not being a user action (#127)
+
+§6 says a queued job runs as the person who asked for it and that there is no privileged job
+identity to escalate to. Three operations in this product cannot satisfy that, and none of them is
+a defect:
+
+| Operation | Why no user can own it | Status |
+|---|---|---|
+| **App-key re-encryption** — `App\Security\Secrets\AppKeyRotation`, ADR-003 D8 | `core.app-key` is install-wide, so no dispatcher's memberships describe what the rotation covers; and four of the eight tables it must rewrite (`ai_runs`, `tool_runs`, `source_records`, `memory_sources`) are `APPEND_ONLY` by §3, so `update` is false for them to **every** user by design | **Shipped** (S2-04), the category's first member |
+| **The retention purge** — `app/Security/Retention/` (S2-03) | deletes rows across every tenant on a schedule, with nobody asking; it answers to `data_retention_rules` rather than to a policy, which §3 already says out loud | Not written |
+| **The backup job** — ADR-002 D5 | reads every table, likewise | Not written |
+
+A rotation that honoured the policy would leave the install half under each key. One that overrode
+it would be the privileged job identity §6 exists to prevent. The honest reading is the third one:
+**re-encryption is not a user action at all**, and neither are the other two. They belong with the
+migration that first wrote those columns, which is not a policy surface either.
+
+That is a real category. Until #127 it was an *unnamed* exception — and an unnamed exception is how
+the next author justifies the privileged job identity. So it has a name, a closed membership and a
+test.
+
+### 10.1 The marker
+
+`App\Security\Authorization\Maintenance\TenantWideMaintenance`, an **interface** with one method:
+
+```php
+interface TenantWideMaintenance
+{
+    public function maintenanceOperation(): string;   // the class basename; the trail's name for it
+}
+```
+
+**Why an interface rather than an attribute.** An attribute labels; this marker has to *do* three
+things, and only one of them is labelling.
+
+1. It must make the audit actor a consequence of membership rather than a second convention.
+   `MaintenanceActor::for($this)` takes a `TenantWideMaintenance`, so a member cannot carry the
+   marker and still write `job:…` or `user:…` by hand — the arch test reads the call, and the
+   constructor of the actor string reads the method. With an attribute, the marker and the actor
+   would be two unrelated edits, and the second one would be the one people forget.
+2. It must be visible to the tools that already read this repository structurally.
+   `Tests\Security\Support\PolicySurface::classesImplementing()` — the S2-06 detector — enumerates
+   interfaces today, so the category reuses the reader that already enumerates `GatedTool` and
+   `ShouldQueue` rather than adding a second mechanism. PHPStan sees an interface too; an attribute
+   is invisible to it.
+3. It must be a type, because the rules are about *co-occurrence*: a member may not also be a
+   `ShouldQueue` or a `GatedTool`, and "this class is two contradictory things" is a statement about
+   types.
+
+The cost of an interface is that a member must be a class with an instance. That cost is the
+feature: a member is resolvable from the container, nameable in the trail, and testable.
+
+### 10.2 Membership is enumerated
+
+`tests/Security/MaintenanceCategoryArchTest.php` holds `TENANT_WIDE_MAINTENANCE` — class → the
+reason that class has no user principal — and fails the build when a class under `app/` carries the
+marker and is not on it, or when a listed class no longer carries it. The reason is checked for
+being a sentence rather than a restatement of the class name.
+
+This is the shape `tests/Security/` already uses twice: `IpcPolicyArchTest` pins the IPC pre-owner
+set to exactly one route, and S2-14's `NoSocketTransportArchTest` pins the egress call sites to a
+table of file → reason. The second is the one this follows, because the *reason* column is what a
+reviewer needs when the next entry is proposed: a list of class names says what is exempt, a list of
+reasons says whether the next one belongs.
+
+### 10.3 The audit actor is a distinct shape
+
+A member's `audit_events.actor` is `maintenance:<Operation>` (`MaintenanceActor`), not `job:<Name>`.
+
+Reusing `job:` was the obvious move and is not enough, because **`job:` does not mean "nobody
+asked"**: this repository writes it for paths a person is standing in front of before they have a
+`users.id` — `job:CreateOwnerForm` is a Livewire submit, `job:IpcCreateOwner` a menu-bar click,
+`job:PasskeyLogin` somebody signing in. A reader filtering the trail on `job:` would get a mixture
+of "the system did this on its own" and "a user did this before they had an id", which is exactly
+the distinction T-46 wants kept. `maintenance:` is a shape no user-facing surface produces, so "did
+anything reach every tenant's rows with nobody asking, and when" is one `LIKE 'maintenance:%'`.
+
+The §3.1 `provenance` grammar pinned by `packaging/fixtures/crm/crm.schema.json` is deliberately
+**not** widened to admit `maintenance:`: a maintenance operation never *authors* a business row, so
+admitting it to the authorship grammar would only create the possibility §10.4 forbids. `AuditLog`
+maps a maintenance actor onto `job:<Operation>` with origin `sync` for the provenance object and
+keeps the distinct shape in `actor` — the column that is about who *acted*.
+
+`AuditCompletenessTest` is where this is asserted, alongside the five user surfaces, rather than in
+a second audit test: there is one audit path, and the point of the category is that it is legible in
+the same trail.
+
+### 10.4 What the category may **not** do
+
+**It is not a way to reach tenant data on behalf of a user.** That is the failure mode it would
+otherwise become, and every rule below exists to stop it:
+
+- **A member is unreachable from any user-facing surface.** No route, no Livewire action, no tool,
+  no `ShouldQueue` class may name one; a member may not itself be a `ShouldQueue` job, a
+  `GatedTool`, a Livewire component, or carry `AuthorizesQueuedWork`. A member runs from the
+  scheduler or an artisan command. A PWA admin action may *request* maintenance — write the
+  envelope, set a flag, record the request — but it may not call the pass inline, because then a
+  user has reached every organization's rows through a class no policy is about. (This is why
+  ADR-003 D8's admin rotation action starts a rotation rather than performing one.)
+- **A member takes no identity.** No `auth()`, no `request()`, no `Gate::forUser()`, no `User` or
+  `Request` parameter. A member that needs to know who asked is a user action and belongs behind a
+  policy. The category is authorised by there being *no* principal, not by outranking one.
+- **A member does not narrow itself to one organization.** "Tenant-wide" is the justification: an
+  operation that touches one tenant's rows has a tenant, therefore has members, therefore has a
+  policy.
+- **A member returns no tenant data to a caller.** Counts, table and column names, outcomes — what
+  `AppKeyRotation::handle()` returns and what its audit row carries.
+- **The marker authorises no ability.** It is not a bypass of `BusinessObjectPolicy` and not a
+  `before()` hook by another route (§1.1): it is the statement that no policy applies because there
+  is no principal for one to be about. Nothing calls the Gate on a member's behalf.
+
+Every bullet above is a test in `MaintenanceCategoryArchTest`, and the rules are proved against
+`tests/Security/Support/Surfaces/UnboundedMaintenancePass.php` — a fixture that carries the marker
+and breaks all of them — on the same principle as §7.1's unguarded fixtures: a rule that has never
+seen a violation is not known to recognise one.
+
+### 10.5 For the authors of the purge and the backup
+
+The purge (S2-03) and the backup (ADR-002 D5) are **not** retrofitted here; they are not written.
+When they are:
+
+1. implement `TenantWideMaintenance` and return the class basename;
+2. add the class to `TENANT_WIDE_MAINTENANCE` with the reason it has no user principal — not what it
+   does;
+3. write every audit row with `MaintenanceActor::for($this)`;
+4. drive it from the scheduler or an artisan command, and from nothing else;
+5. read §10.4. If the operation needs to know who asked, it is not a member — it is a user action,
+   and the answer is a policy.
+
+The purge has one wrinkle worth stating in advance: §3 already says `forceDelete` is refused to
+everybody on every table, *and* that erasure is the retention job's. Those are consistent precisely
+because the purge is a §10 member — it does not force-delete as a user with a very strong role, it
+deletes as an operation no user is behind. Writing it as a `ShouldQueue` job with a service account
+would be the privileged identity, under a new name.

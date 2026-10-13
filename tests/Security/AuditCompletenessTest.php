@@ -21,7 +21,11 @@ use App\Security\Authorization\Gates\Surface;
 use App\Security\Authorization\Gates\SurfaceContext;
 use App\Security\Authorization\Gates\TenantRowGuard;
 use App\Security\Authorization\Gates\ToolAuthorizer;
+use App\Security\Authorization\Maintenance\MaintenanceActor;
+use App\Security\Authorization\Maintenance\TenantWideMaintenance;
 use App\Security\Authorization\OwnerAbilities;
+use App\Security\Secrets\AppKeyRotation;
+use App\Support\Data\ProvenanceOrigin;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Database\Eloquent\Model;
@@ -65,6 +69,15 @@ uses(DatabaseTransactions::class);
 | ULID. Never a payload, never brief content, never an image path (ADR-003 D7
 | row 8); the last two cases in this file assert that, and `AuditNoBlobTest`
 | keeps the table itself free of blob and path columns.
+|
+| **The sixth actor shape (#127).** Those five surfaces all have a user. One
+| category deliberately does not — tenant-wide maintenance, authorised by not
+| being a user action (`TenantWideMaintenance`,
+| `docs/architecture/authorization.md` §10). Its rows land in the same table, so
+| they are asserted here rather than in a second audit test: a trail in which
+| "the system did this with nobody asking" cannot be told from "a user did this"
+| answers the wrong question, and that distinction is the whole reason the
+| category has its own actor shape instead of reusing `job:`.
 |
 */
 
@@ -430,6 +443,80 @@ it('still records the refusal when the subject has a class name no column could 
         ->and($event->subject_type)->not->toContain("\0")
         ->and($event->organization_id)->toBeNull('an unsaved row names no tenant: the column is a foreign key');
 })->group('security', 'cross-account');
+
+it('records a tenant-wide maintenance pass as the system, with no user in the row', function (): void {
+    // The one operation in the category today (ADR-003 D8): it rewrites every
+    // organization's ciphertext because the key is install-wide, and nobody asked
+    // for it. `AppKeyRotation` is driven directly here, exactly as the scheduler
+    // would — there is no surface to call it from, which is §10.4's point.
+    app(AppKeyRotation::class)->handle('audit_completeness');
+
+    $event = AuditEvent::query()->where('action', 'secrets.app_key.reencrypted')->latest('occurred_at')->firstOrFail();
+    $actor = (string) $event->actor;
+
+    expect($actor)->toBe(MaintenanceActor::PREFIX.'AppKeyRotation', 'a maintenance pass names the operation, not a person')
+        ->and(MaintenanceActor::isMaintenance($actor))->toBeTrue()
+        ->and(MaintenanceActor::operationOf($actor))->toBe('AppKeyRotation')
+        ->and($actor)->not->toStartWith('user:', 'nobody asked for this, so no user may be on the row')
+        ->and($actor)->not->toStartWith('job:', '`job:` is also what a pre-identity user action writes (job:CreateOwnerForm); it cannot carry this distinction')
+        ->and($event->organization_id)->toBeNull('a tenant-wide pass is about no single organization');
+
+    // The §3.1 provenance grammar pinned by crm.schema.json stays pinned: a
+    // maintenance pass authors no business row, so `maintenance:` is deliberately
+    // not admitted there (see MaintenanceActor). The provenance object names it as
+    // a job with origin `sync` — nobody asked, which `manual` would claim — while
+    // `actor`, the column about who *acted*, carries the distinct shape.
+    $provenance = $event->provenance ?? [];
+
+    expect($provenance['actor'] ?? null)->toBe('job:AppKeyRotation')
+        ->and($provenance['origin'] ?? null)->toBe(ProvenanceOrigin::Sync->value)
+        ->and((string) ($provenance['actor'] ?? ''))->toMatch('/^(user:[0-7][0-9A-HJKMNP-TV-Z]{25}|job:[A-Za-z][A-Za-z0-9]*|ai:[a-z0-9_-]+\/[A-Za-z0-9._:-]+)$/');
+})->group('security');
+
+it('keeps the system rows and the user rows apart in the same trail', function (): void {
+    // The property the category exists for: one query separates "nobody asked" from
+    // "somebody asked", on the same table, with no second audit path.
+    [$intruder, , , $organizationB] = auditPrincipals();
+
+    $brief = BriefFixtures::import('canonical', $organizationB);
+
+    actingAs($intruder)->get('/briefs/'.$brief->getKey())->assertForbidden();
+
+    app(AppKeyRotation::class)->handle('audit_completeness');
+
+    $maintenance = AuditEvent::query()->where('actor', 'like', MaintenanceActor::PREFIX.'%')->get();
+    $user = AuditEvent::query()->where('actor', 'like', 'user:%')->get();
+
+    expect($maintenance)->not->toBeEmpty('the maintenance pass left no row')
+        ->and($user)->not->toBeEmpty('the user refusal left no row')
+        ->and($maintenance->pluck('id')->intersect($user->pluck('id'))->all())->toBe([], 'a row is one or the other, never both');
+
+    foreach ($maintenance as $event) {
+        expect(MaintenanceActor::isMaintenance((string) $event->actor))->toBeTrue()
+            ->and($event->action)->not->toStartWith(AuthorizationAuditor::ACTION_PREFIX, 'a maintenance pass runs no policy check, so it writes no authz row');
+    }
+
+    // And every actor in the table belongs to exactly one of the four shapes, so a
+    // fifth cannot appear without this failing.
+    foreach (AuditEvent::query()->get() as $event) {
+        expect((string) $event->actor)->toMatch('/^(user:|job:|maintenance:|guest$)/', 'an audit actor outside the grammar is an actor nobody can filter on');
+    }
+})->group('security');
+
+it('refuses to let a maintenance operation name itself a user', function (): void {
+    // The actor column is the one thing that distinguishes the system from a
+    // person, so the member whose honesty it records must not be able to write it
+    // freely. `MaintenanceActor` accepts a bare identifier and nothing else.
+    $impostor = new class implements TenantWideMaintenance
+    {
+        public function maintenanceOperation(): string
+        {
+            return 'user:01M4JGMWH02GAABCPY27KT2DQK';
+        }
+    };
+
+    expect(fn (): string => MaintenanceActor::for($impostor))->toThrow(InvalidArgumentException::class);
+})->group('security');
 
 it('leaves no binary or path column for an authorization row to hide in', function (): void {
     // The complement of the context assertions above: the shape of the table

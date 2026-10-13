@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Security\Audit;
 
 use App\Models\AuditEvent;
+use App\Security\Authorization\Maintenance\MaintenanceActor;
 use App\Security\Secrets\Redactor;
 use App\Support\Data\Provenance;
 use App\Support\Data\ProvenanceOrigin;
@@ -18,7 +19,13 @@ use Carbon\CarbonImmutable;
  * second layer, not the design.
  *
  * Actor grammar is the §3.1 provenance grammar: `user:<ulid>` for a person,
- * `job:<Name>` for a process (an artisan command, a scheduler entry).
+ * `job:<Name>` for a process (an artisan command, a scheduler entry), plus
+ * `maintenance:<Operation>` for the one category that has **no user principal
+ * at all** (`MaintenanceActor`, issue #127). That fourth shape exists because
+ * `job:` does not mean "nobody asked": this repository writes `job:` for paths
+ * a person is standing in front of before they have a `users.id`
+ * (`job:CreateOwnerForm`, `job:IpcCreateOwner`), so filtering the trail on it
+ * would mix the two facts T-46 wants kept apart.
  */
 final class AuditLog
 {
@@ -109,6 +116,18 @@ final class AuditLog
     {
         if (str_starts_with($actor, 'user:')) {
             return Provenance::user(substr($actor, 5));
+        }
+
+        // A tenant-wide maintenance pass authors no business row, so the §3.1
+        // provenance grammar pinned by `crm.schema.json` is deliberately not
+        // widened to admit `maintenance:` — see MaintenanceActor. The provenance
+        // object names the operation as a job with origin `sync` (nobody asked
+        // for it, which `manual` would claim); `actor` carries the distinct
+        // shape, and that column is where the distinction belongs.
+        $operation = MaintenanceActor::operationOf($actor);
+
+        if ($operation !== null) {
+            return Provenance::job($operation, ProvenanceOrigin::Sync);
         }
 
         $jobName = str_starts_with($actor, 'job:') ? substr($actor, 4) : $actor;

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Security\Secrets;
 
 use App\Security\Audit\AuditLog;
+use App\Security\Authorization\Maintenance\MaintenanceActor;
+use App\Security\Authorization\Maintenance\TenantWideMaintenance;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
@@ -31,12 +33,9 @@ use Illuminate\Support\Facades\Cache;
  *     fallback the encrypter makes for ciphertext. A rotation interrupted half-way
  *     therefore leaves lookups correct rather than leaves rows invisible.
  *
- * ## Why this is not a `ShouldQueue` job yet — tracked as #127, not an oversight
+ * ## Why this is not a `ShouldQueue` job — settled by #127, not deferred
  *
- * ADR-003 D8 says the re-encryption runs "in a queued job", and that is still the
- * intent. It is **not** implemented as one here because S2-06 (#88) landed a rule that
- * this operation cannot satisfy, and the collision needs a decision rather than a
- * workaround. `tests/Security/PolicySurfaceArchTest.php` requires every `ShouldQueue`
+ * `tests/Security/PolicySurfaceArchTest.php` (S2-06, #88) requires every `ShouldQueue`
  * class that reaches tenant data to use `AuthorizesQueuedWork` and run **as the user
  * that dispatched it** — deliberately, because "there is no privileged job identity to
  * escalate to" (that trait's own words, threat model T-73).
@@ -53,27 +52,22 @@ use Illuminate\Support\Facades\Cache;
  *    up half under each key. A rotation that overrode it would be the privileged job
  *    identity S2-06 exists to prevent.
  *
- * The honest conclusion is that re-encryption is not a user action at all. It belongs
- * to the same category as the S2-04 migration that first wrote these columns: a
- * storage-layer pass triggered by a key change, which is why that migration is not a
- * policy surface either. The **retention purge** (S2-03's `data_retention_rules`) and
- * the **backup job** (ADR-002 D5) will need exactly the same category, so naming it is
- * worth doing once and properly rather than inventing an exception here.
+ * So re-encryption is not a user action at all. It belongs to the same category as the
+ * S2-04 migration that first wrote these columns: a storage-layer pass triggered by a
+ * key change, which is why that migration is not a policy surface either. **#127 names
+ * that category** — `TenantWideMaintenance`, "authorised by not being a user action",
+ * [authorization.md §10](../../../docs/architecture/authorization.md) — and this class is
+ * its first member. ADR-003 D8's "in a queued job" wording is corrected there and in the
+ * ADR; the queue was never what made this safe, the cache lock below is, and it is the
+ * same device D8 already uses to serialise token refreshes.
  *
- * **That is issue #127**, which names the category, gives it a marker whose members an
- * arch test enumerates — so growing the list costs a reviewed decision rather than an
- * import — requires a member to be unreachable from any user-facing surface, gives it
- * its own audit actor shape, and writes down what it may *not* do. S2-04 deliberately
- * does not invent any of that here: an unnamed exception is exactly how the next author
- * would justify the privileged job identity S2-06 exists to prevent.
- *
- * Until #127 lands this class is a plain action: the ADR-003 D8 admin path in the PWA
- * calls it, and `handle()` is what a job will call when there is a sanctioned way to be
- * one. It is a one-line change there and nothing here moves. Nothing about the behaviour or the tests changes when that happens —
- * `tests/Security/AppKeyRotationTest.php` already drives it directly. The
- * one-at-a-time guarantee that `ShouldBeUnique` would have given is kept by the cache
- * lock below, which is the same device ADR-003 D8 already uses to serialise token
- * refreshes.
+ * Carrying the marker is not a licence. `tests/Security/MaintenanceCategoryArchTest.php`
+ * holds this class to it: no route, Livewire action, tool or `ShouldQueue` class may name
+ * it, it may not read `auth()`, `request()` or a `User`, and its audit actor is
+ * `maintenance:AppKeyRotation` rather than `job:…`, so the trail says the system did this
+ * with nobody asking. The ADR-003 D8 admin path in the PWA may *start* a rotation — the
+ * Supervisor writes the envelope — but it may not call this pass inline; that would be a
+ * user reaching every organization's rows through a class no policy is about.
  *
  * ## What this deliberately does not do
  *
@@ -90,7 +84,7 @@ use Illuminate\Support\Facades\Cache;
  * person: it means a key was lost rather than rotated, which **A25** is the decision
  * that prevents and `docs/operations/uninstall.md` §5 is the documentation of.
  */
-final class AppKeyRotation
+final class AppKeyRotation implements TenantWideMaintenance
 {
     /**
      * The lock that keeps two rotations from interleaving — the device ADR-003 D8
@@ -104,6 +98,12 @@ final class AppKeyRotation
         private readonly SensitiveAttributeRewriter $rewriter,
         private readonly AuditLog $audit,
     ) {}
+
+    /** The authorization.md §10 category's name for this operation, and the audit actor it produces. */
+    public function maintenanceOperation(): string
+    {
+        return 'AppKeyRotation';
+    }
 
     /**
      * Rewrites every inventoried attribute and the blind index under the current key,
@@ -127,10 +127,13 @@ final class AppKeyRotation
         $unreadable = array_filter($this->rewriter->unreadable());
 
         // Counts and column names only: §10's audit trail records that a rotation
-        // happened and how much it moved, never a value (ADR-003 D7).
+        // happened and how much it moved, never a value (ADR-003 D7). The actor is the
+        // #127 category's shape rather than `job:…`, because `job:` is also what a
+        // pre-identity *user* action writes (`job:CreateOwnerForm`) and this one had no
+        // user at all — see MaintenanceActor.
         $this->audit->record(
             action: 'secrets.app_key.reencrypted',
-            actor: 'job:AppKeyRotation',
+            actor: MaintenanceActor::for($this),
             outcome: $unreadable === [] ? AuditLog::OUTCOME_OK : AuditLog::OUTCOME_FAILED,
             subjectType: 'app_key',
             context: [

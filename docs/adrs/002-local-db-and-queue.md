@@ -168,6 +168,18 @@ two are the default.
 - Restore: stop the `launchd` services, move the live `app.sqlite`, `-wal`, `-shm` aside, copy the
   decrypted snapshot in, run `PRAGMA integrity_check`, start services. Restore drills (§9) run this
   path in CI against the fixture database.
+- **Authorization: the backup is a tenant-wide maintenance operation, not a queued job (#127).** It
+  reads every table in the install, so it has no user principal — one dispatcher's memberships do not
+  describe a whole-database snapshot, and S2-06 (#88) deliberately leaves no privileged job identity
+  for a `ShouldQueue` class to run as. The backup is therefore a member of the category named in
+  [authorization.md §10](../architecture/authorization.md): it implements
+  `App\Security\Authorization\Maintenance\TenantWideMaintenance`, is added to
+  `TENANT_WIDE_MAINTENANCE` in `tests/Security/MaintenanceCategoryArchTest.php` with the reason it
+  has no user principal, records `backup_runs` and its `audit_events` row with a
+  `maintenance:<Operation>` actor, and runs from the scheduler — never from a route, a Livewire
+  action or a job a user dispatches. §10.4 is binding on it: in particular the snapshot is handed to
+  ADR-003's encryption step and is never returned to a caller, and the operation never acts for a
+  user. §10.5 is the checklist for whoever writes it.
 
 ### D6. Checkpointing and WAL hygiene
 

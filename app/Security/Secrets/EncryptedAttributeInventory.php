@@ -22,8 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * It is a registry rather than a documentation table on purpose. The models do not
  * declare their own `encrypted:` casts: `App\Models\Concerns\EncryptsSensitiveAttributes`
- * reads this list, so the casts and ADR-003 D8's re-encryption job
- * (`App\Security\Secrets\AppKeyRotation`) are the *same* list and the job cannot fall
+ * reads this list, so the casts and ADR-003 D8's re-encryption pass
+ * (`App\Security\Secrets\AppKeyRotation`) are the *same* list and the pass cannot fall
  * behind the casts by omission. `tests/Security/EncryptedAttributeInventoryTest.php`
  * closes the other direction: a hand-written `encrypted:` cast anywhere under
  * `app/Models/` fails the suite until it is entered here, which is what makes S2-04
