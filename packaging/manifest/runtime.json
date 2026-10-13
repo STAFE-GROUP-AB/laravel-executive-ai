@@ -3,8 +3,8 @@
     "schema_version": 1,
     "runtime_version": "0.1.0",
     "status": "signed",
-    "built_at": "2026-10-13T22:08:52.855Z",
-    "source_commit": "73a22dad4333e6439655d6ba9ab967ead81aca34",
+    "built_at": "2026-10-13T23:35:53.272Z",
+    "source_commit": "082840206de600540e2d3007a485eb1923542c98",
     "components": {
         "frankenphp": {
             "version": "1.13.0",
@@ -3335,7 +3335,7 @@
             },
             {
                 "path": "app/public/sw.js",
-                "sha256": "2a1ad0429bf119d293b9bd3c3f89040a2f405dca725bcaa068376a2994aa9171",
+                "sha256": "3492953427230fe888c1d04d8948e2d44f396c9d613c2487d544d233ebc77821",
                 "bytes": 3645
             },
             {
@@ -46115,8 +46115,13 @@
             },
             {
                 "path": "frankenphp",
-                "sha256": "b94f10cd8d2f6b89e75ea49f46e37f47acc00e976b23f212a8cdb3689081cbeb",
+                "sha256": "45f80d7035d4120cc7349732c543fa53889057c9237ecc22e3ba4639c1c56dde",
                 "bytes": 144390080
+            },
+            {
+                "path": "php",
+                "sha256": "a08bd68e6429b585c633b370a22977c444d5522ad04126bfb4b29530bf3c1ec8",
+                "bytes": 1971
             },
             {
                 "path": "php.ini",
@@ -46126,10 +46131,10 @@
         ]
     },
     "artifact": {
-        "tag": "runtime-8.5.11-1.13.0-2",
-        "asset": "laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-2.tar.gz",
-        "url": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/releases/download/runtime-8.5.11-1.13.0-2/laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-2.tar.gz",
-        "sha256": "d914e6204139bd2e4351ac03c54df806144b8dcee65b9405f457a2fb1e5801c3",
-        "bytes": 69120344
+        "tag": "runtime-8.5.11-1.13.0-3",
+        "asset": "laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-3.tar.gz",
+        "url": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/releases/download/runtime-8.5.11-1.13.0-3/laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-3.tar.gz",
+        "sha256": "f83c18719656d1b6fb120f61a164a0ee46147df283dafb80298b1a86f4b4df47",
+        "bytes": 69121019
     }
 }
