@@ -337,12 +337,39 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
           echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
 
+      # Scope: a pull request is judged on **its own commits**; `main` is judged on everything.
+      #
+      # `fetch-depth: 0` makes actions/checkout fetch every branch, and `gitleaks git .` with no
+      # range walks every commit reachable from any of them. So one unmerged branch carrying a
+      # finding failed the lane on every *other* open pull request, reporting a file the author
+      # had never touched. That happened on 2026-10-13: commit f5c2a818 on
+      # `feat/s2-04-encryption` reded this lane on PRs #123 and #124, while `main` was green.
+      #
+      # Narrowing the pull-request run is not a weakening. The push run on `main` still scans the
+      # full history with no range, so a secret cannot reach the default branch unseen, and every
+      # commit a pull request adds is scanned before it can get there. What goes away is one
+      # branch's finding blocking an unrelated author, and a report naming a commit that is not
+      # under review.
       - name: Scan git history for committed secrets
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           gitleaks version
+
+          scope=()
+          if [ -n "${BASE_SHA:-}" ]; then
+            # The checkout is the merge ref, so this range is exactly what the pull request adds
+            # on top of its base. `--no-merges` keeps the merge commit itself out of the walk.
+            scope=(--log-opts="--no-merges ${BASE_SHA}..HEAD")
+            echo "Scanning the commits this pull request adds on top of ${BASE_SHA}."
+          else
+            echo "Scanning the full history."
+          fi
+
           gitleaks git . \
+            "${scope[@]+"${scope[@]}"}" \
             --redact \
             --no-banner \
             --exit-code 1 \
