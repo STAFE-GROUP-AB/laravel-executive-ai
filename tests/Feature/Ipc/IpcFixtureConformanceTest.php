@@ -25,6 +25,7 @@ use Tests\Support\Ipc\FakePendingApprovals;
 use Tests\Support\Ipc\FakeTunnelProvider;
 use Tests\Support\Ipc\IpcClient;
 use Tests\Support\JsonSchema;
+use Tests\Support\OwnerAccount;
 use Tests\Support\PwaFixtures;
 
 use function Pest\Laravel\call;
@@ -45,7 +46,7 @@ uses(DatabaseTransactions::class);
 const FIXTURE_NOW = '2026-10-10T18:00:05+02:00';
 
 /** Exchanges whose response bytes the server reproduces exactly once the world is seeded. */
-const BYTE_EXACT = ['briefs-latest', 'briefs-latest-not-modified', 'error-forbidden-scope', 'error-signature-invalid', 'error-version-unsupported', 'heartbeat', 'approvals-pending', 'oauth-callback', 'remote-access-disable'];
+const BYTE_EXACT = ['briefs-latest', 'briefs-latest-not-modified', 'error-forbidden-scope', 'error-owner-exists', 'error-signature-invalid', 'error-version-unsupported', 'heartbeat', 'approvals-pending', 'oauth-callback', 'owner', 'remote-access-disable'];
 
 function loadIpcFixture(string $name): array
 {
@@ -89,7 +90,11 @@ function seedWorldFor(string $name, array $fixture): void
                 $limiter->hit('ipc:limit:heartbeat:'.IpcClient::SESSION, 10);
             }
         })(),
-        'ai-pause', 'ai-resume', 'heartbeat', 'error-forbidden-scope', 'error-signature-invalid', 'error-version-unsupported' => $owner(),
+        'ai-pause', 'ai-resume', 'heartbeat', 'error-forbidden-scope', 'error-signature-invalid', 'error-version-unsupported', 'error-owner-exists' => $owner(),
+        // §6.9 is the one exchange recorded against a core with no owner.
+        'owner' => (function (): void {
+            OwnerAccount::clear();
+        })(),
         'health-not-ready' => null,
         default => throw new RuntimeException("No world seeded for fixture {$name}; add it to seedWorldFor()"),
     };
@@ -182,7 +187,7 @@ it('answers every recorded exchange with the recorded status and a valid respons
 
         // The actual exchange validates against ipc.schema.json as an exchange document.
         $exchange = [
-            'schema_version' => '1.0.0',
+            'schema_version' => '1.1.0',
             'operation' => $fixture['operation'],
             'description' => 'actual server response',
             'request' => [...$request, 'body' => $request['body'] === [] ? new stdClass : $request['body']],

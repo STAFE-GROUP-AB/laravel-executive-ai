@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.1.0",
+  "operation": "owner.create",
+  "description": "POST /ipc/v1/owner from the installer's CREATE_OWNER screen on a fresh install: the owner account, its organization and the owner membership are created and the answer carries one fact and no identifier (§6.9).",
+  "request": {
+    "method": "POST",
+    "path": "/ipc/v1/owner",
+    "headers": {
+      "Host": "127.0.0.1:8787",
+      "Authorization": "Bearer lxai1.menubar.01M4G0QK2T6Z5P9Y3R7W1A8C4E.1794240000.f8c50b991bd35d59ed0fa74ffdfe4bbf",
+      "Accept": "application/json",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Timestamp": "1791648005",
+      "X-Lxai-Nonce": "b3duZXItY3JlYXRlLi4uLg",
+      "X-Lxai-Signature": "v1=f48fe4e4d4d30dbd3587304a6da11f1dc5005486cbbb295655f0afcd4f156ddc",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P40",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "name": "Ada Owner",
+      "email": "ada.owner@example.test",
+      "timezone": "Europe/Stockholm",
+      "language": "sv"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lxai-Ipc-Version": "1",
+      "X-Lxai-Request-Id": "01M4G0PT40SQ5H1AFST1HB6P40",
+      "X-Lxai-Signature": "v1=dea25dd0125f40184043f20faee58cca2286ea5b2c6f992bbe126429de326f6a",
+      "X-Lxai-Origin": "127.0.0.1:8787"
+    },
+    "body": {
+      "ok": true,
+      "request_id": "01M4G0PT40SQ5H1AFST1HB6P40",
+      "server_time": "2026-10-10T18:00:05+02:00",
+      "data": {
+        "created": true
+      }
+    }
+  }
+}

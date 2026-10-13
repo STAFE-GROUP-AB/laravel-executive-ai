@@ -1,6 +1,6 @@
 # Swift ↔ Laravel IPC contract (S0-15)
 
-**Status:** Frozen at contract version **1.0.0** (wire major `1`) · **Owners:** Workstream A (Swift client) and B (Laravel server); H reviews
+**Status:** Frozen at contract version **1.1.0** (wire major `1`) — see §15 for what the minor added · **Owners:** Workstream A (Swift client) and B (Laravel server); H reviews
 **Schema file:** [`packaging/fixtures/ipc.schema.json`](../../packaging/fixtures/ipc.schema.json) (JSON Schema draft 2020-12)
 **Examples:** [`packaging/fixtures/ipc/`](../../packaging/fixtures/ipc/) — one recorded exchange per operation plus the error cases
 **Validation:** `node packaging/fixtures/validate-schema.mjs` (CI step, S0-05) — also recomputes every fixture signature with the test key (§4.6)
@@ -89,6 +89,49 @@ On the server, a verified session resolves to a synthetic principal `IpcClient {
 bound to the **owner** account (v1 is single-owner), and every operation runs its gate as
 `Gate::forUser($owner)->authorize(<ability>, ['via' => 'ipc'])`. The `via: ipc` context exists so that
 policies which require re-authentication (§11) can deny the IPC path explicitly.
+
+### 2.1 The one operation with no owner-bound principal (decision, 1.1.0)
+
+There is exactly one moment in the product's life when the paragraph above cannot hold: the
+installer's `CREATE_OWNER` step (§12.1), where the owner account the principal would bind to is
+precisely what the operation creates. `POST /ipc/v1/owner` (§6.9) is therefore the one operation
+that runs **no gate**. That is a decision with a stated justification, not a hole:
+
+1. **What the owner binding actually buys, and why it is absent here.** The binding is not
+   authentication — authentication is the session token (§3) — it is *authorisation*: it answers
+   "may this person do this?" against a policy. Before `CREATE_OWNER` there is no person to ask
+   about and no policy to ask. Binding to a null owner would not be safer; it is what the server
+   does for every *other* operation, and the answer is `403` / `policy_denied` (fail closed, see
+   point 4).
+2. **What stands in its place.** Two conditions, and only both together are the authorisation:
+   a live `menubar` session — which already proves our signed application, paired through the
+   Supervisor over XPC with `setCodeSigningRequirement` pinned to our Team ID on both ends (§3.2,
+   §7.1), reaching the core over loopback (§5.2) with a request signed inside a ±30 s window and a
+   nonce that has not been seen (§4) — **and** the absence of an owner, re-read from the database
+   on every single request. The second condition is what makes the first sufficient: the window in
+   which this operation does anything at all is the window between the first boot and the first
+   owner.
+3. **Why it is not a way in.** The window closes permanently and for every caller the instant an
+   owner exists: from then on the route answers `409` / `owner_exists` (§8.2), creates nothing,
+   names nobody, and writes `auth.owner_create_refused`. It has no read side, so it cannot be used
+   to learn anything: its only successful answer is `{"created": true}`, and its only refusal
+   carries no detail — not the existing owner's address, id or organization. There is no field in
+   its request through which a caller can ask for anything but the one owner this install does not
+   yet have (`additionalProperties: false`, §11.4), and no credential anywhere in the exchange,
+   because sign-in is a one-time code mailed to the address that was submitted
+   ([auth.md](auth.md) §3). An attacker who could call it would already be a process able to
+   produce our code signature to the Supervisor on this user's Mac before the owner existed — at
+   which point they could run the installer itself.
+4. **The pre-owner path is deliberate, not incidental.** `IpcPrincipal` resolves the owner lazily;
+   with no owner `owner()` is null, `actor()` degrades to the `job:IpcServer` provenance actor, and
+   `authorize()` **throws `policy_denied`**. So every gated operation in §6 is refused on an
+   ownerless core by construction, and the single pre-owner operation never calls `authorize()` at
+   all. `IpcPolicyArchTest` pins both halves: the pre-owner set is exactly one route, it carries
+   `IpcRequireNoOwner`, and it names no ability — a second entry is a contract change with two
+   reviewers (§13.2), not a test edit.
+
+The same rule in one line: **an operation may skip the owner-bound gate only if an owner existing
+makes it refuse.**
 
 ## 3. Authentication: a session-bound token issued at pairing
 
@@ -263,8 +306,12 @@ edit.
 
 ### 5.1 Versioning
 
-- The contract version is semver (`1.0.0`, this document; same bump rules as the brief schema §4).
-  The wire carries only the **major** in `X-Lxai-Ipc-Version`.
+- The contract version is semver (`1.1.0`, this document; same bump rules as the brief schema §4).
+  The wire carries only the **major** in `X-Lxai-Ipc-Version`, which is therefore still `1`: a minor
+  adds operations, fields and error codes and never changes the meaning of anything already
+  specified, so a 1.0.0 client and a 1.1.0 server understand each other on every 1.0.0 operation.
+  The full semver appears in two places only — this document and the heartbeat's
+  `contract_version` (§6.5) — and the server never refuses a client for naming an older minor.
 - The server supports the **current major and the previous major for one release** (the same rule as
   ADR-005 D3.7). A request with a missing or unsupported major fails closed:
 
@@ -327,6 +374,7 @@ is operation-specific. All timestamps are RFC 3339 with offset. The exact JSON o
 | 6.7 | Enable remote access | `POST /ipc/v1/remote-access/enable` | yes, **elevated** | `enableRemoteAccess` | `remote-access-enable.json` |
 | 6.7 | Disable remote access | `POST /ipc/v1/remote-access/disable` | yes | `disableRemoteAccess` | `remote-access-disable.json` |
 | 6.8 | Services | — | — | — | not HTTP; see §7 |
+| 6.9 | Create the owner — **1.1.0** | `POST /ipc/v1/owner` | yes | — (**no gate**: §2.1, no owner exists yet) | `owner.json`, `error-owner-exists.json` |
 
 ### 6.1 `GET /ipc/v1/health`
 
@@ -419,7 +467,7 @@ within `threshold_seconds`, default 120). Sent every **30 s** while the GUI runs
 pairing and after wake from sleep. Request:
 
 ```json
-{ "client": "menubar", "client_version": "1.0.0 (120)", "contract_version": "1.0.0", "panel_open": false, "since": "2026-10-10T17:30:00+02:00" }
+{ "client": "menubar", "client_version": "1.0.0 (120)", "contract_version": "1.1.0", "panel_open": false, "since": "2026-10-10T17:30:00+02:00" }
 ```
 
 `data`: `{ "received_at", "next_heartbeat_in_seconds": 30, "threshold_seconds": 120, "server": { "app_version", "runtime_version" } }`.
@@ -489,6 +537,69 @@ over XPC** (§7.2). Reasons, in order:
 and `"quitting": true`, then exits; it never stops services. "Stop services" / "Start services" are
 XPC operations with a confirmation sheet.
 
+### 6.9 `POST /ipc/v1/owner` — **added in 1.1.0**
+
+The installer's `CREATE_OWNER` step (§12.1, [installer.md](installer.md) screen 4) over the paired
+`menubar` session, so the person never sees a Terminal. Pairing happened one state earlier, at
+`BOOT_SERVICES`, so this operation needs no new credential, prompt or authentication step. Its
+authorization is a live `menubar` token **and** the absence of an owner — §2.1 is the decision and
+the reasoning; this section is the wire.
+
+Request:
+
+```json
+{ "name": "Ada Owner", "email": "ada.owner@example.test", "timezone": "Europe/Stockholm", "language": "sv" }
+```
+
+| Field | | |
+|---|---|---|
+| `name` | required, ≤ 200 chars, at least one non-whitespace character | screen 4's name field |
+| `email` | required, RFC-valid, ≤ 254 chars | screen 4's address field. Identifies the account, receives the one-time sign-in codes and the Executive Brief; stored lower-cased |
+| `organization` | optional, 1–200 chars | workspace name. **The Mac installer omits it** — screen 4 does not ask for one — and the core then names the workspace after its owner, renameable later in the PWA |
+| `timezone` | optional, IANA zone | the zone the first brief is scheduled in. The Mac sends its own; omitted falls back to the core's configured zone |
+| `language` | optional, BCP-47 | the language the briefs are written in. The Mac sends the installer's; omitted falls back to the core's configured locale |
+
+`additionalProperties: false`, so `user_id`, `owner`, `role`, `organization_id` or `password` in the
+body is `422` / `validation_failed` (§11.4). There is no password field anywhere in the product.
+
+Success is `200` with `data`:
+
+```json
+{ "created": true }
+```
+
+**One fact and nothing else** — no token, no one-time code, no user, organization or membership id,
+and not even the address that was submitted. The installer needs exactly one boolean
+(`OwnerHandoff { alreadyExisted }`), so one boolean is what crosses the wire, and this answer is
+given to a caller that has not yet proved it owns anything.
+
+**The refusal is the interesting half.** When an owner already exists the operation answers
+`409` / `owner_exists`, every time, creating nothing and naming nobody (`details: null`). That is
+not an error path bolted on: it is how a **data-preserving reinstall** works. The installer reads
+it as `OwnerHandoff(alreadyExisted: true)` and **advances to the next screen** rather than showing
+a failure — the existing account and the existing briefs in the untouched `data/` are kept, and the
+person signs in to them with a one-time code. The refusal is signed like any other answer (§4.5),
+so a hijacked port cannot talk the installer *out* of creating the owner either.
+
+Server behaviour:
+
+- The work is `App\Security\Authorization\CreateOwner`, the same action the artisan command and the
+  in-app Livewire form call ([auth.md](auth.md) §2): one organization, one user, one owner
+  membership, in one transaction behind `Cache::lock('lea:create-owner')`, moving the install
+  marker from `not_installed` to `installing`. There is no IPC-only path into the domain (§11.1).
+- `Middleware\IpcRequireNoOwner` is the guard and re-reads "does an owner exist" per request;
+  `CreateOwner`'s own check **inside** the lock is the backstop for the race, and a request that
+  loses it lands on the same `owner_exists`. Two concurrent calls therefore produce exactly one
+  owner (threat model T-72).
+- Audit (§10): `auth.owner_created` on success and `auth.owner_create_refused` on refusal, both
+  with `via: ipc`, the `client`, the `session_id` and the `request_id`, the success actor being
+  `job:IpcCreateOwner` so the trail names which of the three doors was used. Neither record carries
+  the submitted name or address beyond what `CreateOwner` already stores.
+- Client mapping: `200` → `alreadyExisted: false`; `409 owner_exists` → `alreadyExisted: true`;
+  `404` or `426` → *the core is too old, repair it*; `422`/`403` → the form is wrong and screen 4
+  says so; everything else → *core unavailable*. `IpcOwnerCreator` owns that split
+  ([ipc-client.md](ipc-client.md) §5).
+
 ## 7. GUI ↔ Supervisor XPC surface
 
 Mach service `<bundle-prefix>.supervisor.control` (prefix pending A12), served by the Supervisor's
@@ -503,7 +614,7 @@ asynchronous with a 10 s timeout:
 | 7.2 `services() -> [ServiceStatus]` | `{name: core\|worker\|scheduler, state: running\|starting\|stopped\|degraded, pid?, restarts_in_window, last_exit_reason?, since}` from the Supervisor's own bookkeeping (ADR-001 D3) | — |
 | 7.2 `restart(service:)`, `stopAll()`, `startAll()` | process control with ADR-001's backoff and budget; `stopAll` leaves launchd `KeepAlive` in place (the Supervisor keeps running, PHP stops) | confirmation sheet; `restart` of `core` while a `remote-access/enable` is in flight is refused |
 | 7.3 `elevate(sessionId:operation:nonce:) -> Elevation` | prompts for device-owner authentication (`LAContext.evaluatePolicy(.deviceOwnerAuthentication)`, Touch ID or login password) and, on success, returns a one-shot elevation token | the prompt is the Supervisor's, with the operation named in the reason string |
-| 7.2 `removeAllSecrets() -> [KeychainItemRef]` — **§7.2 addition, S1-13** | uninstall: deletes every `se.stafe.executive-ai.*` Keychain item through the one writer (ADR-003 D2, D8) and drops every live session; returns `{service, account}` names only, never a value | the uninstaller calls it before `SMAppService.unregister()`; confirmation sheet in the GUI with the keep-or-delete data choice ([services.md](services.md) §8, [`docs/operations/uninstall.md`](../operations/uninstall.md)). Additive and XPC-only: it is not carried on the HTTP wire, so `X-Lxai-Ipc-Version` and the `contract_version` the heartbeat and the fixtures pin stay `1.0.0` |
+| 7.2 `removeAllSecrets() -> [KeychainItemRef]` — **§7.2 addition, S1-13** | uninstall: deletes every `se.stafe.executive-ai.*` Keychain item through the one writer (ADR-003 D2, D8) and drops every live session; returns `{service, account}` names only, never a value | the uninstaller calls it before `SMAppService.unregister()`; confirmation sheet in the GUI with the keep-or-delete data choice ([services.md](services.md) §8, [`docs/operations/uninstall.md`](../operations/uninstall.md)). Additive and XPC-only: it is not carried on the HTTP wire, so it needed no contract bump of its own — the later 1.1.0 minor (§15) is unrelated to it, and `X-Lxai-Ipc-Version` is `1` either way |
 
 ### 7.3 Elevation (re-authentication for critical IPC operations, §11)
 
@@ -550,6 +661,7 @@ never granted through IPC at all**, elevated or not (§11).
 | 403 | `reauth_required` | the operation needs the PWA session (approvals) | open `details.open_url` in the PWA |
 | 404 | `not_found` | no brief yet; reserved route | show the documented empty state |
 | 409 | `state_conflict` | remote-access precondition failed | re-run `inspect()`, show the state |
+| 409 | `owner_exists` — **1.1.0** | `POST /ipc/v1/owner` on a core that already has one (§6.9) | **not a failure for the installer**: report `alreadyExisted: true` and advance. Never retried |
 | 413 | `payload_too_large` | §1.1 limits | bug; log |
 | 415 | `unsupported_media_type` | body without `application/json` | bug; log |
 | 422 | `validation_failed` / `oauth_state_invalid` | body or query invalid | show `details` (field → problem) |
@@ -573,6 +685,7 @@ paths or stack traces. `details` is an object or `null`; `supported_versions` is
 | `ai/pause`, `ai/resume` | 10 / min | 2 s (cancellation is asynchronous beyond that) | 5 s |
 | `heartbeat` | 6 / min | 500 ms | 3 s |
 | `oauth/callback` | 5 / min | 15 s, then `pending` | 20 s |
+| `owner` — **1.1.0** | 5 / min | 10 s (≤ 5 s waiting on `lea:create-owner`, then one transaction) | 12 s |
 | `remote-access` (GET) | 10 / min | 5 s | 8 s |
 | `remote-access/enable`, `/disable` | 3 / min | 30 s | 35 s |
 | all routes together | 120 / min | — | — |
@@ -607,7 +720,11 @@ loopback traffic.
    `via: ipc` in the context. `IpcController` methods call the same application services the PWA's
    Livewire actions call; there is no IPC-only code path into the domain. Pest architecture test:
    every route under `/ipc/` carries `IpcAuthenticate` **and** a named ability in the `can:` middleware
-   or an explicit `authorize()` in the controller; a route without one fails CI.
+   or an explicit `authorize()` in the controller; a route without one fails CI. The single
+   exception is §2.1's pre-owner operation, which has no owner to run a gate as: it carries
+   `IpcRequireNoOwner` instead, the same architecture test pins that the pre-owner set is exactly
+   one route, and it too calls a shared application service (`CreateOwner`) rather than its own
+   path into the domain.
 2. **Approvals are never granted via IPC**, with or without elevation. The IPC exposes a read-only
    list and a deep link; approving, rejecting, cancelling and the re-authentication they require happen
    in the PWA session (§11 "re-auth för kritiska åtgärder"; ADR-005 D1.6 "only from an authenticated,
@@ -620,8 +737,13 @@ loopback traffic.
    rejected by the request schema (`additionalProperties: false`).
 5. **No IPC operation starts a model run, sends mail, writes to the CRM or calls an MCP tool.**
    The mutating set is exactly: the cancellation token (pause/resume), the heartbeat timestamp, the
-   OAuth exchange that the user initiated in the GUI, and the `TunnelProvider` state. Adding a mutating
+   OAuth exchange that the user initiated in the GUI, the `TunnelProvider` state, and — since
+   1.1.0 — the one-time creation of the owner account (§6.9). Adding a mutating
    operation is a security-critical PR (two reviewers, §13.2) and a contract minor bump at least.
+6. **An operation may skip the owner-bound gate only if an owner existing makes it refuse** (§2.1).
+   v1 has exactly one such operation and it is `POST /ipc/v1/owner`. This is not a general
+   exemption for "setup" operations: anything else the installer needs after `CREATE_OWNER` runs as
+   the owner, through a gate, like everything else.
 
 ## 12. Tests the implementation must ship (S1-08, §14 "IPC tests")
 
@@ -636,6 +758,8 @@ loopback traffic.
 | `IpcRedactionTest` | corpus tokens (`lxai1.…`, `lxai1e.…`) in exception messages never reach logs; `oauth/callback` body never appears in any sink |
 | `IpcResponseSigningTest` (Swift) | tampered body, tampered status, missing signature → *core unreachable*, body never parsed |
 | `HeartbeatCheckTest` | `menubar_integration` only moves on an authenticated `menubar` heartbeat; `supervisor` heartbeat rejected with `forbidden_scope` |
+| `OwnerCreateTest` (PHP, **1.1.0**) | §6.9: a fresh install creates organization, user and owner membership and answers `{created: true}` and nothing else — no credential, no id, not the submitted address; a repeated install is `409 owner_exists`, creates nothing and audits `auth.owner_create_refused` with `via: ipc`; every further attempt refuses too; the request waits on `lea:create-owner` instead of creating an owner beside a concurrent run; a `supervisor` token is `forbidden_scope` and an absent or wrong-MAC token is `session_invalid`; an identity-asserting body is `422`; the 5/min budget |
+| `IpcOwnerCreatorTests` (Swift, **1.1.0**) | `200` → `OwnerHandoff(alreadyExisted: false)`, `409 owner_exists` → `alreadyExisted: true` and never a retry, every other code onto the right half of `OwnerCreationError`; an **unsigned** `409` is still refused (§4.5); the recorded `owner.json` request is reproduced byte for byte; the draft never reaches the client log; and the installer advances past `CREATE_OWNER` on both hand-offs while stopping on a rejection or an unreachable core |
 
 ## 13. What this document does not decide
 
@@ -656,3 +780,19 @@ loopback traffic.
   section is rewritten before the change lands.
 - Any `ipc.rejected` with `reason: origin` seen in the field from a `127.0.0.1` peer → incident; the
   §5.2 rule set is reviewed, not relaxed.
+
+## 15. Version history
+
+Bump rules are the brief schema's §4 (optional field or new member → minor; anything that changes
+the meaning of what is already specified → major). The wire carries only the major, so every entry
+below leaves `X-Lxai-Ipc-Version` at `1`. **Every place the version string is pinned** must move in
+the same PR: this document's header and §5.1, the heartbeat payload (`contract_version`, §6.5), the
+`schema_version` const in `packaging/fixtures/ipc.schema.json` and in every
+`packaging/fixtures/ipc/*.json`, and the Swift constant `IpcOperation.contractVersion`. (Neither the
+brief schema's own `1.0.0` nor the health contract's is this version; they are separate documents
+with separate histories.)
+
+| Version | Date | Change | Compatibility |
+|---|---|---|---|
+| 1.0.0 | 2026-10-10 (S0-15) | the contract as frozen: §6.1 – §6.8 | — |
+| **1.1.0** | 2026-10-13 (#121, S2) | **adds** §6.9 `POST /ipc/v1/owner` and its §2.1 decision, the `owner_exists` error code (§8.2), its §9 budget, and the fixtures `owner.json` and `error-owner-exists.json` | Purely additive. Nothing already specified changed meaning: every 1.0.0 operation, error code, header, envelope, budget and fixture is untouched, a 1.0.0 client keeps working against a 1.1.0 core, and a 1.1.0 client sees `404` / `not_found` from a 1.0.0 core — which the installer reports as *repair the installation*. Security-critical PR under §13.2 (two reviewers) because it adds a mutating operation (§11.5) |

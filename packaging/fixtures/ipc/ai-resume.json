@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "ai.resume",
   "description": "POST /ipc/v1/ai/resume: clears the cancellation token; idempotent (§6.4).",
   "request": {

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "remote-access.disable",
   "description": "POST /ipc/v1/remote-access/disable: `serve --https=443 off`; handlers the app did not create are listed, not removed (ADR-006 D2, §6.7).",
   "request": {

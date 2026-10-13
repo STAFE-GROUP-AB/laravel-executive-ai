@@ -1,8 +1,10 @@
-// CREATE_OWNER hand-off (S1-05 defines, S1-02 implements the account).
+// CREATE_OWNER hand-off (S1-05 defines, S1-02 implements the account, #121 wires the two).
 //
-// The installer captures a name and an e-mail address on screen 4 and hands them to the core.
-// The credential/passkey step and the "no second owner on a repeated install" guarantee (T-72)
-// live in S1-02. Nothing here is persisted or logged.
+// The installer captures a name and an e-mail address on screen 4 and hands them to the core
+// over `POST /ipc/v1/owner` (ipc-contract §6.9, `IpcOwnerCreator`). There is no credential step:
+// sign-in is a one-time code to that address, and a passkey can be added later. The "no second
+// owner on a repeated install" guarantee (T-72) is the core's, and reaches the installer as
+// `OwnerHandoff(alreadyExisted: true)`. Nothing here is persisted or logged.
 
 import Foundation
 
@@ -82,12 +84,6 @@ enum OwnerCreationError: Error, Equatable, Sendable {
 
 protocol OwnerCreating: Sendable {
     func createOwner(_ draft: OwnerDraft) async throws -> OwnerHandoff
-}
-
-struct UnavailableOwnerCreator: OwnerCreating {
-    func createOwner(_ draft: OwnerDraft) async throws -> OwnerHandoff {
-        throw OwnerCreationError.unavailable("Owner creation arrives with the core account flow (S1-02).")
-    }
 }
 
 final class ScriptedOwnerCreator: OwnerCreating, @unchecked Sendable {

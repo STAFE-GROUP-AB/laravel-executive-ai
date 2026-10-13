@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "heartbeat",
   "description": "POST /ipc/v1/heartbeat every 30 s; the only signal the menubar_integration health check reads (§6.5).",
   "request": {
@@ -12,14 +12,14 @@
       "X-Lxai-Ipc-Version": "1",
       "X-Lxai-Timestamp": "1791648005",
       "X-Lxai-Nonce": "aGVhcnRiZWF0Li4uLi4uLg",
-      "X-Lxai-Signature": "v1=01deea6813fc052938f0a70d7fa9310acb99f06c1a7966314d65688be32145ec",
+      "X-Lxai-Signature": "v1=5758e97bf8b55f16484b5d2b1c02aa00228a81679dcb8c9b506b11813c80e6ca",
       "X-Lxai-Request-Id": "01M4G0134DPDQWC3F77AZMCSSB",
       "Content-Type": "application/json"
     },
     "body": {
       "client": "menubar",
       "client_version": "1.0.0 (120)",
-      "contract_version": "1.0.0",
+      "contract_version": "1.1.0",
       "panel_open": false,
       "since": "2026-10-10T17:30:00+02:00"
     }

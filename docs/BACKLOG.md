@@ -1403,7 +1403,7 @@ Create `app/Approvals/ProposalFreezer.php`, `app/Approvals/Actions/`, `routes/ap
       any `/ipc/` route — with or without elevation (ADR-005 D1.6, ipc-contract §11.2) — and that approving
       requires the S2-05 re-authentication (threat model T-06, T-71).
 - [ ] `/approvals` shows pending, approved, rejected, expired and cancelled (§1.2); the menu bar badge and
-      `GET /ipc/v1/approvals` return the real pending set with `contract_version` still `1.0.0`.
+      `GET /ipc/v1/approvals` return the real pending set without a contract bump (the operation is unchanged; the contract is at 1.1.0 since #121).
 - [ ] `tests/Security/ForeignEmailCannotTriggerSendTest.php`'s `ExpectedFailure::guard()` wrapper is
       **removed** and all four S0-21 cases pass on their own assertions; threat model **T-01, T-05, T-06** and
       **T-09** move to `mitigated`.

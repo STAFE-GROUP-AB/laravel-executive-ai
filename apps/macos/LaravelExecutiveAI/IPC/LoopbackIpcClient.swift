@@ -46,6 +46,10 @@ enum IpcClientError: Error, Equatable, Sendable {
     case notFound
     /// `409 state_conflict`.
     case stateConflict
+    /// `409 owner_exists` — the §6.9 refusal: this Mac already has an owner.
+    /// Not a failure for the installer: it is how a data-preserving
+    /// reinstall learns that CREATE_OWNER has nothing left to do.
+    case ownerExists
     /// `400`, `413`, `415` — bugs; logged, never retried.
     case badRequest(code: String)
     /// `422 validation_failed` / `oauth_state_invalid`: field → problem.
@@ -88,7 +92,7 @@ enum IpcClientError: Error, Equatable, Sendable {
             .notFound
         case .rateLimited:
             .rateLimited
-        case .stateConflict, .badRequest, .validationFailed, .internalError, .unexpected:
+        case .stateConflict, .ownerExists, .badRequest, .validationFailed, .internalError, .unexpected:
             .invalidResponse(userFacingReason)
         }
     }
@@ -110,6 +114,7 @@ enum IpcClientError: Error, Equatable, Sendable {
         case .reauthRequired: "re-authentication required"
         case .notFound: "not found"
         case .stateConflict: "state conflict"
+        case .ownerExists: "an owner account already exists on this Mac"
         case .badRequest(let code): "bad request (\(code))"
         case .validationFailed(let code, _): "validation failed (\(code))"
         case .rateLimited(let seconds): "rate limited\(seconds.map { " for \($0) s" } ?? "")"
@@ -123,7 +128,10 @@ enum IpcClientError: Error, Equatable, Sendable {
 
 /// One request to the core: method, request-target, canonical body and the per-operation extras.
 struct IpcOperation: Equatable, Sendable {
-    static let contractVersion = "1.0.0"
+    /// ipc-contract §5.1. The wire carries only the major (`wireMajor`); this
+    /// full semver is what the heartbeat reports. 1.1.0 added §6.9's
+    /// `POST /ipc/v1/owner` and the `owner_exists` code.
+    static let contractVersion = "1.1.0"
 
     var name: String
     var method: String
@@ -161,6 +169,28 @@ struct IpcOperation: Equatable, Sendable {
     static let pendingApprovals = IpcOperation(name: "approvals", method: "GET", pathAndQuery: "/ipc/v1/approvals?state=pending&limit=20")
     static let aiPause = IpcOperation(name: "ai/pause", method: "POST", pathAndQuery: "/ipc/v1/ai/pause", body: .object(["reason": .string("user_menubar")]))
     static let aiResume = IpcOperation(name: "ai/resume", method: "POST", pathAndQuery: "/ipc/v1/ai/resume", body: .object([:]))
+
+    /// §6.9 CREATE_OWNER. The draft carries the two fields screen 4 asks for;
+    /// the zone and the language are the Mac's, so the first brief is
+    /// scheduled and written in the environment the person is sitting in. No
+    /// workspace name is sent (the screen does not ask) and no credential
+    /// exists to send: sign-in is a one-time code by mail.
+    static func createOwner(_ draft: OwnerDraft, timeZone: String, language: String) -> IpcOperation {
+        IpcOperation(
+            name: "owner",
+            method: "POST",
+            pathAndQuery: "/ipc/v1/owner",
+            body: .object([
+                "name": .string(draft.trimmedName),
+                "email": .string(draft.trimmedEmail),
+                "timezone": .string(timeZone),
+                "language": .string(language),
+            ]),
+            // §9: a 10 s server budget (up to 5 s waiting on
+            // `lea:create-owner`, then one transaction), 12 s on the client.
+            timeout: 12
+        )
+    }
 
     static func latestBrief(ifNoneMatch etag: String?) -> IpcOperation {
         IpcOperation(name: "briefs/latest", method: "GET", pathAndQuery: "/ipc/v1/briefs/latest", ifNoneMatch: etag)
@@ -651,6 +681,8 @@ final class LoopbackIpcClient: CoreClient, Sendable {
             return .failure(.notFound)
         case "state_conflict":
             return .failure(.stateConflict)
+        case "owner_exists":
+            return .failure(.ownerExists)
         case "bad_request", "payload_too_large", "unsupported_media_type":
             return .failure(.badRequest(code: envelope.code))
         case "validation_failed", "oauth_state_invalid":

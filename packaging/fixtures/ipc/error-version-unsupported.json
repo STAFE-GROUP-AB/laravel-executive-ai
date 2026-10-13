@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "health",
   "description": "A client sending wire major 3 to a core that supports 1: 426 with the repair hint; no response signature because the server never derived a signing key (§5.1, §4.5).",
   "request": {

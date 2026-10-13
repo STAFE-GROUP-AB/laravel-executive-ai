@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "oauth.callback",
   "description": "POST /ipc/v1/oauth/callback forwarding exactly code and state from ASWebAuthenticationSession (ADR-003 D4); PHP performed the exchange synchronously (§6.6). Values are synthetic.",
   "request": {

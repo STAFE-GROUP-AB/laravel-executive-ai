@@ -47,6 +47,27 @@ enum IpcClientFactory {
         }
     }
 
+    /// CREATE_OWNER over the same one `menubar` session (ipc-contract §6.9).
+    static func makeOwnerCreator(
+        bundle: Bundle = .main,
+        checkpointStore: any InstallCheckpointStore,
+        session: IpcSession,
+        timeZone: TimeZone = .current,
+        language: PreflightLanguage = PreflightLanguage.preferred()
+    ) -> IpcOwnerCreator {
+        let identifier = timeZone.identifier
+        let tag = language.rawValue
+
+        return IpcOwnerCreator(
+            checkpointStore: checkpointStore,
+            session: session,
+            timeZoneIdentifier: { identifier },
+            languageTag: { tag }
+        ) { port, session in
+            makeClient(port: port, session: session, bundle: bundle)
+        }
+    }
+
     /// `"<CFBundleShortVersionString> (<CFBundleVersion>)"`, the heartbeat's `client_version`.
     static func clientVersion(of bundle: Bundle) -> String {
         let marketing = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"

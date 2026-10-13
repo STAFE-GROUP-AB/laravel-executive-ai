@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "health",
   "description": "GET /ipc/v1/health while core-ready and AI-ready: the health contract ready document inside the success envelope (§6.1). Mirrors packaging/fixtures/health/ready-ai-ready.json.",
   "request": {

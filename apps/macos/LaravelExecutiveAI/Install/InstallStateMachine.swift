@@ -265,6 +265,10 @@ final class InstallStateMachine {
 
         runAutomated { [self] in
             do {
+                // Both hand-offs complete this state: `alreadyExisted` means a
+                // data-preserving reinstall found the account still there and
+                // nothing was created (ipc-contract §6.9, threat model T-72).
+                // The draft is dropped either way — it is never persisted here.
                 _ = try await dependencies.ownerCreator.createOwner(draft)
             } catch let error as OwnerCreationError {
                 throw InstallFailed(failure: .ownerCreation(Self.describe(error)))

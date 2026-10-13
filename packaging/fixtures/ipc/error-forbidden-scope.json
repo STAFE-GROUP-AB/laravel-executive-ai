@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "operation": "approvals.pending",
   "description": "The Supervisor's own token on a menu-bar route: 403 forbidden_scope; the scope is inside the token MAC (§2, §3.4).",
   "request": {

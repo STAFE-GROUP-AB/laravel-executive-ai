@@ -72,6 +72,7 @@ return [
         'ai-pause' => 10,
         'ai-resume' => 10,
         'heartbeat' => 6,
+        'owner' => 5,
         'oauth-callback' => 5,
         'remote-access' => 10,
         'remote-access-enable' => 3,
