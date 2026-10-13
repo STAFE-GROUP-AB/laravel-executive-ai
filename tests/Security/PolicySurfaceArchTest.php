@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Tests\Security\Support\PolicySurface;
 use Tests\Security\Support\Surfaces\CustomerNotesTool;
@@ -259,6 +260,38 @@ it('makes every executable tool a GatedTool', function (): void {
     expect(TOOL_NAMESPACES)->not->toBeEmpty()
         ->and($tools)->not->toContain(ToolKind::class, PolicyDecision::class, ToolRunOutcome::class);
 })->group('security');
+
+/**
+ * The sweep below is only as good as the schema it reads, and on MySQL
+ * `Schema::getTables()` with no schema argument reads the **wrong** one: the
+ * grammar excludes the system schemas and returns every table in every other
+ * database on the server. A developer machine running Herd has thousands, several
+ * hundred carrying an `organization_id`, so the policy sweep enumerated tables that
+ * do not exist in the database under test.
+ *
+ * Neither profile could show it on its own. SQLite cannot: one connection is one
+ * file. CI cannot: its MySQL holds only the test database, so the sweep was right
+ * by coincidence rather than by construction — which is the kind of green that
+ * teaches nothing.
+ *
+ * This asserts the property directly, so the sweep stays driven by the schema under
+ * test. It fails on any machine that has a second database, which is where the
+ * defect actually appears.
+ */
+it('sweeps only the database under test, not every database on the server', function (): void {
+    $swept = TenantRowFactory::tenantTables();
+
+    expect($swept)->not->toBeEmpty('the sweep found no tenant table at all, which means it is reading nothing');
+
+    $ownListing = Schema::getTableListing(schema: Schema::getCurrentSchemaListing(), schemaQualified: false);
+    $foreign = array_values(array_diff($swept, $ownListing));
+
+    expect($foreign)->toBe([], 'the sweep returned tables that are not in this connection\'s own schema: '.implode(', ', array_slice($foreign, 0, 10)));
+
+    foreach ($swept as $table) {
+        expect(Schema::hasTable($table))->toBeTrue("{$table} was swept but does not exist on this connection");
+    }
+})->group('security')->group('backend-contract');
 
 it('gives every table that carries organization_id a policy, or proves it has no model yet', function (): void {
     $gate = app(Gate::class);

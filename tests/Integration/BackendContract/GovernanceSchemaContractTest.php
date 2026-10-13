@@ -467,7 +467,12 @@ it('records the ADR-002 D5 backup steps and the D6 checkpoint events', function 
 })->group('backend-contract')->skip(fn (): bool => BackendProfile::serverWithoutMysql(), 'server profile selected but no MySQL connection configured');
 
 it('governs every table that carries a retention policy, and governs no table that does not', function (): void {
-    $governed = collect(Schema::getTables())
+    // The schema argument is required, not tidiness: `Schema::getTables()` with no
+    // argument returns every table in every database on a MySQL server, because the
+    // grammar only excludes the system schemas. On a developer machine that is other
+    // projects' tables, and this test would then demand a retention rule for them.
+    // `getCurrentSchemaListing()` is `['main']` on SQLite and `[<database>]` on MySQL.
+    $governed = collect(Schema::getTables(Schema::getCurrentSchemaListing()))
         ->pluck('name')
         ->filter(fn (string $table): bool => Schema::hasColumn($table, 'retention_policy'))
         ->sort()
