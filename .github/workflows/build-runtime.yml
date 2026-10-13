@@ -159,7 +159,9 @@ jobs:
         run: |
           set -euo pipefail
           notices="$(find "$OUT_DIR/licenses" -type f | wc -l | tr -d ' ')"
-          copyleft="$(grep -rlE 'GNU (LESSER |AFFERO )?GENERAL PUBLIC LICENSE' "$OUT_DIR/licenses" | wc -l | tr -d ' ')"
+          # `|| true`: a clean notice set means grep matches nothing and exits 1, which pipefail
+          # would otherwise turn into a failed step on exactly the builds that are correct.
+          copyleft="$(grep -rlE 'GNU (LESSER |AFFERO )?GENERAL PUBLIC LICENSE' "$OUT_DIR/licenses" | wc -l | tr -d ' ' || true)"
           gnu_iconv="$(find "$OUT_DIR/licenses" -iname '*libiconv*' | wc -l | tr -d ' ')"
           {
             echo '## Runtime build'
