@@ -86,6 +86,13 @@ password, key or verifier**, encrypted or not. Laravel's `encrypted` casts remai
 attributes* that are not credentials (§3.1), and the `APP_KEY` that protects them is itself a Keychain
 item (`core.app-key`), never a file.
 
+Those casts are now enumerated in one place — `App\Security\Secrets\EncryptedAttributeInventory`
+(S2-04, #87) — and `tests/Security/EncryptedAttributeInventoryTest.php` asserts both halves of this
+rule over it: that the inventory and the casts the models resolve are the same list in both
+directions, and that no inventoried column's name matches the credential pattern this paragraph
+forbids. Which columns are encrypted, which are deliberately left plaintext and why is
+[data-model.md](../architecture/data-model.md) §"Encryption at rest".
+
 ### D2. Who may touch the Keychain
 
 Exactly **one process holds the shared access group: the Supervisor** (ADR-001). It carries
@@ -306,11 +313,54 @@ its value with the redactor so even unknown formats are caught).
   → retention job purges synced data per the connection's policy. Delete is never skipped because
   revoke failed.
 - **Uninstall.** The uninstaller enumerates `kSecAttrService LIKE "se.stafe.executive-ai.*"` in the
-  group and deletes every item; the Keychain does not remove items when an app is deleted, so this is
-  an explicit step and a user-visible promise.
+  group and deletes **every item except the application key when data is kept**; the Keychain does
+  not remove items when an app is deleted, so this is an explicit step and a user-visible promise.
+
+  **Amended by S2-04 (#87) per A25, decided 2026-10-11.** This bullet originally said "every item",
+  and S1-13 (#41) shipped that literally — `core.app-key` included — even when the person chose
+  *Keep my data*. In Sprint 1 that was harmless, because nothing in `data/` was encrypted with
+  `APP_KEY`. From S2-04's first `encrypted:` cast it is not: a keep-data uninstall followed by a
+  reinstall would leave rows nobody can decrypt, and `previous[]` cannot recover a key that was
+  deleted. So the sweep takes one argument, `keepApplicationKey`, defaulting to **false** so a caller
+  that says nothing still performs the original sweep; the uninstaller passes the person's data
+  choice. With it true, `core.app-key` and **only** it survives — every account under that service,
+  because a rotated-out key in `previous[]` may still be what reads an un-re-encrypted row — and
+  every other item, `ipc.menubar` included, is still deleted. A *Delete everything* uninstall takes
+  the key with the data, which is the point of it. The exception is matched against
+  `SecretService.appKey` rather than a literal, so A12 moving the prefix moves the exception with it.
+  `docs/operations/uninstall.md` §3, §4, §5, §7 and §9 are the user-facing half, including the plain
+  statement that a lost `core.app-key` is unrecoverable by any party.
 - **`APP_KEY` rotation.** `core.app-key` envelope holds `current` and `previous[]`; Laravel decrypts
   with previous keys when the current fails (E35). Rotation is an admin action in the PWA that writes
-  the envelope and re-encrypts `encrypted` attributes in a queued job; sessions are invalidated.
+  the envelope and re-encrypts `encrypted` attributes in a queued job; sessions are invalidated. The
+  pass is `App\Security\Secrets\AppKeyRotation` (S2-04): it re-encrypts every attribute in
+  `App\Security\Secrets\EncryptedAttributeInventory` under the current key, rewrites the keyed blind
+  index `contact_emails.address_hash` — whose HMAC key is derived from the application key, so every
+  index key changes when the envelope does — and records counts in `audit_events`, never a value. A
+  value no key in the envelope can read is reported and **left untouched**, never overwritten. The
+  rotation is complete only when the old key can be dropped from `previous[]`; until then every row
+  still reads, which is what makes a *deferred* re-encryption safe at all.
+  `tests/Security/AppKeyRotationTest.php` proves both directions.
+
+  **Open with S2-04, tracked as #127: "in a queued job" is not yet literally true, and the reason
+  is a collision worth recording.** S2-06 (#88) requires every `ShouldQueue` class that reaches tenant data to run
+  as the user that dispatched it, because there is deliberately no privileged job identity
+  (`AuthorizesQueuedWork`, threat model T-73). A key rotation cannot satisfy that: the key is
+  install-wide, so a dispatcher's memberships are the wrong scope, and four of the eight tables it
+  must rewrite — `ai_runs`, `tool_runs`, `source_records`, `memory_sources` — are **append-only by
+  policy**, so `update` is false for them to every user by design. A rotation that honoured the
+  policy would leave the install half under each key; one that overrode it would be the privileged
+  job identity S2-06 exists to prevent. So re-encryption is not a user action at all: it belongs
+  with the S2-04 migration that first wrote those columns — a storage-layer pass triggered by a key
+  change. S2-04 therefore ships it as a plain action serialised by a cache lock
+  (`lea:app-key:reencrypt`), with the same behaviour and the same tests, and the **retention purge**
+  (S2-03) and the **backup job** (ADR-002 D5) will need the same category. Naming that category —
+  "tenant-wide maintenance, authorised by not being a user action" — is **issue #127**: a marker
+  whose members an arch test enumerates, a rule that a member is unreachable from any user-facing
+  surface, its own audit actor shape, and a written statement of what it may not do. **#127 also
+  corrects the "in a queued job" wording in this bullet**, so this paragraph is the signpost for a
+  sentence that currently contradicts the code rather than a silent discrepancy. It was not S2-04's
+  to take alone, and S2-04 deliberately invented no exception for itself in the meantime.
 - **IPC key rotation.** `ipc.menubar` is regenerated on every reinstall and by a "Reset security
   pairing" action; the menu bar re-pairs through the Supervisor (S0-15).
 - **Compromise response.** The broker's **locked** state (D3.2) refuses all `get`s instantly from the

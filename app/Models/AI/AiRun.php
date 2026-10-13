@@ -9,6 +9,7 @@ use App\AI\Providers\Dto\AiFinishReason;
 use App\AI\Routing\PrivacyMode;
 use App\AI\Runs\RunOutcome;
 use App\Models\Concerns\BusinessObject;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use App\Models\Organization;
 use App\Support\Json\Jcs;
 use Carbon\CarbonImmutable;
@@ -21,6 +22,13 @@ use InvalidArgumentException;
 /**
  * One AI run with ADR-004 D7's thirteen provenance fields (§3.1 `ai_runs`).
  * Append-only: no soft delete, and only the retention job removes a row.
+ *
+ * `prompt_redacted` and `response_redacted` are **encrypted at rest** (S2-04). They
+ * already pass `App\Security\Secrets\Redactor` on write (ADR-003 D7 row 4); the cast
+ * is the second layer, because a redactor is a pattern matcher and what is left after
+ * it is still the owner's business. Neither column is matched: the dedupe slot is
+ * `dedupe_key` + `dedupe_window_start`, derived before the prompt is stored, and
+ * `prompt_hash` is what a caller compares.
  *
  * @property string $id
  * @property string $organization_id
@@ -66,6 +74,7 @@ use InvalidArgumentException;
 class AiRun extends Model
 {
     use BusinessObject;
+    use EncryptsSensitiveAttributes;
 
     /**
      * `dedupe_marker` is a generated column: the database computes it from
@@ -81,6 +90,7 @@ class AiRun extends Model
     {
         return [
             ...$this->businessObjectCasts(),
+            ...$this->encryptedAttributeCasts(),
             'capabilities_snapshot' => 'array',
             'privacy_mode' => PrivacyMode::class,
             'input_tokens' => 'integer',

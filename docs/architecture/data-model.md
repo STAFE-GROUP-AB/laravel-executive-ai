@@ -40,6 +40,54 @@ Every business object carries these; `App\Models\Concerns\BusinessObject` provid
 | `retain_until` | `dateTime` nullable | Earliest instant the retention job may purge the row. |
 | `created_at`, `updated_at`, `deleted_at` | `dateTime` nullable | Timestamps and soft delete where applicable. |
 
+### Foreign keys with no index of their own — read this before dropping an index on MySQL
+
+**Measured on a clean MySQL 8.4 database while S2-04 (#87) was being built, and invisible to every
+SQLite-only check.** InnoDB requires an index whose *leftmost* column is the referencing column of a
+foreign key, and it will adopt an index that already satisfies that rather than create one. Laravel
+adds foreign keys *after* the table's indexes, so wherever a `<table>_<columns>_unique` index starts
+with the referencing column, that unique index is the only thing serving the foreign key — and
+dropping it, or re-columning it, is refused outright:
+
+```
+SQLSTATE[HY000]: General error: 1553 Cannot drop index
+'contact_emails_organization_address_unique': needed in a foreign key constraint
+```
+
+SQLite enforces no index for a foreign key at all, so the same migration succeeds there and the
+failure only appears in the `server-profile` CI lane. **Nine foreign keys are currently in that
+shape** — one serving index, and it is unique:
+
+| Table | Foreign key | The only index serving it |
+|---|---|---|
+| `action_approvals` | `action_approvals_proposal_fk` | `action_approvals_proposal_unique (action_proposal_id)` |
+| `contact_emails` | `contact_emails_organization_fk` | `contact_emails_organization_address_unique (organization_id, address_hash)` |
+| `customer_contact` | `customer_contact_customer_fk` | `customer_contact_customer_contact_unique (customer_id, contact_id)` |
+| `email_sync_cursors` | `email_sync_cursors_connection_fk` | `email_sync_cursors_connection_scope_unique (connection_id, scope)` |
+| `mcp_grants` | `mcp_grants_tool_fk` | `mcp_grants_tool_active_unique (tool_id, active_marker)` |
+| `memory_sources` | `memory_sources_memory_fk` | `memory_sources_memory_position_unique (memory_id, position)` |
+| `project_contact` | `project_contact_project_fk` | `project_contact_project_contact_unique (project_id, contact_id)` |
+| `sync_cursors` | `sync_cursors_external_account_fk` | `sync_cursors_account_scope_unique (external_account_id, source_type, scope)` |
+| `task_assignees` | `task_assignees_task_fk` | `task_assignees_task_user_unique (task_id, user_id)` |
+
+`brief_items_brief_fk` is the near miss worth knowing about: it is served by **two** unique indexes
+(`brief_items_brief_item_unique`, `brief_items_brief_position_unique`), so dropping either one is fine
+because the other takes over. Everything else in the schema has a non-unique index that can serve its
+foreign key, either a composite one that happens to start with the right column or the index MySQL
+created for the constraint itself.
+
+**Nothing is wrong with any of these**, and none of them was changed: the index each one needs is the
+index the queries want anyway. It is a hazard, not a defect — the next migration that touches one of
+those unique indexes hits the same wall, on MySQL only, after every local check passed. The fix is
+additive and is in
+`2026_10_13_000013_encrypt_sensitive_attributes_at_rest::moveTheAddressUniqueIndexOntoTheHash()`: put
+a **scaffold** index over the new column set up *first*, so the foreign key never has no index; then
+drop the old one; then create the real index under its frozen name; then remove the scaffold, which is
+safe because by then the named index is serving the constraint. Two indexes over the same columns
+coexist for three statements, which both engines allow, and the final state is identical on each. The
+query that produced the table above is in that migration's doc block; re-run it after any migration
+that adds a unique index starting with a foreign-key column.
+
 ## 2. Tables
 
 ### `users`
@@ -870,6 +918,134 @@ because a comparison has nothing to compare against otherwise.
 | `mcp_servers` | **`trust_tier`** (D4.4: `T0` our own tools, `T1` an allowlisted local stdio server, `T2` a remote Streamable HTTP server on an approved host, `T3` blocked — decided in code, never by the model) and **`version`** (D4.6, pinned at Connect), plus `transport`, `status`, `protocol_version`, `endpoint_url`, `command`/`args` (an absolute path and an argument **array**, never a shell string — §11), `executable_sha256` (verified before every spawn), `registry_source`, `namespace_verification`, `declared_egress`, `declared_fs_paths`, `server_capabilities`, `tools_list_hash` (the sha256 over the canonical `tools/list` response as a whole), `tools_listed_at`, the Keychain reference triple, and the approval/review/suspension/revocation stamps. `mcp_servers_organization_name_unique`, `mcp_servers_organization_status_index`, `mcp_servers_organization_trust_tier_index` |
 | `mcp_tools` | **`mcp_tools_server_tool_unique (server_id, tool_name)`** — the key that distinguishes "the same tool, changed" from "a new tool" — with **`schema_hash`** = `sha256(canonical tool JSON)` pinned at Connect. `title`, `description`, `input_schema`, `output_schema` and `annotations` are **external content**: stored and rendered as data, never inserted into a system prompt (D4.8), and the annotations (`readOnlyHint`, `destructiveHint`, …) are recorded but **never** used for policy — the spec requires a client to treat them as untrusted unless the server is trusted, and only T0 is. `is_mutating` and `sends_crm_data` are our own verdicts, set by review, and they are what the PolicyGate reads. A tool that disappears is stamped `removed_at`, never deleted. Plus `mcp_tools_organization_review_state_index`, `mcp_tools_server_schema_hash_index` |
 | `mcp_grants` | Permission to call **one tool**. `granted_schema_hash` is copied from the tool at the moment of the grant, so D4.6's suspension is a comparison and not a recollection: a later `tools/list` that changes a tool stamps `suspended_at` with a reason on every grant whose hash no longer matches. Revocation is a stamp too (`revoked_at`, `revoked_reason`), kept under the `mcp_grant_record` rule, because "was this tool ever allowed to see customer data" is the first question an incident asks. `requires_action_approval`, `argument_constraints`, `call_budget`, `calls_made`, `reauthenticated_at`, `audit_event_id`, `expires_at`, `last_used_at`. **`mcp_grants_tool_active_unique (tool_id, active_marker)`** allows any number of historical grants and at most one live one; plus `mcp_grants_organization_server_index`, `mcp_grants_server_revoked_index` |
+
+### Encryption at rest (S2-04, #87)
+
+Blueprint §3.1 requires sensitive attributes encrypted at rest, and ADR-003 **D1** permits Laravel
+`encrypted:` casts for sensitive attributes that are **not** credentials. S2-04 is the only item
+permitted to add one; `tests/Security/EncryptedAttributeInventoryTest.php` fails on an `encrypted:`
+cast added anywhere else.
+
+The list lives in **`App\Security\Secrets\EncryptedAttributeInventory`**, and the models do not
+declare their own casts: `App\Models\Concerns\EncryptsSensitiveAttributes` reads that registry, so the
+casts and ADR-003 D8's re-encryption job (`App\Security\Secrets\AppKeyRotation`) are the *same* list
+and the job cannot fall behind a cast by omission. The migration is
+`2026_10_13_000013_encrypt_sensitive_attributes_at_rest`.
+
+**If `core.app-key` is lost, these columns are unreadable and no support path recovers them.** That is
+what made **A25** a hard gate on this item: a keep-data uninstall keeps `core.app-key` and only it, so
+the key survives exactly the uninstall that keeps the data, and a delete-everything uninstall takes
+both ([uninstall.md](../operations/uninstall.md) §3, §5, §7; ADR-003 D8).
+`tests/Feature/Install/ReinstallPreservesDataTest.php` boots twice over one data directory and reads
+the encrypted rows back.
+
+#### What is encrypted
+
+| Table | Column | Cast | Why |
+|---|---|---|---|
+| `contact_emails` | `address` | `encrypted` | The strongest identifier a natural person has here, on a `personal` row. Exact-match only, so the unique index moves onto `address_hash` (below) |
+| `contacts` | `phones` | `encrypted:array` | Personal data that nothing matches on — "nothing matches on a phone number" — and InnoDB cannot index a JSON column anyway |
+| `communications` | `from_address` | `encrypted` | The sender of a timeline item. Read whole, never matched: §5.6 resolves an address *through* `contact_emails`, not by querying this column |
+| `commitments` | `text` | `encrypted` | The promise as it was made, quoted verbatim, on a `confidential` row. No index, no full-text index |
+| `source_records` | `payload` | `encrypted:array` | External content. The replay key is the external-id tuple plus `content_hash`; nothing matches inside the payload (ADR-002 D3.3) |
+| `memories` | `content` | `encrypted` | §4's app-owned memory; `personal` whenever it is about a natural person. The single-active guarantee is the index over `scope_key`/`memory_key` |
+| `memory_sources` | `excerpt` | `encrypted` | A quoted fragment of someone's mail or issue; the ordering is `memory_sources_memory_position_unique` over ids |
+| `ai_runs` | `prompt_redacted`, `response_redacted` | `encrypted` | ADR-004 D7's prompt and response. Already redacted on write (ADR-003 D7 row 4); this is the second layer, because a redactor is a pattern matcher |
+| `tool_runs` | `arguments_redacted`, `result_redacted` | `encrypted:array` | What a tool was called with and what came back (§1.2). Every index on the table is over ids, the tool name, the decision or a timestamp |
+| `push_subscriptions` | `p256dh`, `auth` | `encrypted` | ADR-006's Web Push key material, assigned to this item by name by ADR-002 D9.5 and the table's own migration. Not a credential of ours under D1 — the browser handed them to us and the VAPID private key is the Keychain item — but they are the secret half of a subscription |
+
+Thirteen columns across ten models. **No entry is a token, password, key or verifier**: credentials
+live in the Keychain and no column holds one, encrypted or not (ADR-003 D1, Forbidden 1), asserted over
+the inventory by the same forbidden-name pattern the S2-03 contract test uses on whole tables.
+
+#### What is deliberately left plaintext, and why
+
+An `encrypted:` cast costs three things, and each one excludes columns. The inventory test asserts the
+first two structurally, so a later item cannot cross these lines by accident.
+
+| Left plaintext | Reason |
+|---|---|
+| `customers.display_name`/`legal_name`/`notes`, `contacts.display_name`/`given_name`/`family_name`/`title`/`notes`, `communications.subject`/`excerpt` | **They are the search corpus.** `App\CRM\Search\SearchableEntity` names them, the FTS5 external-content tables and the InnoDB `FULLTEXT` indexes cover exactly them, and ciphertext tokenises to noise. They keep their row's `sensitivity_class` instead |
+| `communications.to_addresses` | The §5.6 exact-lookup column for "which of our addresses was this addressed to" — the check that refuses an outgoing mail whose From is not in `send_as_addresses`. A column that is matched cannot be ciphertext |
+| `push_subscriptions.endpoint` | The natural key (`push_subscriptions_endpoint_unique`): re-subscribing the same browser must find the existing row rather than add a second one |
+| `action_proposals.payload`, `redacted_value`, `value_hash` | ADR-005 D1.3/D1.10 already say the sensitive thing — the text that will be typed — is **never stored**; the row keeps a redaction and a hash. And `payload`/`proposal_hash` are the §11 integrity pair the executing side re-verifies, so putting them behind a decrypt would turn "this proposal was tampered with" into "this proposal cannot be checked" — the fail-closed path gets worse, not better |
+| `audit_events.context`, `health_events.context`, the §11 re-auth evidence (`auth_devices.ip_address`/`user_agent`, `action_approvals.ip_address`/`user_agent`) | The §10/§11 evidence trail. It is already redacted on write and hidden from serialisation, and it is the record that explains what happened — the one thing that must still be readable while an incident is being understood |
+| `email_connections`, `external_accounts`, `sync_cursors`, `email_sync_cursors`, `mcp_*`, `privacy_policies`, `backup_runs` | **They landed empty** (S2-03). `email_connections.email_address` and `external_accounts.provider_account_id` are identity columns under unique indexes, so encrypting them means designing a blind index for queries that do not exist yet; that belongs with E3-1 and E3-5, which write the rows. Encrypting an empty table buys nothing today and would constrain an item that has not written its queries |
+
+#### Uniqueness: `contact_emails.address_hash`
+
+Laravel's encrypter is randomised — `Encrypter::encrypt()` draws a fresh IV, so the same plaintext
+yields different ciphertext every time. A unique index over an encrypted column therefore constrains
+nothing and an equality lookup never hits. One inventoried column was unique, so its constraint moved:
+
+| Column | Notes |
+|---|---|
+| `address_hash` | `char(64)`, **keyed** HMAC-SHA256 of the trimmed, lower-cased `address` under a key derived from `core.app-key` (`App\Security\Secrets\BlindIndex`). Carries **`contact_emails_organization_address_unique (organization_id, address_hash)`** — the index keeps the name S2-01 froze and changes its columns |
+
+Same shape as `passkey_credentials.credential_id_hash` (#117): the value lives in a wide, unindexed
+column and a fixed-width digest carries the key. `ContactEmail::hashFor()` is the single definition, a
+`saving` hook recomputes it from `address` on every write, and `ContactEmail::forAddress()` is the only
+way a caller looks one up — §5.6's "the sender address is the primary address of contact X" resolves
+through that scope. It is **keyed** where the passkey hash is not, because a credential id is not a
+secret while an email address is: the set of plausible addresses is small enough to enumerate, so an
+unkeyed digest would be reversible by dictionary and would hand back the value the ciphertext beside it
+exists to protect. Rotation therefore rewrites the hash column as well as the ciphertext, and a lookup
+asks for the hash under every key in the envelope so an interrupted rotation leaves addresses findable
+rather than invisible.
+
+#### Width, the `json` type, and why the `local` profile is untouched
+
+A Laravel payload is base64 of a JSON envelope around the padded ciphertext — roughly **2.4×** the
+input — and MySQL runs `STRICT_TRANS_TABLES` here, so an overflow is a hard error and not a silent
+truncation (#117 measured exactly that for `credential_id`). Worse, an `encrypted:array` cast writes a
+base64 *string*, which MySQL's `json` type rejects outright. So on the `server` profile every
+inventoried column becomes **`mediumtext`**, which also moves the `varchar(320)`/`varchar(255)` values
+off-page and takes pressure off MySQL's 65 535-byte row-definition limit rather than adding to it.
+
+**None of that touches SQLite.** Its grammar emits no `VARCHAR` length and enforces none, and `json()`
+already compiles to `text`, so every one of these columns is already unbounded on `local`; the widening
+is skipped there, and the one step that would cost something — Laravel's SQLite grammar implements
+`->change()` by rebuilding the table — never runs on the profile the owner uses. On `local` the
+migration's only writes are the row rewrites themselves.
+
+#### Bringing existing rows forward
+
+Local installs already hold plaintext rows and `migrate` never re-runs an applied migration, so the
+migration rewrites them: `App\Security\Secrets\SensitiveAttributeRewriter` walks the inventory with
+`chunkById` (never `chunk` — both loops write to the column they page over, and `chunk()`'s raw-offset
+paging skips rows at exactly one past the chunk size, *silently*, which is the bug #117's backfill
+shipped with), skips any value that is already a payload, and treats each value as an opaque string so
+the plaintext comes back byte-identical rather than through a JSON round trip.
+
+Order matters and is guarded at every step: `address_hash` is added and backfilled from the plaintext
+**before** the index moves; a scaffold index over the new columns goes up **before** the old one comes
+down, because InnoDB reused `(organization_id, address)` as `contact_emails_organization_fk`'s index and
+refuses to drop it otherwise (`SQLSTATE[HY000] 1553`, seen on a clean MySQL 8.4 database and invisible to
+every SQLite-only check); `address` is widened **after** the index is gone, because a `TEXT` column
+cannot carry an unprefixed key; and the rows are encrypted **last**, because encrypting first would
+overflow a column that has not been widened yet. On a fresh install the schema steps run and every row
+rewrite is an empty `SELECT`. `tests/Feature/Secrets/SensitiveAttributeRollForwardTest.php` builds a
+throwaway database on the pre-S2-04 shape, gives it one row in every inventoried table, runs the one
+migration over it, and asserts no row was lost, every value decrypts to its exact bytes, the search
+columns were untouched, the index moved and still constrains, and a replay changes nothing.
+
+#### Rotation, and failing closed
+
+`core.app-key` holds `{current, previous[]}` and the Supervisor hands both to
+`SecretsServiceProvider`, which sets `app.key` and `app.previous_keys` before the encrypter resolves
+(ADR-003 D3.3). So the instant a new key is written every existing row still reads, because Laravel
+falls back through `previous_keys` (Evidence E35) — which is what makes
+`App\Security\Secrets\AppKeyRotation` safe to be *queued*. It re-encrypts every inventoried value under
+the current key, rewrites `address_hash`, and records counts and column names in `audit_events` —
+never a value. A value no key can read is counted and reported, never overwritten: that row's contents
+are already gone, and writing a re-encrypted nothing over it would destroy the only evidence that a key
+was lost rather than rotated.
+
+A read that cannot decrypt raises **`App\Security\Secrets\UnreadableEncryptedAttributeException`**,
+naming the model, the attribute, `core.app-key` and the uninstall documentation — never the value or
+the key. Nothing returns the ciphertext, an empty string, or a "maybe it is still plaintext" fallback.
+Laravel's own `DecryptException` ("The MAC is invalid.") is already fail-closed; what this adds is a
+message the person reading the log can act on.
 
 ## 3. Round trip with the brief and CRM fixtures
 

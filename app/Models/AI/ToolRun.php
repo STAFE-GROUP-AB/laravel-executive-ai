@@ -10,6 +10,7 @@ use App\AI\Tools\ToolKind;
 use App\AI\Tools\ToolRunOutcome;
 use App\Models\Approvals\ActionProposal;
 use App\Models\Concerns\BusinessObject;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use App\Models\Organization;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +26,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * computer-use row carries `screenshot_sha256` plus dimensions, app bundle id and
  * window title and nothing else about the frame (ADR-003 D7 row 8, ADR-005 D1.7) —
  * `tests/Security/AuditNoBlobTest.php` keeps it that way.
+ *
+ * `arguments_redacted` and `result_redacted` are **encrypted at rest** (S2-04): what a
+ * tool was called with and what came back, already redacted on write (ADR-003 D7 row
+ * 4) and matched by nothing — every index on this table is over ids, the tool name,
+ * the policy decision or a timestamp. They stop being `json` columns on the `server`
+ * profile because the cast stores a base64 payload, which MySQL's `json` type rejects.
  *
  * @property string $id
  * @property string $organization_id
@@ -54,6 +61,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ToolRun extends Model
 {
     use BusinessObject;
+    use EncryptsSensitiveAttributes;
 
     protected $guarded = [];
 
@@ -62,10 +70,9 @@ class ToolRun extends Model
     {
         return [
             ...$this->businessObjectCasts(),
+            ...$this->encryptedAttributeCasts(),
             'tool_kind' => ToolKind::class,
             'step' => 'integer',
-            'arguments_redacted' => 'array',
-            'result_redacted' => 'array',
             'policy_decision' => PolicyDecision::class,
             'outcome' => ToolRunOutcome::class,
             'error_kind' => AiErrorKind::class,

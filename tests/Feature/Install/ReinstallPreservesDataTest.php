@@ -5,11 +5,16 @@ declare(strict_types=1);
 use App\Briefs\Generation\PlaceholderBrief;
 use App\Console\Commands\OwnerCreateCommand;
 use App\Models\Brief;
+use App\Models\CRM\Contact;
+use App\Models\CRM\ContactEmail;
 use App\Models\Membership;
 use App\Models\MembershipRole;
 use App\Models\User;
 use App\Security\Authorization\CreateOwner;
 use App\Security\Authorization\OwnerDetails;
+use App\Security\Secrets\UnreadableEncryptedAttributeException;
+use App\Support\Data\Provenance;
+use App\Support\Data\ProvenanceOrigin;
 use App\Support\Install\InstallState;
 use App\Support\Install\InstallStateStore;
 use App\Support\Runtime\RuntimeLayout;
@@ -21,6 +26,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\File;
+use Tests\Support\ApplicationKeys;
 use Tests\Support\FreshInstance;
 
 /*
@@ -34,6 +40,11 @@ use Tests\Support\FreshInstance;
  * The suite's own database (database/testing.sqlite, DatabaseTransactions) is never used:
  * DB_DATABASE is lifted so the ADR-001 D4 default <LEA_DATA_DIR>/database/executive.sqlite
  * applies, exactly as it does under the Supervisor.
+ *
+ * Since S2-04 (#87) this file also carries the **A25** acceptance. From the first
+ * `encrypted:` cast, "the kept database opens unchanged" is only true if `core.app-key`
+ * was kept with it, so the second boot reads an encrypted row back — and then proves
+ * what a keep-data uninstall that had deleted the key would have left behind instead.
  */
 
 /** A temporary installer-shaped data directory and two boots against it. */
@@ -200,5 +211,75 @@ it('starts with no owner on a fresh data directory, so delete-everything really 
 
         $response = $app->make(HttpKernel::class)->handle(Request::create(FreshInstance::ORIGIN.'/install/owner'));
         expect($response->getStatusCode())->toBe(200);
+    });
+});
+
+it('reads every encrypted row back after a keep-data uninstall, because A25 keeps core.app-key', function (): void {
+    $dataDir = ReinstallFixture::installerShapedDataDirectory();
+    ReinstallFixture::pointAt($dataDir);
+
+    // First install: an owner, and a contact whose phone list and email address are
+    // §3.1 sensitive attributes — encrypted at rest from S2-04 (#87) on.
+    $firstInstall = ReinstallFixture::boot(function (Application $app): array {
+        $created = $app->make(CreateOwner::class)->create(new OwnerDetails('Ada Owner', 'owner@example.test', 'Example Organization', 'Europe/Stockholm', 'sv'), 'job:test-install');
+
+        $contact = Contact::query()->create([
+            'organization_id' => $created->organization->id,
+            'given_name' => 'Karin',
+            'family_name' => 'Nordlund',
+            'display_name' => 'Karin Nordlund',
+            'title' => 'Platschef',
+            'phones' => [['number' => '+46 70 123 45 67', 'label' => 'mobile']],
+            'language' => 'sv',
+            'notes' => 'Vill helst ha mejl.',
+            'sensitivity_class' => 'personal',
+            'provenance' => Provenance::job('ReinstallPreservesDataTest', ProvenanceOrigin::Manual),
+        ]);
+
+        $email = ContactEmail::query()->create([
+            'organization_id' => $created->organization->id,
+            'contact_id' => $contact->id,
+            'address' => 'karin.nordlund@example.test',
+            'label' => 'work',
+            'is_primary' => true,
+            'position' => 0,
+            'sensitivity_class' => 'personal',
+            'provenance' => Provenance::job('ReinstallPreservesDataTest', ProvenanceOrigin::Manual),
+        ]);
+
+        $app->make(InstallStateStore::class)->transition(InstallState::CoreReady, 'HEALTH_CHECK');
+
+        // The address really is ciphertext in the file that is about to be kept.
+        $stored = (string) $app->make(DatabaseManager::class)->connection()
+            ->table('contact_emails')->where('id', $email->id)->value('address');
+
+        expect($stored)->not->toContain('karin.nordlund@example.test');
+
+        return ['contact_id' => $contact->id, 'email_id' => $email->id, 'key' => (string) $app['config']['app.key']];
+    });
+
+    // The keep-data uninstall: everything but `data/` goes, and — this is **A25**,
+    // option (a), decided 2026-10-11 — `core.app-key` stays. The Supervisor therefore
+    // hands the next boot the same `laravel_app_key` envelope, which the unchanged
+    // APP_KEY models here.
+    ReinstallFixture::boot(function (Application $app) use ($firstInstall): void {
+        expect((string) $app['config']['app.key'])->toBe($firstInstall['key'], 'the kept install boots on the kept application key');
+
+        $contact = Contact::query()->findOrFail($firstInstall['contact_id']);
+        $email = ContactEmail::query()->findOrFail($firstInstall['email_id']);
+
+        expect($email->address)->toBe('karin.nordlund@example.test', 'the encrypted address came back')
+            ->and($contact->phones)->toBe([['number' => '+46 70 123 45 67', 'label' => 'mobile']], 'the encrypted phone list came back')
+            // The lookup §5.6 depends on survives the reinstall too: the blind index
+            // is keyed from the same application key, so it still resolves.
+            ->and(ContactEmail::query()->forAddress('karin.nordlund@example.test')->firstOrFail()->id)->toBe($firstInstall['email_id']);
+
+        // And what A25's rejected option (c) would have left instead: the data kept,
+        // the key gone, the rows unreadable — and a failure that is loud rather than an
+        // empty field in a brief.
+        ApplicationKeys::with(ApplicationKeys::fresh(), [], function () use ($firstInstall): void {
+            expect(fn () => ContactEmail::query()->findOrFail($firstInstall['email_id'])->address)
+                ->toThrow(UnreadableEncryptedAttributeException::class);
+        });
     });
 });

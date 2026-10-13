@@ -73,9 +73,9 @@ final class XPCSupervisorControlClient: SupervisorControlling, @unchecked Sendab
         }
     }
 
-    func removeAllSecrets() async throws -> [KeychainItemRef] {
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef] {
         try await call { proxy, finish in
-            proxy.removeAllSecrets { data, error in finish(Self.result([KeychainItemRef].self, data, error)) }
+            proxy.removeAllSecrets(keepApplicationKey: keepApplicationKey) { data, error in finish(Self.result([KeychainItemRef].self, data, error)) }
         }
     }
 

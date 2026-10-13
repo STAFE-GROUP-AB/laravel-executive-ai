@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented (S1-07, #35): `apps/macos/LaravelExecutiveAISupervisor/` (the headless tool, shared into the app module for tests), `apps/macos/LaravelExecutiveAI/Services/` (the GUI side: booter, XPC client, panel service control), `apps/macos/LaravelExecutiveAI/IPC/IpcSigning.swift` (token and signature arithmetic, shared with S1-08 part 2), `packaging/manifest/launchd/`, `app/Security/Secrets/` + `config/secrets.php` + `App\Security\Ipc\BrokerKeySource` (the PHP end of the broker). S1-13 (#41) added `removeAllSecrets()` to the control surface and the uninstall order in §8 (`apps/macos/LaravelExecutiveAI/Install/Uninstaller.swift`). Real launchd, Keychain and XPC paths are exercised only on the S1-14 lab Mac; every test runs against recording doubles. |
+| **Status** | Implemented (S1-07, #35): `apps/macos/LaravelExecutiveAISupervisor/` (the headless tool, shared into the app module for tests), `apps/macos/LaravelExecutiveAI/Services/` (the GUI side: booter, XPC client, panel service control), `apps/macos/LaravelExecutiveAI/IPC/IpcSigning.swift` (token and signature arithmetic, shared with S1-08 part 2), `packaging/manifest/launchd/`, `app/Security/Secrets/` + `config/secrets.php` + `App\Security\Ipc\BrokerKeySource` (the PHP end of the broker). S1-13 (#41) added `removeAllSecrets()` to the control surface and the uninstall order in §8; S2-04 (#87) gave it the A25 `keepApplicationKey` argument (`apps/macos/LaravelExecutiveAI/Install/Uninstaller.swift`). Real launchd, Keychain and XPC paths are exercised only on the S1-14 lab Mac; every test runs against recording doubles. |
 | **Blueprint** | §2 (separate supervised processes; `php artisan serve` forbidden), §9 (automatic launch, crash restart, bounded retries, health probes, "tydligt om användarinloggning krävs"), §12.1 `BOOT_SERVICES`, §16 step 5 (kill/restart and uninstall verified on a clean Mac — S1-14) |
 | **Decisions** | ADR-001 D3 (one LaunchAgent, the Supervisor; verify on every boot; backoff and bound; **user login required**), D4 (no `.env`, non-secret config as environment); ADR-003 D1 (what lives in the Keychain), D2 (one writer), D3 (the broker), D7 row 12 (no secret in any child's environment), D8 (reset pairing, uninstall); [ipc-contract.md](ipc-contract.md) §3.1–3.3 (`K`, pairing grant, tokens), §6.8/§7 (service control is XPC); [health-contract.md](health-contract.md) §1, §6 |
 | **Tests** | `apps/macos/LaravelExecutiveAITests/Services/` (`ServiceSupervisorTests`, `SupervisorSpawnTests`, `LaunchAgentServiceBooterTests`, `SupervisorSecretsTests`, `SecretsBrokerTests`, `SupervisorControlServiceTests`, `SupervisorRuntimeTests`, `IPCSigningFixtureTests`, `SupervisorBundleTests`), `tests/Feature/Secrets/`, `packaging/manifest/launchd/test/supervisor-plist.test.mjs` |
@@ -233,7 +233,10 @@ Who calls what:
 ```swift
 try await Uninstaller(dependencies: .live(control: SupervisorControlClientFactory.live())).uninstall(choice: .keep | .delete)
 // 1. control.stopAll()                 — the three PHP children stop (XPC)
-// 2. control.removeAllSecrets()        — every se.stafe.executive-ai.* item, through the Supervisor (XPC; ADR-003 D2, D8, T-41)
+// 2. control.removeAllSecrets(keepApplicationKey: choice.preservesData)
+//                                      — every se.stafe.executive-ai.* item, through the Supervisor (XPC; ADR-003 D2, D8, T-41),
+//                                        except core.app-key when the data is kept: from S2-04's first `encrypted:` cast it is
+//                                        the only thing that can read the rows the person chose to keep (A25). Default false.
 // 3. registrar.unregister()            — SMAppService.unregister(): the agent cannot respawn a Supervisor that would recreate them
 // 4. RuntimeUninstaller.remove(preservingData:includingInstallDirectory: false)  — runtime/, run/, Caches, Logs; data/ unless kept
 // 5. BriefCache.clear()
@@ -244,7 +247,7 @@ try await Uninstaller(dependencies: .live(control: SupervisorControlClientFactor
 **Decided here: the Keychain sweep runs through the Supervisor over XPC, before it is
 unregistered.** The alternative — a `keychain-access-groups` entitlement on the app so the
 uninstaller could delete the items itself — would have made a second process a Keychain writer
-and contradicted ADR-003 D2 for one feature. So `removeAllSecrets()` is a §7 operation, the
+and contradicted ADR-003 D2 for one feature. So `removeAllSecrets(keepApplicationKey:)` is a §7 operation, the
 Supervisor must be alive for steps 1–2, and the order is stop → sweep → unregister. When the
 agent is not `enabled` (never registered, never approved in Login Items, disabled there later)
 no Supervisor can be running and nothing holds the access group; the uninstaller then skips

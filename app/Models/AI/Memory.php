@@ -8,6 +8,7 @@ use App\AI\Memory\MemoryKind;
 use App\AI\Memory\MemoryScope;
 use App\AI\Memory\MemoryStatus;
 use App\Models\Concerns\BusinessObject;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use App\Models\Organization;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -23,6 +24,11 @@ use InvalidArgumentException;
  * `MemoryStatus::Proposed` and needs a reviewed operation before it becomes
  * `Active`; `Active` is the only status `active()` — and therefore the agent —
  * returns.
+ *
+ * `content` is **encrypted at rest** (S2-04): a memory about a natural person is
+ * `sensitivity_class = personal`, and nothing matches on the content — the
+ * single-active-memory guarantee is the index over `scope_key` and `memory_key`, and
+ * `memories` has no full-text index.
  *
  * @property string $id
  * @property string $organization_id
@@ -50,6 +56,7 @@ use InvalidArgumentException;
 class Memory extends Model
 {
     use BusinessObject;
+    use EncryptsSensitiveAttributes;
     use SoftDeletes;
 
     /**
@@ -64,6 +71,7 @@ class Memory extends Model
     {
         return [
             ...$this->businessObjectCasts(),
+            ...$this->encryptedAttributeCasts(),
             'scope' => MemoryScope::class,
             'kind' => MemoryKind::class,
             'status' => MemoryStatus::class,

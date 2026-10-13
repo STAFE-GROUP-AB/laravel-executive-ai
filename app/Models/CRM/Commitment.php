@@ -7,6 +7,7 @@ namespace App\Models\CRM;
 use App\CRM\Commitments\CommitmentDirection;
 use App\CRM\Commitments\CommitmentStatus;
 use App\CRM\Commitments\ExtractedBy;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * A promise made in a communication (§3.1 `commitments`). `brief_item_id` is the
  * brief document's item id (`brief_items.item_id`), not a row key — see the
  * migration — so it is a plain column, resolved through the latest brief version.
+ *
+ * `text` is **encrypted at rest** (S2-04): the promise as it was made, quoted
+ * verbatim, on a row classified `confidential`. No index reads it and no search
+ * covers it — `commitments` has no full-text index — so the cast costs no query.
  *
  * @property string $communication_id
  * @property string $customer_id
@@ -29,11 +34,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Commitment extends CrmModel
 {
+    use EncryptsSensitiveAttributes;
+
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             ...parent::casts(),
+            ...$this->encryptedAttributeCasts(),
             'direction' => CommitmentDirection::class,
             'promised_at' => 'immutable_datetime',
             'due_at' => 'immutable_datetime',

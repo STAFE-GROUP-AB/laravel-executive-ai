@@ -39,12 +39,15 @@ final class UninstallerTests: XCTestCase {
         let briefCache: BriefCache
         let bundleURL = URL(fileURLWithPath: "/Applications/Example.app")
         let foreignItem = KeychainItemRef(service: "com.example.unrelated", account: "other")
+        /// The envelope the first boot generated, so a keep-data test can prove the item that
+        /// survives the sweep is that same key and not a regenerated one (A25).
+        let appKey: AppKeyEnvelope
         var dependencies: UninstallDependencies
 
         init(paths: InstallPaths, registrarStatus: LaunchAgentStatus = .enabled, control: ScriptedSupervisorControl? = nil, remover: RecordingAppBundleRemover = RecordingAppBundleRemover()) async throws {
             let fileManager = FileManager.default
             let secrets = SupervisorSecrets(store: keychain)
-            try secrets.ensureAppKey()
+            appKey = try secrets.ensureAppKey()
             _ = try secrets.ensureIpcKey()
             try secrets.storeProviderApiKey(provider: "openai", apiKey: TransientSecret("sk-test-not-a-real-key-000000000000")!)
             try keychain.write(foreignItem, data: Data("keep".utf8), label: "unrelated")
@@ -109,7 +112,7 @@ final class UninstallerTests: XCTestCase {
         let report = try await harness.uninstaller.uninstall(choice: .delete)
 
         // The order: stop → sweep through the Supervisor → unregister → files → trash.
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets])
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: false)])
         XCTAssertEqual(harness.registrar.calls.filter { $0 == .unregister }, [.unregister])
         XCTAssertEqual(report.performed, UninstallStep.allCases)
         XCTAssertEqual(report.resumedFrom, [])
@@ -127,6 +130,7 @@ final class UninstallerTests: XCTestCase {
         // launchd and the Keychain.
         XCTAssertEqual(harness.registrar.status(), .notRegistered)
         XCTAssertEqual(harness.inventoryItems, [], "every se.stafe.executive-ai.* item is gone")
+        XCTAssertNil(harness.keychain.snapshot[SupervisorSecrets.appKeyRef], "A25 spares the application key only when data is kept; this choice takes it too")
         XCTAssertEqual(Array(harness.keychain.snapshot.keys), [harness.foreignItem], "an item that is not ours is untouched")
 
         // The bundle, exactly once, last.
@@ -142,7 +146,7 @@ final class UninstallerTests: XCTestCase {
 
         let again = try await harness.uninstaller.uninstall(choice: .delete)
 
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets], "the Supervisor is not called again once the agent is unregistered")
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: false)], "the Supervisor is not called again once the agent is unregistered")
         XCTAssertEqual(harness.registrar.calls.filter { $0 == .unregister }.count, 1)
         XCTAssertEqual(harness.remover.trashed.count, 2, "trashing again is harmless; the Finder ignores a missing item")
         XCTAssertEqual(again.secretsSweep.status, .skipped, "with no Supervisor registered there is nothing to sweep, and the report says so")
@@ -158,10 +162,18 @@ final class UninstallerTests: XCTestCase {
         let report = try await harness.uninstaller.uninstall(choice: .keep)
 
         XCTAssertEqual(report.preservedData, paths.dataRoot)
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets])
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: true)])
         XCTAssertEqual(harness.registrar.status(), .notRegistered)
-        XCTAssertEqual(harness.inventoryItems, [], "Keychain items go even when data stays (ADR-003 D8)")
         XCTAssertEqual(harness.remover.trashed, [harness.bundleURL])
+
+        // A25 (ADR-003 D8, "every item except the application key when data is kept"): `K` and the
+        // provider key go, `core.app-key` stays — it is the only thing that can read the rows under
+        // the `data/` tree this choice keeps (S2-04's `encrypted:` casts), and the count the sheet
+        // shows is what was actually removed, so the spared key is not in it.
+        XCTAssertEqual(harness.inventoryItems, [SupervisorSecrets.appKeyRef])
+        XCTAssertEqual(report.secretsSweep, .removed(count: 2))
+        XCTAssertEqual(Set(harness.keychain.snapshot.keys), [SupervisorSecrets.appKeyRef, harness.foreignItem], "an item that is not ours is untouched either way")
+        XCTAssertEqual(try SupervisorSecrets(store: harness.keychain).ensureAppKey(), harness.appKey, "the same key, not a freshly generated one: the preserved database still decrypts")
 
         // Kept: the database, the backups, the storage tree — with a real logs directory in
         // place of the symlink into the removed Logs directory.
@@ -254,7 +266,7 @@ final class UninstallerTests: XCTestCase {
 
             XCTAssertEqual(report.resumedFrom, journaled, "\(interruptAfter)")
             XCTAssertEqual(report.performed, Array(UninstallStep.allCases.dropFirst(journaled.count)), "\(interruptAfter): the second run does only what is left")
-            XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets], "\(interruptAfter): the Supervisor is stopped and swept exactly once")
+            XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: false)], "\(interruptAfter): the Supervisor is stopped and swept exactly once")
             XCTAssertEqual(harness.registrar.calls.filter { $0 == .unregister }.count, 1, "\(interruptAfter): unregistered exactly once")
             XCTAssertEqual(harness.remover.trashed, [harness.bundleURL], "\(interruptAfter): trashed exactly once")
             XCTAssertEqual(harness.inventoryItems, [], "\(interruptAfter)")
@@ -285,8 +297,8 @@ final class UninstallerTests: XCTestCase {
         let report = try await harness.uninstaller.uninstall(choice: .keep)
 
         XCTAssertEqual(report.resumedFrom, [.servicesStopped, .secretsRemoved])
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets], "the sweep is not repeated")
-        XCTAssertEqual(report.secretsSweep, .removed(count: 3), "the first run's sweep result is carried in the journal")
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: true)], "the sweep is not repeated")
+        XCTAssertEqual(report.secretsSweep, .removed(count: 2), "the first run's sweep result is carried in the journal — two items, because this keep-data run spared the application key (A25)")
         XCTAssertEqual(harness.registrar.status(), .notRegistered)
         XCTAssertFalse(exists(paths.runtimeRoot))
         XCTAssertTrue(exists(paths.dataRoot))
@@ -313,7 +325,44 @@ final class UninstallerTests: XCTestCase {
         XCTAssertTrue(report.performed.contains(.runtimeRemoved), "the file-system step runs again under the new choice")
         XCTAssertFalse(exists(paths.dataRoot))
         XCTAssertFalse(exists(paths.applicationSupport))
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets])
+
+        // The crash came after step 3, so the Supervisor that holds the access group is already
+        // unregistered: the keep-data sweep cannot be repeated and the `core.app-key` it spared
+        // (A25) outlives the uninstall. The journal keeps the honest record of the run that did
+        // sweep rather than claiming a second one.
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: true)])
+        XCTAssertEqual(harness.inventoryItems, [SupervisorSecrets.appKeyRef])
+        XCTAssertEqual(report.secretsSweep, .removed(count: 2))
+    }
+
+    /// The same change of mind, but before step 3: the Supervisor is still there, so the key the
+    /// keep-data sweep spared is collected after all (A25 — "a delete-everything uninstall deletes
+    /// the key too").
+    func testChangingTheDataChoiceBeforeUnregisteringSweepsTheApplicationKeyAfterAll() async throws {
+        var harness = try await Harness(paths: paths)
+        harness.dependencies.afterStep = { step in
+            if step == .secretsRemoved {
+                throw CancellationError()
+            }
+        }
+
+        do {
+            _ = try await harness.uninstaller.uninstall(choice: .keep)
+            XCTFail("expected the simulated crash")
+        } catch is CancellationError {}
+
+        XCTAssertEqual(harness.inventoryItems, [SupervisorSecrets.appKeyRef], "the keep-data sweep spared exactly the application key")
+
+        harness.dependencies.afterStep = nil
+        let report = try await harness.uninstaller.uninstall(choice: .delete)
+
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: true), .removeAllSecrets(keepApplicationKey: false)])
+        XCTAssertTrue(report.performed.contains(.secretsRemoved), "the sweep runs again under the new choice")
+        XCTAssertEqual(report.secretsSweep, .removed(count: 1), "only the one item that was left")
+        XCTAssertEqual(harness.inventoryItems, [], "nothing of ours is left behind (T-41)")
+        XCTAssertEqual(Array(harness.keychain.snapshot.keys), [harness.foreignItem])
+        XCTAssertEqual(harness.registrar.calls.filter { $0 == .unregister }.count, 1, "unregistered exactly once")
+        XCTAssertFalse(exists(paths.dataRoot))
     }
 
     // MARK: - Fail closed
@@ -347,7 +396,7 @@ final class UninstallerTests: XCTestCase {
             XCTAssertEqual(error, .secretsFailed("secrets"))
         }
 
-        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets])
+        XCTAssertEqual(harness.control.calls, [.stopAll, .removeAllSecrets(keepApplicationKey: false)])
         XCTAssertEqual(harness.registrar.status(), .enabled, "the agent stays so the sweep can be retried through the Supervisor")
         XCTAssertTrue(exists(paths.runtimeRoot))
         XCTAssertEqual(harness.remover.trashed, [])

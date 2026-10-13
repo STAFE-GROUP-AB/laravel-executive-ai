@@ -396,8 +396,8 @@ final class StubSupervisorControl: SupervisorControlling, Sendable {
         recorded.withLock { $0.append("storeProviderApiKey") }
     }
 
-    func removeAllSecrets() async throws -> [KeychainItemRef] {
-        recorded.withLock { $0.append("removeAllSecrets") }
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef] {
+        recorded.withLock { $0.append(keepApplicationKey ? "removeAllSecrets(keepApplicationKey)" : "removeAllSecrets") }
 
         return []
     }

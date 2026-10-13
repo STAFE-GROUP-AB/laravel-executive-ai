@@ -89,6 +89,33 @@ final class SupervisorControlServiceTests: XCTestCase {
         XCTAssertEqual(SupervisorControlWire.decode([KeychainItemRef].self, from: encoded), removed)
     }
 
+    // A25: the same sweep with the keep-data flag. One item survives — the key the preserved
+    // database is encrypted under — and the returned list, which is what the uninstall sheet
+    // counts, does not pretend otherwise.
+    func testRemoveAllSecretsSparesTheApplicationKeyWhenDataIsKept() async throws {
+        let (service, secrets, _, store) = try makeService()
+        let appKey = try secrets.ensureAppKey()
+        try secrets.storeProviderApiKey(provider: "openai", apiKey: TransientSecret("sk-test-not-a-real-key-000000000000")!)
+        try store.write(KeychainItemRef(service: "com.example.unrelated", account: "other"), data: Data("keep".utf8), label: "unrelated")
+        _ = try await service.pair(client: .menubar)
+
+        let removed = try await service.removeAllSecrets(keepApplicationKey: true)
+
+        XCTAssertEqual(Set(removed.map(\.service)), [SecretService.ipcMenubar, SecretService.aiProvider])
+        XCTAssertFalse(removed.contains(SupervisorSecrets.appKeyRef), "a spared item is not counted as removed")
+        XCTAssertEqual(Set(store.snapshot.keys.map(\.service)), [SecretService.appKey, "com.example.unrelated"])
+        XCTAssertEqual(try secrets.ensureAppKey(), appKey, "the key the preserved data is encrypted under is still there")
+
+        // `K` went with the rest, so the sessions die on this path too.
+        let sessions = await service.currentSessions
+        XCTAssertTrue(sessions.isEmpty)
+
+        // The protocol's no-argument form is ADR-003 D8's original sweep.
+        let rest = try await service.removeAllSecrets()
+        XCTAssertEqual(rest, [SupervisorSecrets.appKeyRef])
+        XCTAssertEqual(store.snapshot.keys.map(\.service), ["com.example.unrelated"])
+    }
+
     func testRemoveAllSecretsReportsAKeychainFailureAsSecretsError() async throws {
         let now = self.now
         let store = InMemoryKeychainStore(failingWith: .status(-25308))

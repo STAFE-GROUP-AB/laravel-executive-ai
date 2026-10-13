@@ -118,6 +118,40 @@ final class SupervisorSecretsTests: XCTestCase {
         XCTAssertNotNil(store.snapshot[KeychainItemRef(service: "se.other.app", account: "x")])
     }
 
+    // A25 (decided 2026-10-11, ADR-003 D8 "every item except the application key when data is
+    // kept"): a keep-data uninstall spares `core.app-key` and only it. From S2-04's first
+    // `encrypted:` cast that key is the only thing that can read the rows the person chose to
+    // keep, so it has to outlive the sweep — every account under the service, not just `default`.
+    func testRemoveAllSparesOnlyTheApplicationKeyWhenDataIsKept() throws {
+        let store = InMemoryKeychainStore()
+        let secrets = secrets(store)
+        let appKey = try secrets.ensureAppKey()
+        _ = try secrets.ensureIpcKey()
+        try secrets.storeProviderApiKey(provider: "mistral", apiKey: TransientSecret("not-a-real-key-0123456789")!)
+        try secrets.storeProviderApiKey(provider: "openai", apiKey: TransientSecret("not-a-real-key-9876543210")!)
+
+        // A rotated-out account under the spared service: the exception is the service identity,
+        // so every account under it survives, and nothing under any other service does.
+        let rotated = KeychainItemRef(service: SecretService.appKey, account: "previous")
+        try store.write(rotated, data: Data([2]), label: SecretService.label(SecretService.appKey))
+        let foreign = KeychainItemRef(service: "se.other.app", account: "x")
+        try store.write(foreign, data: Data([1]), label: "other")
+
+        let removed = try secrets.removeAll(keepApplicationKey: true)
+
+        XCTAssertEqual(Set(removed.map(\.service)), [SecretService.ipcMenubar, SecretService.aiProvider])
+        XCTAssertEqual(removed.count, 3, "`K` and both provider keys; the spared key is not reported as removed")
+        XCTAssertFalse(removed.contains(SupervisorSecrets.appKeyRef))
+        XCTAssertEqual(Set(store.snapshot.keys), [SupervisorSecrets.appKeyRef, rotated, foreign])
+        XCTAssertEqual(try secrets.ensureAppKey(), appKey, "the same key, not a freshly generated one")
+
+        // The other uninstall takes it: the flag defaults to ADR-003 D8's original sweep.
+        let rest = try secrets.removeAll()
+
+        XCTAssertEqual(Set(rest), [SupervisorSecrets.appKeyRef, rotated])
+        XCTAssertEqual(Array(store.snapshot.keys), [foreign], "nothing of ours is left behind")
+    }
+
     func testKeychainFailureIsReported() {
         let secrets = secrets(InMemoryKeychainStore(failingWith: .missingEntitlement))
 
