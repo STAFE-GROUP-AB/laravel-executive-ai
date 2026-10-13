@@ -1,0 +1,1 @@
+Provider-agnostic snapshots of external items (§3.1 `source_records`): the resumable write target of non-email sync jobs (ADR-002 D3), keyed uniquely per account and external id; `communications` projects onto them by `source_type`/`source_id`.

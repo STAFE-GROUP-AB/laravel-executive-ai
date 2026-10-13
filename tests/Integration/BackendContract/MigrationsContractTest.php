@@ -6,16 +6,17 @@ use App\Support\Health\Checks\DatabaseMigrationsCheck;
 use App\Support\Health\CheckStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\BackendProfile;
 
 /*
  * ADR-002 D10 `migrations` group. CI runs the suite once per profile; the
- * `server` leg needs MySQL 8.4 and is skipped unless DB_CONNECTION=mysql is
+ * `server` leg needs MySQL 8.4 and is skipped unless a MySQL connection is
  * actually configured, so a developer without MySQL stays green.
  */
 
 function serverProfileWithoutMysql(): bool
 {
-    return config('lea.backend_profile') === 'server' && config('database.default') !== 'mysql';
+    return BackendProfile::serverWithoutMysql();
 }
 
 it('has run every bundled migration with zero pending', function (): void {
@@ -24,6 +25,28 @@ it('has run every bundled migration with zero pending', function (): void {
     expect($outcome->status)->toBe(CheckStatus::Ok)
         ->and($outcome->detail)->toEndWith('; 0 pending');
 })->group('backend-contract')->skip(fn (): bool => serverProfileWithoutMysql(), 'server profile selected but no MySQL connection configured');
+
+/*
+ * ADR-002 D10 as amended by S2-01: the group asserts `migrate` from zero with
+ * zero pending, and nothing else. There is no rollback assertion because
+ * migrations in this repository are up()-only — a `migrate:rollback` would be a
+ * no-op at best, and `down()` on a shipped install is a data-loss operation.
+ */
+it('ships migrations that are up() only', function (): void {
+    $files = glob(database_path('migrations/*.php')) ?: [];
+
+    // Laravel's own bundled `cache` and `jobs` migrations keep the stock
+    // `down()` they ship with; every migration this repository authors has none.
+    $ours = array_values(array_filter($files, fn (string $file): bool => ! str_starts_with(basename($file), '0001_01_01_0000')));
+
+    $withDown = array_values(array_map('basename', array_filter(
+        $ours,
+        fn (string $file): bool => str_contains((string) file_get_contents($file), 'function down('),
+    )));
+
+    expect($ours)->not->toBeEmpty()
+        ->and($withDown)->toBe([]);
+})->group('backend-contract');
 
 it('creates the §3.1 tables of the Sprint 1 minimum with portable types', function (): void {
     foreach (['users', 'organizations', 'memberships', 'briefs', 'brief_items', 'brief_deliveries', 'audit_events', 'install_state', 'jobs', 'failed_jobs', 'cache', 'sessions'] as $table) {

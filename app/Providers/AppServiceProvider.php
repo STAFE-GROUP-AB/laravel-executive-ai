@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\CRM\Search\DatabaseFullTextSearch;
+use App\CRM\Search\FullTextSearch;
 use App\Http\View\Composers\ShellStateComposer;
 use App\Security\Authorization\Otp\OtpHasher;
 use App\Security\Authorization\Passkeys\NotYetAvailable;
@@ -31,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(Redactor::class);
         $this->app->singleton(AiReadiness::class, ConfiguredProviderAiReadiness::class);
         $this->app->singleton(PendingApprovals::class, NoPendingApprovals::class);
+        $this->app->singleton(FullTextSearch::class, DatabaseFullTextSearch::class);
 
         $this->registerAuthentication();
         $this->redactFailedJobExceptions();

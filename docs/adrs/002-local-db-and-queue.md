@@ -5,7 +5,7 @@
 | **Status** | Proposed |
 | **Date** | 2026-10-10 |
 | **Deciders** | B (Laravel platform) author · F (Integrations) reviews the sync-worker rules · H (Security/privacy) reviews the backup and durability boundary. No owner sign-off required (`ENG` in `docs/OPEN-QUESTIONS.md`). |
-| **Closes** | Blueprint §15 item 3 (first half: SQLite FTS5 vs optional MySQL) · OPEN-QUESTIONS §15.3a, **A4** (resolved), **A9** (measured) · **A3** proposed here, final in E2-2 |
+| **Closes** | Blueprint §15 item 3 (first half: SQLite FTS5 vs optional MySQL) · OPEN-QUESTIONS §15.3a, **A4** (resolved), **A9** (measured) · **A3** proposed here 2026-10-10, **final 2026-10-13 in D9 (S2-01, #84)** |
 
 ## Context
 
@@ -116,9 +116,19 @@ two are the default.
 - Full-text is **SQLite FTS5** behind an internal `FullTextSearch` contract (`app/CRM/Search/`):
   one external-content FTS5 table per searchable entity (`email_messages_fts`, `contacts_fts`,
   `communications_fts`, `briefs_fts`) maintained by `AFTER INSERT/UPDATE/DELETE` triggers created in
-  the migration, exactly as the benchmark's `--fts5` schema does. Tokenizer `unicode61`; whether to
-  fold diacritics (`remove_diacritics 2` folds Swedish ä/ö → a/o, trading precision for recall) is
-  decided in E2-1 with a Swedish fixture corpus, not here.
+  the migration, exactly as the benchmark's `--fts5` schema does. Tokenizer `unicode61`.
+- **`remove_diacritics 2` — decided 2026-10-13 by S2-01 (#84) against the Swedish fixture corpus**,
+  where this decision was deferred to E2-1. Folding is on: `goteborg` must find "Göteborg",
+  `sjostrom` "Sjöström", `akersberga` "Åkersberga", `molndal` "Mölndal" — what the owner types on a
+  keyboard that is not Swedish, and what a pasted address or a provider's mangled subject gives us.
+  The recall argument is reinforced by the profile argument: MySQL's `utf8mb4_unicode_ci` FULLTEXT
+  folds diacritics whether we like it or not, so *not* folding on SQLite would make the two profiles
+  return different hit sets and the `search` contract group unsatisfiable. The precision cost is
+  accepted and small on this corpus (`har` also matches "här"); it is a CRM lookup over names,
+  subjects and notes, not a linguistic index. One residual difference is recorded rather than
+  papered over: `utf8mb4_unicode_ci` also folds ß → ss, `unicode61` does not, so `mussig` finds
+  "Müßig" on the `server` profile only — the contract queries avoid ß, and S2-09's UI must not
+  promise it. Evidence E6.
 - The `server` profile implements the same contract with InnoDB `FULLTEXT` indexes and
   `MATCH … AGAINST (… IN BOOLEAN MODE)`. The contract test asserts the same hit **set** for the
   fixture queries on both; ranking order is allowed to differ.
@@ -194,9 +204,15 @@ The table is **`email_connections`** (§5.6 data model, `EmailConnection` DTO, `
 provider, account identity, scopes, status, folder selection and a **Keychain item reference** —
 never a token, refresh token or password (§5.6, ADR-003).
 
-### D9. A3 — how `communications`/`messages`/`threads` relate to `email_messages`/`email_threads` (Proposed, final in E2-2)
+### D9. A3 — how `communications`/`messages`/`threads` relate to `email_messages`/`email_threads` (final, S2-01)
 
-Proposed normalization direction, for workstreams B and E to confirm when E2-2 writes the schema:
+**Final as of 2026-10-13 (S2-01, #84), closing ambiguity A3.** The direction below was proposed on
+2026-10-10 for workstreams B and E to confirm when the schema was written; S2-01 wrote it
+(`database/migrations/2026_10_11_*`, `app/Models/CRM/`) and the acceptance evidence is in
+`tests/Integration/BackendContract/CrmSchemaContractTest.php` (`communications` carries
+`source_type`/`source_id` and has **no** foreign key to `email_messages`, and neither `messages` nor
+`threads` exists) and `tests/Feature/CRM/CrmFixtureRoundTripTest.php` (the S0-18 pack round-trips,
+the user-corrected domain match included). Nothing in the text changed when it became final:
 
 - **`email_messages` and `email_threads` are the system of record for provider data**: one row per
   message per connection, provider-faithful after normalization (MIME, HTML sanitization, threading
@@ -215,6 +231,17 @@ Proposed normalization direction, for workstreams B and E to confirm when E2-2 w
 - Reasoning: a projection keeps provider sync idempotent and fast (D3), keeps the cross-account
   policy boundary at the `email_connections` level where criterion 4 is tested, and makes criterion 6
   (explainable, correctable matching with a link back to the original) a property of one table.
+- **What S2-01 added while landing it.** `source_records` is the non-email counterpart of
+  `email_messages`: the provider-agnostic snapshot a sync job upserts, unique on
+  `(organization_id, source_type, external_account_id, external_id)` — the §3.1
+  "provider/account/external_id" key that makes a replayed batch a no-op (D3.3). A contact's
+  addresses live in `contact_emails`, unique per organization, because "the sender address is this
+  contact's address" (§5.6) must be an indexed lookup rather than a scan of a JSON column. The
+  ordered lists the fixture pack shows nested (`emails`, `github_links`) keep their order through a
+  `position` column; pure id sets (`customer_ids`, `contact_ids`, `assignee_user_ids`) are relations
+  and come back ordered by id. `communications.account_id` and `source_records.external_account_id`
+  are plain ULID columns until S2-03 lands `email_connections`, which is when they get their
+  foreign key.
 - **Additions to the §3.1 minimum that E2-2 must pick up from other ADRs:** `push_subscriptions`
   (ADR-006, opt-in PWA Web Push: `endpoint`, `p256dh`, `auth`, `user_id`, `created_at`,
   `last_seen`, `revoked_at`; unique on `endpoint`). It follows the portable schema rules in D10 and
@@ -231,6 +258,12 @@ Proposed normalization direction, for workstreams B and E to confirm when E2-2 w
   table in foreign-key order with ULIDs preserved, in 1 000-row chunks, verifies row counts and a
   per-table checksum (`sha256` over ordered ULIDs) on both sides, writes a `backup_runs` row, and
   refuses to run unless a fresh `VACUUM INTO` snapshot exists. It is **not** offered in the installer.
+- **Migrations are `up()` only.** A shipped install's rollback path is a restore from a verified
+  snapshot (D5), not a `down()` that drops the user's tables, so no migration defines one and the
+  `migrations` group asserts that instead of a rollback. *(Amended 2026-10-13 by S2-01, #84: the
+  group's original wording required `migrate:rollback` of the last batch, which contradicted the
+  `up()`-only rule the repository has followed since S1-01 and which `MigrationsContractTest` had
+  already dropped. `lea:backend:migrate` above, not `migrate:rollback`, is how a profile is left.)*
 - **Contract-test matrix** — CI runs the Pest suite twice, `profile: [local, server]`; `server` uses
   MySQL 8.4 and Redis service containers. The schema is built once per job with `migrate`; tests
   run inside `DatabaseTransactions`, never `RefreshDatabase` per file. The groups that must pass on
@@ -238,10 +271,10 @@ Proposed normalization direction, for workstreams B and E to confirm when E2-2 w
 
   | Group | Asserts on both profiles |
   |---|---|
-  | `migrations` | `migrate` from zero and `migrate:rollback` of the last batch succeed; schema dump matches the portable rules |
+  | `migrations` | `migrate` from zero succeeds with zero pending; every migration this repository authors is `up()` only (Laravel's bundled `cache`/`jobs` migrations keep their stock `down()`); schema matches the portable rules |
   | `queue` | push, pop, release, retry with backoff, fail → `failed_jobs`, `Bus::batch`, `ShouldBeUnique`, `WithoutOverlapping` on the connection id |
   | `repository` | every `WorkspaceRepository` query (§3) over the frozen CRM fixture returns identical ids |
-  | `search` | `FullTextSearch` fixture queries return the same hit set; a trigger-maintained index stays consistent after insert/update/delete |
+  | `search` | `FullTextSearch` fixture queries return the same hit set; a trigger-maintained index stays consistent after insert/update/delete. Its corpus is the one thing in the suite that must be **committed**: InnoDB publishes rows to a FULLTEXT index at commit, so a corpus inside the test transaction is invisible on `server` (E6). It is therefore imported under mirrored ULIDs and deleted again per test, never left behind for another test to see |
   | `sync-idempotency` | replaying the same 100-message sync batch twice yields one row each; a batch interrupted after N rows resumes without loss or duplicates |
   | `cross-account` | the §5.6 criterion 4 negative tests (S0-21) pass on both |
   | `backup-restore` | snapshot → integrity check → restore round-trip (SQLite: `VACUUM INTO`; MySQL: `mysqldump --single-transaction`) reproduces the fixture checksums |
@@ -333,6 +366,33 @@ SQLite is public domain; FTS5 is part of the amalgamation. `sqlite-vec` (Apache-
 *not* adopted, so no review is required now; if it is ever proposed, the bundled binary goes through
 the ADR-007 process. MySQL's GPLv2-with-FOSS-exception redistribution question is exactly why the
 `server` profile is operator-installed and never bundled.
+
+### E6. Measured — diacritic folding and FULLTEXT visibility on both profiles (S2-01, 2026-10-13)
+
+Probed on the development machine against the S0-18 Swedish/Italian/German corpus: PHP 8.4.19 with
+SQLite **3.45.2** (FTS5, `unicode61 remove_diacritics 2`) and **MySQL 9.3.0** (InnoDB FULLTEXT,
+`utf8mb4_unicode_ci`, `innodb_ft_min_token_size = 3`).
+
+| Query | SQLite FTS5 | MySQL FULLTEXT |
+|---|---|---|
+| `goteborg` → "Göteborg" | hit | hit |
+| `sjostrom` → "Sjöström", `akersberga` → "Åkersberga", `molndal` → "Mölndal" | hit | hit |
+| `naive`/`facade` → "naïve façade", `celik`/`bronte` → "Zoë Brontë-Çelik" | hit | hit |
+| `mussig` → "Müßig" | **miss** (ß is not a diacritic to `unicode61`) | **hit** (`utf8mb4_unicode_ci` folds ß → ss) |
+| `har` → "här" and "har" | both (accepted recall/precision trade) | both |
+| rows written inside the open transaction | visible (FTS5 triggers are transactional) | **invisible** until commit |
+
+The last two rows are why D4 folds and why the `search` group's corpus is committed and then
+deleted. Two further `server`-only behaviours are left out of the contract queries rather than
+worked around: InnoDB ignores tokens shorter than three characters and its own stopword list
+(`the`, `for`, `not`, …), so a query of operator-looking words can match on `server` and miss on
+`local`. `SearchTerms` keeps the surface narrow — word characters only, optional trailing `*` — so
+nothing a person types reaches either engine as an operator.
+
+Also measured (because external-content FTS5 keys the index by the content table's rowid, and D5's
+backup rewrites the file): rowids of a `char(26)`-keyed table survive both `VACUUM` and
+`VACUUM INTO`, and the FTS5 `integrity-check` on the snapshot passes, so a restored snapshot keeps a
+valid index. `SqliteFullTextGrammar::rebuild()` exists for the case where it does not.
 
 ## Alternatives considered
 

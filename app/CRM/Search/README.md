@@ -1,0 +1,1 @@
+Full-text search contract (ADR-002 D4): SQLite FTS5 external-content tables `customers_fts`, `contacts_fts`, `communications_fts` maintained by triggers on the `local` profile, InnoDB `FULLTEXT` indexes on the `server` profile; the `search` contract group asserts the same hit set on both. Raw SQL lives in `app/Support/Database/*FullTextGrammar` (ADR-002 D10).
