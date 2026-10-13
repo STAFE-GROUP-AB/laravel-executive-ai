@@ -22,6 +22,18 @@ final class IpcOwnerCreatorTests: XCTestCase {
         super.tearDown()
     }
 
+    /// Three polls a millisecond apart. The live creator waits up to 20 s for the core to come up
+    /// (#124), which is right on hardware and absurd in a unit test: without this override every
+    /// case in this file that does not answer `/health/live` burns the full 20 s before it can
+    /// fail, which is how a suite stops being run locally.
+    static func testWaiting() -> IpcOwnerCreator.Waiting {
+        var waiting = IpcOwnerCreator.Waiting()
+        waiting.attempts = 3
+        waiting.interval = .milliseconds(1)
+
+        return waiting
+    }
+
     private func makeCreator(
         port: Int? = IpcTestSupport.port,
         session: IpcSession = IpcTestSupport.session(),
@@ -35,10 +47,31 @@ final class IpcOwnerCreatorTests: XCTestCase {
             port: { port },
             session: session,
             timeZoneIdentifier: { timeZone },
-            languageTag: { language }
+            languageTag: { language },
+            waiting: Self.testWaiting()
         ) { port, session in
             IpcTestSupport.client(port: port, session: session, nonce: nonce, requestId: requestId, sink: sink)
         }
+    }
+
+    /// `/health/live` first, the test's own answer for everything else. The creator waits for the
+    /// core before its first signed request (#124), so a stub that does not answer liveness is a
+    /// stub of a core that never came up — which is only what two cases here mean.
+    private static func installServingCore(_ handler: @escaping IpcStubURLProtocol.Handler) {
+        let live = Data("{\"status\":\"ok\"}".utf8)
+
+        IpcStubURLProtocol.install { request, body in
+            guard request.url?.path != "/health/live" else {
+                return .response(status: 200, headers: ["Content-Type": "application/json"], body: live)
+            }
+
+            return handler(request, body)
+        }
+    }
+
+    /// The signed exchange, without the unsigned `/health/live` poll that now precedes it (#124).
+    private static var signedRequests: [IpcStubURLProtocol.Recorded] {
+        IpcStubURLProtocol.requests.filter { $0.request.url?.path != "/health/live" }
     }
 
     private func createdBody() throws -> Data {
@@ -49,13 +82,15 @@ final class IpcOwnerCreatorTests: XCTestCase {
 
     func testACreatedOwnerIsAHandoffThatDidNotAlreadyExist() async throws {
         let body = try createdBody()
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
 
         let handoff = try await makeCreator().createOwner(Self.draft)
 
         XCTAssertEqual(handoff, OwnerHandoff(alreadyExisted: false))
 
-        let recorded = try XCTUnwrap(IpcStubURLProtocol.requests.first)
+        XCTAssertEqual(IpcStubURLProtocol.requests.first?.request.url?.path, "/health/live", "the core is waited for before it is trusted")
+
+        let recorded = try XCTUnwrap(Self.signedRequests.first)
         XCTAssertEqual(recorded.request.url?.absoluteString, "http://127.0.0.1:8787/ipc/v1/owner")
         XCTAssertEqual(recorded.request.httpMethod, "POST")
         XCTAssertEqual(recorded.header("Content-Type"), "application/json")
@@ -82,12 +117,12 @@ final class IpcOwnerCreatorTests: XCTestCase {
             message: "An owner account already exists on this Mac.",
             hint: "Continue the install: the existing account is kept and signs in with a one-time code."
         )
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 409, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 409, body: body) }
 
         let handoff = try await makeCreator().createOwner(Self.draft)
 
         XCTAssertEqual(handoff, OwnerHandoff(alreadyExisted: true))
-        XCTAssertEqual(IpcStubURLProtocol.requests.count, 1, "the refusal is not retried")
+        XCTAssertEqual(Self.signedRequests.count, 1, "the refusal is not retried")
     }
 
     func testTheRefusalIsStillVerifiedBeforeItIsBelieved() async throws {
@@ -95,7 +130,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
         // unsigned (§4.5), so a hijacked port cannot talk the installer out of
         // creating the owner.
         let body = try IpcTestSupport.errorBody(code: "owner_exists")
-        IpcStubURLProtocol.install { _, _ in IpcTestSupport.unsignedReply(status: 409, body: body) }
+        Self.installServingCore { _, _ in IpcTestSupport.unsignedReply(status: 409, body: body) }
 
         await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
             XCTAssertEqual(error as? OwnerCreationError, .unavailable("core unreachable: the response carried no signature"))
@@ -105,7 +140,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
     func testTheFixtureExchangeIsReproducedByteForByte() async throws {
         let fixture = try IpcFixture.load("owner")
         let reply = try fixture.recordedReply()
-        IpcStubURLProtocol.install { _, _ in reply }
+        Self.installServingCore { _, _ in reply }
 
         let creator = IpcOwnerCreator(
             port: { IpcTestSupport.port },
@@ -117,7 +152,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
         }
 
         let handoff = try await creator.createOwner(Self.draft)
-        let recorded = try XCTUnwrap(IpcStubURLProtocol.requests.first)
+        let recorded = try XCTUnwrap(Self.signedRequests.first)
 
         XCTAssertEqual(handoff, OwnerHandoff(alreadyExisted: false))
         XCTAssertEqual(recorded.request.httpMethod, fixture.method)
@@ -133,7 +168,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
         XCTAssertEqual(fixture.responseStatus, 409)
 
         let reply = try fixture.recordedReply()
-        IpcStubURLProtocol.install { _, _ in reply }
+        Self.installServingCore { _, _ in reply }
 
         let creator = IpcOwnerCreator(
             port: { IpcTestSupport.port },
@@ -152,7 +187,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
 
     func testAValidationFailureNamesTheFieldsAndIsRejected() async throws {
         let body = try IpcTestSupport.errorBody(code: "validation_failed", details: ["email": "invalid"])
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 422, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 422, body: body) }
 
         await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
             XCTAssertEqual(error as? OwnerCreationError, .rejected("The core did not accept these details: email."))
@@ -197,17 +232,37 @@ final class IpcOwnerCreatorTests: XCTestCase {
         }
     }
 
-    func testNothingListeningIsUnavailable() async throws {
+    /// Nothing listening at all: the creator never gets past the liveness wait, and says so. This
+    /// is the case that failed on the owner's Mac, and the message is now about the core not
+    /// being up rather than about pairing (#124).
+    func testACoreThatIsNotUpYetIsUnavailableWithAnActionableReason() async throws {
         IpcStubURLProtocol.install { _, _ in .failure(.cannotConnectToHost) }
+
+        await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
+            XCTAssertEqual(
+                error as? OwnerCreationError,
+                .unavailable("The core is not answering yet. The background service may need your permission in System Settings › Login Items.")
+            )
+        }
+
+        XCTAssertEqual(Self.signedRequests.count, 0, "no signed request is sent to a core that is not there")
+    }
+
+    /// A core that answers liveness and then drops the signed request is a different failure, and
+    /// still `.unavailable` — the form is not what is wrong.
+    func testALiveCoreThatDropsTheSignedRequestIsStillUnavailable() async throws {
+        Self.installServingCore { _, _ in .failure(.cannotConnectToHost) }
 
         await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
             XCTAssertEqual(error as? OwnerCreationError, .unavailable("core unreachable: no answer on loopback"))
         }
+
+        XCTAssertEqual(Self.signedRequests.count, 1)
     }
 
     func testACoreThatDoesNotKnowTheOperationAsksForARepair() async throws {
         let body = try IpcTestSupport.errorBody(code: "not_found")
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 404, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 404, body: body) }
 
         await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
             XCTAssertEqual(error as? OwnerCreationError, .unavailable("This core does not offer owner creation over IPC; repair the installation."))
@@ -216,7 +271,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
 
     func testASignedAnswerThatIsNotTheEnvelopeIsUnavailable() async throws {
         let body = Data("{\"created\":true}".utf8)
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
 
         await XCTAssertThrowsErrorAsync(try await makeCreator().createOwner(Self.draft)) { error in
             XCTAssertEqual(error as? OwnerCreationError, .unavailable("The core answered something that is not the IPC envelope."))
@@ -232,7 +287,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
             XCTAssertEqual(error as? OwnerCreationError, .rejected("Check the name and the e-mail address."))
         }
 
-        XCTAssertEqual(IpcStubURLProtocol.requests.count, 0)
+        XCTAssertEqual(IpcStubURLProtocol.requests.count, 0, "not even a liveness poll")
     }
 
     func testThePortIsReadFromTheCheckpointWhenTheCallRuns() async throws {
@@ -246,7 +301,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
             IpcTestSupport.client(port: port, session: session)
         }
         let body = try createdBody()
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body, port: 8791) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body, port: 8791) }
 
         await XCTAssertThrowsErrorAsync(try await creator.createOwner(Self.draft))
 
@@ -261,7 +316,7 @@ final class IpcOwnerCreatorTests: XCTestCase {
 
     func testTheDraftNeverReachesTheClientLog() async throws {
         let body = try createdBody()
-        IpcStubURLProtocol.install { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
+        Self.installServingCore { request, _ in IpcTestSupport.signedReply(for: request, status: 200, body: body) }
         let sink = CapturingIpcSink()
 
         _ = try await makeCreator(sink: sink).createOwner(Self.draft)
@@ -283,12 +338,13 @@ final class IpcOwnerCreatorTests: XCTestCase {
             checkpointStore: harness.checkpointStore,
             session: IpcTestSupport.session(),
             timeZoneIdentifier: { "Europe/Stockholm" },
-            languageTag: { "sv" }
+            languageTag: { "sv" },
+            waiting: Self.testWaiting()
         ) { port, session in
             IpcTestSupport.client(port: port, session: session)
         }
 
-        IpcStubURLProtocol.install(handler)
+        Self.installServingCore(handler)
 
         let machine = InstallStateMachine(dependencies: dependencies)
         machine.start()
@@ -309,7 +365,10 @@ final class IpcOwnerCreatorTests: XCTestCase {
         XCTAssertEqual(machine.state, .selectAI)
         XCTAssertEqual(machine.status, .waitingForPerson)
         XCTAssertTrue(machine.history.contains(.createOwner))
-        XCTAssertEqual(IpcStubURLProtocol.requests.map { $0.request.url?.path }, ["/ipc/v1/owner"])
+        XCTAssertEqual(
+            IpcStubURLProtocol.requests.map { $0.request.url?.path }.filter { $0 != "/health/live" },
+            ["/ipc/v1/owner"]
+        )
 
         let stored = try XCTUnwrap(try harness.checkpointStore.load())
         XCTAssertTrue(stored.ownerCreated)

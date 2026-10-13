@@ -159,8 +159,11 @@ struct InstallProgressScreen: View {
         case .bootServices:
             return "Registering the background service. macOS may ask you to allow it in Login Items — no password."
         case .healthCheck:
+            // #124: this poll can legitimately run for minutes — three of the `ready` checks are
+            // produced by the scheduler's minute tick — so it says how far it has got and that it
+            // is bounded. A silent wait and a hung install look identical.
             return machine.healthAttempts > 1
-                ? "Waiting for the core to report ready (attempt \(machine.healthAttempts))"
+                ? "Waiting for the core to report ready — check \(machine.healthAttempts) of \(machine.healthBudgetAttempts); the first daily brief and the login self-test are prepared on the next minute"
                 : "Waiting for the core to report ready"
         default:
             return nil

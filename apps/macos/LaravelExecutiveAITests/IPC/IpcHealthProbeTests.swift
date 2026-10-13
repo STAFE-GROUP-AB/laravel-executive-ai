@@ -38,7 +38,15 @@ final class IpcHealthProbeTests: XCTestCase {
         XCTAssertEqual(readiness, HealthReadiness(ready: true, failingChecks: [], aiState: "not_configured"))
         XCTAssertTrue(readiness.aiSetupRequired)
 
-        let recorded = try XCTUnwrap(IpcStubURLProtocol.requests.first)
+        // #124: the probe also feeds `menubar_integration`, because the installer is the GUI and
+        // nothing else sends that heartbeat while the install is running.
+        XCTAssertEqual(
+            IpcStubURLProtocol.requests.map { $0.request.url?.path },
+            ["/ipc/v1/heartbeat", "/health/ready"],
+            "one heartbeat, then the readiness read"
+        )
+
+        let recorded = try XCTUnwrap(IpcStubURLProtocol.requests.last)
         XCTAssertEqual(recorded.request.url?.absoluteString, "http://127.0.0.1:8787/health/ready")
         XCTAssertEqual(recorded.request.httpMethod, "GET")
         XCTAssertTrue(recorded.header("Authorization")?.hasPrefix("Bearer lxai1.menubar.") == true)
@@ -170,9 +178,15 @@ final class IpcHealthProbeTests: XCTestCase {
 
         let notReady = try healthDocument(.notReadySchedulerFailing)
         let ready = try healthDocument(.coreReadyNoAI)
-        let calls = Mutex<Int>(0)
+        // Count readiness reads only: the heartbeat the probe now sends alongside them (#124)
+        // must not consume the "first poll is not ready" answer.
+        let polls = Mutex<Int>(0)
         IpcStubURLProtocol.install { request, _ in
-            let number = calls.withLock { value -> Int in
+            guard request.url?.path == "/health/ready" else {
+                return IpcTestSupport.signedReply(for: request, status: 200, body: ready, port: request.url?.port ?? 0)
+            }
+
+            let number = polls.withLock { value -> Int in
                 value += 1
                 return value
             }
@@ -187,8 +201,12 @@ final class IpcHealthProbeTests: XCTestCase {
 
         XCTAssertEqual(machine.state, .ready)
         XCTAssertEqual(machine.lastHealth, HealthReadiness(ready: true, failingChecks: [], aiState: "not_configured"))
-        XCTAssertGreaterThanOrEqual(IpcStubURLProtocol.requests.count, 2)
-        XCTAssertTrue(IpcStubURLProtocol.requests.allSatisfy { $0.request.url?.path == "/health/ready" })
+        let paths = IpcStubURLProtocol.requests.map { $0.request.url?.path }
+
+        XCTAssertGreaterThanOrEqual(paths.filter { $0 == "/health/ready" }.count, 2)
+        XCTAssertTrue(paths.allSatisfy { $0 == "/health/ready" || $0 == "/ipc/v1/heartbeat" })
+        // One heartbeat for the whole poll loop: the interval is 20 s and §9 allows 6 a minute.
+        XCTAssertEqual(paths.filter { $0 == "/ipc/v1/heartbeat" }.count, 1)
     }
 }
 

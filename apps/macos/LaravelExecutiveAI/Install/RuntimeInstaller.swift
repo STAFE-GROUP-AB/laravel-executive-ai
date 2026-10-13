@@ -25,6 +25,18 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
     case verifyingInstalledFiles
     case activatingRuntime
     case preparingDataDirectory
+    /// Not the installer's own work: INSTALL_CORE's last step registers the Supervisor
+    /// LaunchAgent, which mints the keys, verifies the runtime, migrates the database and spawns
+    /// the core, so that the next screen has something to create the owner in (#124,
+    /// services.md §2).
+    ///
+    /// It carries the elapsed seconds because this is the one step that can legitimately take a
+    /// while on a **first** install — macOS has never seen this 145 MB signed binary, so
+    /// Gatekeeper assessment and first-execution signature validation happen here, once — and a
+    /// step that looks frozen is worse than a step that takes time. The Supervisor is silent
+    /// while it works (it answers XPC only once it is up), so the copy names what it is doing
+    /// rather than pretending to measure it.
+    case startingServices(elapsedSeconds: Int)
     case completed
 
     var label: String {
@@ -34,6 +46,10 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
         case .verifyingInstalledFiles: return "Verifying installed files"
         case .activatingRuntime: return "Activating runtime"
         case .preparingDataDirectory: return "Preparing data folder"
+        case .startingServices(let seconds):
+            return seconds < 3
+                ? "Starting services"
+                : "Starting services — the first run checks the runtime and prepares the database (\(seconds)s)"
         case .completed: return "Runtime installed"
         }
     }
@@ -47,9 +63,19 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
             return 0.05 + 0.80 * min(max(copied, 0), 1)
         case .verifyingInstalledFiles: return 0.88
         case .activatingRuntime: return 0.94
-        case .preparingDataDirectory: return 0.97
+        case .preparingDataDirectory: return 0.96
+        case .startingServices: return 0.98
         case .completed: return 1
         }
+    }
+
+    /// True while the Supervisor is being started, whatever the elapsed count says.
+    var isStartingServices: Bool {
+        if case .startingServices = self {
+            return true
+        }
+
+        return false
     }
 }
 

@@ -1,9 +1,20 @@
-// CREATE_OWNER over the paired `menubar` session (ipc-contract §6.9, issue #121).
+// CREATE_OWNER over the paired `menubar` session (ipc-contract §6.9, issues #121 and #124).
 //
-// Screen 4's draft goes to `POST /ipc/v1/owner` on the loopback client this process already
-// holds — pairing happened at BOOT_SERVICES, one state earlier, so no new credential, prompt or
-// authentication step belongs here. The core answers one of three things and this type maps each
-// onto the hand-off the installer understands:
+// Screen 4's draft goes to `POST /ipc/v1/owner` on the loopback client. **Correction to #121's
+// premise:** pairing does *not* happen "one state earlier at BOOT_SERVICES" — BOOT_SERVICES is
+// two states *after* this one (`InstallState.coreSequence`), and #121 shipped believing
+// otherwise, which is why the first signed build failed here with "pairing failed: the
+// Supervisor did not answer". What makes this reachable is that INSTALL_CORE now ends by
+// registering the Supervisor LaunchAgent (#124), so by the time this runs the Supervisor is
+// live, it has minted `K`, and the core is serving. Pairing is then a lazy XPC call inside
+// `IpcSession` on the first request — still no new credential, prompt or authentication step
+// here.
+//
+// The core may still be coming up while the person types, so this waits for `/health/live`
+// before the first signed request rather than reporting a core that is merely slow as broken.
+//
+// The core answers one of three things and this type maps each onto the hand-off the installer
+// understands:
 //
 //   200 { "created": true }   → OwnerHandoff(alreadyExisted: false)   the account exists now
 //   409 owner_exists          → OwnerHandoff(alreadyExisted: true)    a data-preserving reinstall;
@@ -29,18 +40,31 @@ struct IpcOwnerCreator: OwnerCreating {
     /// The BCP-47 tag the briefs are written in: the installer's language.
     let languageTag: @Sendable () -> String
     let makeClient: @Sendable (_ port: Int, _ session: IpcSession) -> LoopbackIpcClient
+    /// How long to let the core finish starting before calling it unreachable. INSTALL_CORE
+    /// started the Supervisor moments ago; it still has to mint the keys, migrate and spawn.
+    var waiting = Waiting()
+
+    struct Waiting: Sendable {
+        var attempts = 40
+        var interval: Duration = .milliseconds(500)
+        var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+
+        init() {}
+    }
 
     init(
         port: @escaping @Sendable () -> Int?,
         session: IpcSession,
         timeZoneIdentifier: @escaping @Sendable () -> String = { TimeZone.current.identifier },
         languageTag: @escaping @Sendable () -> String = { PreflightLanguage.preferred().rawValue },
+        waiting: Waiting = Waiting(),
         makeClient: @escaping @Sendable (Int, IpcSession) -> LoopbackIpcClient
     ) {
         self.port = port
         self.session = session
         self.timeZoneIdentifier = timeZoneIdentifier
         self.languageTag = languageTag
+        self.waiting = waiting
         self.makeClient = makeClient
     }
 
@@ -51,6 +75,7 @@ struct IpcOwnerCreator: OwnerCreating {
         session: IpcSession,
         timeZoneIdentifier: @escaping @Sendable () -> String = { TimeZone.current.identifier },
         languageTag: @escaping @Sendable () -> String = { PreflightLanguage.preferred().rawValue },
+        waiting: Waiting = Waiting(),
         makeClient: @escaping @Sendable (Int, IpcSession) -> LoopbackIpcClient
     ) {
         self.init(
@@ -58,6 +83,7 @@ struct IpcOwnerCreator: OwnerCreating {
             session: session,
             timeZoneIdentifier: timeZoneIdentifier,
             languageTag: languageTag,
+            waiting: waiting,
             makeClient: makeClient
         )
     }
@@ -71,10 +97,17 @@ struct IpcOwnerCreator: OwnerCreating {
             throw OwnerCreationError.unavailable("The core has no loopback port yet; run the install again from the start.")
         }
 
+        let client = makeClient(port, session)
+
+        // The Supervisor was registered at the end of INSTALL_CORE; the core it spawns has to
+        // read APP_KEY over the broker and run the migrations before it serves. `/health/live`
+        // needs no token and no pairing, so it tells "not up yet" apart from "pairing failed".
+        try await waitForCore(client)
+
         let operation = IpcOperation.createOwner(draft, timeZone: timeZoneIdentifier(), language: languageTag())
 
         do {
-            let response = try await makeClient(port, session).send(operation)
+            let response = try await client.send(operation)
 
             guard (try? response.envelopeData()) != nil else {
                 throw OwnerCreationError.unavailable("The core answered something that is not the IPC envelope.")
@@ -87,6 +120,25 @@ struct IpcOwnerCreator: OwnerCreating {
         } catch let error as IpcClientError {
             throw Self.map(error)
         }
+    }
+
+    /// Polls the unsigned `/health/live` until the core answers. A core that never answers is
+    /// `.unavailable` with the reason the person can act on — not a pairing error, which is what
+    /// the first signed build reported for exactly this situation (#124).
+    private func waitForCore(_ client: LoopbackIpcClient) async throws {
+        for attempt in 1...max(waiting.attempts, 1) {
+            try Task.checkCancellation()
+
+            if await client.live() {
+                return
+            }
+
+            if attempt < waiting.attempts {
+                try await waiting.sleep(waiting.interval)
+            }
+        }
+
+        throw OwnerCreationError.unavailable("The core is not answering yet. The background service may need your permission in System Settings › Login Items.")
     }
 
     /// The §8.2 table, split into the two cases screen 4 can act on.

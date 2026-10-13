@@ -29,6 +29,30 @@ enum InstallState: String, Codable, CaseIterable, Sendable, Hashable {
         .selectAI, .bootServices, .healthCheck, .ready,
     ]
 
+    /// What this state leaves behind that `install/checkpoint.json` cannot record.
+    ///
+    /// **A checkpoint restores which states are done. It does not restore the processes those
+    /// states started.** That is the defect behind #124: `INSTALL_CORE` has a durable effect (the
+    /// runtime on disk, correctly recorded as `runtime.activated`) and a volatile one (the
+    /// Supervisor registered and its three children running), and resume read the first as
+    /// evidence for the second. On the failing Mac the second launch jumped straight to
+    /// `CREATE_OWNER` with no Supervisor and no `frankenphp` process anywhere.
+    ///
+    /// So every state that has a volatile postcondition declares it here, and
+    /// `InstallStateMachine` re-establishes each one — idempotently — for every state a resume
+    /// skips. A new state with a volatile effect that does not appear in this list is the same
+    /// bug again; `InstallEntryConditionTests` fails when one is added without declaring it.
+    var volatileEffects: [InstallVolatileEffect] {
+        switch self {
+        case .installCore:
+            return [.supervisionRunning]
+        case .selectAI:
+            return [.pendingProviderKey]
+        default:
+            return []
+        }
+    }
+
     static let optionalPath: [InstallState] = [
         .connectEmail, .connectGitHub, .peekabooPermissions, .remoteAccess, .scheduleBrief,
     ]
@@ -154,6 +178,39 @@ enum InstallAsyncOutcome: String, Sendable, Hashable, Codable {
     case skipped
     case failed
     case cancelled
+}
+
+/// A postcondition that lives in a process, a launchd registration or memory — never on disk.
+///
+/// The distinction exists because `install/checkpoint.json` can only record the durable half of
+/// what a state did. See `InstallState.volatileEffects` for why that mattered (#124).
+enum InstallVolatileEffect: String, CaseIterable, Sendable {
+    /// The Supervisor LaunchAgent is registered and answering, so the keys exist, the database is
+    /// migrated and the core is serving (ADR-001 D3 as amended, services.md §2). Re-established
+    /// by the same idempotent `startSupervisor` call the fresh run makes.
+    case supervisionRunning
+
+    /// The own API key from SELECT_AI, held in memory for the one Keychain writer
+    /// (`PendingSecretHandoff`, ADR-003 D2 — the installer never writes the Keychain). Being
+    /// unpersisted is the point, so it cannot be restored: a resume that skips a SELECT_AI whose
+    /// key was never handed over shows screen 5 again rather than finishing with no provider
+    /// configured and no explanation.
+    case pendingProviderKey
+
+    var label: String {
+        switch self {
+        case .supervisionRunning: return "the Supervisor and the core running"
+        case .pendingProviderKey: return "the AI provider key held for the Keychain writer"
+        }
+    }
+
+    /// Whether re-running the producing work restores it, or the state has to be re-entered.
+    var isRestorable: Bool {
+        switch self {
+        case .supervisionRunning: return true
+        case .pendingProviderKey: return false
+        }
+    }
 }
 
 /// A transition the table refuses.

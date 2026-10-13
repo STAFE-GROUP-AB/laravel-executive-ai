@@ -1,12 +1,20 @@
-// BOOT_SERVICES, live (S1-07; S1-05 defined the hand-off).
+// Starting the services, live (S1-07; S1-05 defined the hand-off).
 //
-// Registers the one Supervisor LaunchAgent (ADR-001 D3) and waits until the Supervisor answers
-// on its control channel. `.requiresLoginItemApproval` is returned when macOS wants the person
-// to allow the login item — a click in System Settings, never a password (§12.2); the installer
-// re-enters this state after the click. The API key from SELECT_AI, if any, is handed to the
-// Supervisor here: SELECT_AI runs before BOOT_SERVICES, so the key waits in memory
-// (`PendingSecretHandoff`) and goes through the one Keychain writer (ADR-003 D2) as soon as it
-// exists. The installer never writes the Keychain itself.
+// Two entry points, because the two halves have different prerequisites (#124):
+//
+//   startSupervisor()  — INSTALL_CORE's last step. Registers the one Supervisor LaunchAgent
+//                        (ADR-001 D3 as amended) and waits until it answers on its control
+//                        channel. From here on a core exists, so CREATE_OWNER has something to
+//                        talk to. Idempotent: an already-enabled agent is not registered again.
+//   boot()             — BOOT_SERVICES. Confirms supervision is still live, then hands over the
+//                        API key from SELECT_AI, which is the only part of this that could not
+//                        have run earlier. The key waits in memory (`PendingSecretHandoff`) and
+//                        goes through the one Keychain writer (ADR-003 D2). The installer never
+//                        writes the Keychain itself.
+//
+// `.requiresLoginItemApproval` is returned when macOS wants the person to allow the login item —
+// a click in System Settings, never a password (§12.2); the installer re-enters the state after
+// the click, and because `startSupervisor()` is idempotent the retry does not reinstall anything.
 
 import Foundation
 import Synchronization
@@ -73,7 +81,8 @@ struct LaunchAgentServiceBooter: ServiceBooting {
         self.waiting = waiting
     }
 
-    func boot(runtime: InstalledRuntime, port: Int) async throws -> BootServicesOutcome {
+    /// INSTALL_CORE's last step: make the Supervisor exist, so a core exists.
+    func startSupervisor(runtime: InstalledRuntime, port: Int) async throws -> BootServicesOutcome {
         switch registrar.status() {
         case .enabled:
             break
@@ -99,6 +108,21 @@ struct LaunchAgentServiceBooter: ServiceBooting {
         }
 
         try await waitForSupervisor()
+
+        return .started
+    }
+
+    /// BOOT_SERVICES: supervision is confirmed, then the SELECT_AI key is handed over.
+    func boot(runtime: InstalledRuntime, port: Int) async throws -> BootServicesOutcome {
+        // Registration happened at INSTALL_CORE, but it can have lapsed since — the person may
+        // have turned the login item off in System Settings while typing their name — so this
+        // re-checks rather than assuming. It is the same idempotent call.
+        let outcome = try await startSupervisor(runtime: runtime, port: port)
+
+        guard outcome == .started else {
+            return outcome
+        }
+
         try await handOffPendingSecret()
 
         return .started
