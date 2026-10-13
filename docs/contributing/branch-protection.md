@@ -12,10 +12,31 @@
 
 ## 0. Current state, honestly
 
-Checked read-only against GitHub on 2026-10-10:
+**Applied 2026-10-13.** The `main` ruleset of §1 is live as **id 24986875**, created by the owner
+from `rulesets/main-now.json` (the one step no agent may perform — a settings API). What changed
+against the 2026-10-10 reading below:
 
-- `main` has **no branch protection and no repository ruleset**. The only ruleset that reaches
-  the repository is the enterprise-level ruleset "Standard" (id 5666733), which has **no rules**
+- Direct pushes to `main` are over. Every change goes through a pull request, squash-merged, linear
+  history, no force-push and no deletion — the coordinator's own `docs:` and `ci:` commits included.
+- Required checks are `php`, `swift`, `secrets-scan`, `fixtures`, `commitlint` and **`parity`**.
+  `parity` is the §16 step 9 gate that had to be in place before any Sprint 3 workstream issue
+  opens (`docs/operations/vertical-slice.md` §5, OPEN-QUESTIONS A14). `build-macos` is deliberately
+  **not** required: it is path-filtered, so requiring it would block every pull request that does
+  not touch `apps/macos/**`. `sprint-2-exit` joins the list when S2-20 lands.
+- One parameter differs from the §1 proposal: `strict_required_status_checks_policy` is **false**.
+  With four to six agents merging in parallel, "branch must be up to date" would force every open
+  pull request to rebase and re-run a fifteen-minute macOS lane after each merge. The checks still
+  have to pass on the pull request head, and squash-only linear history keeps `main` bisectable.
+- GitHub added `require_extra_approval_for_unattributed_changes: true` by default. It does **not**
+  bite here: agent commits are authored as `Claude <noreply@anthropic.com>`, which GitHub resolves
+  to the user `claude`, so they are attributed. If that ever changes, the symptom is a merge blocked
+  for an approval nobody can give, and the fix is one `PUT` with that parameter set to `false`.
+- The enterprise ruleset "Standard" (id 5666733) still carries no rules and was left alone.
+
+The 2026-10-10 reading that the plan below was written against:
+
+- `main` had **no branch protection and no repository ruleset**. The only ruleset that reached
+  the repository was the enterprise-level ruleset "Standard" (id 5666733), which has **no rules**
   and therefore no effect.
 - The repository has **one collaborator**, `@andreaskviby` (admin). The organisation
   `STAFE-GROUP-AB` has no `security-owners` team.
@@ -25,9 +46,11 @@ Checked read-only against GitHub on 2026-10-10:
   - GitHub refuses a formal *Approve* review ("can not approve your own pull request"), so agent
     PRs are reviewed as **review comments** (PR #52, #53, #54: one `COMMENTED` review each) and
     then merged by the same identity.
-  - The coordinator also pushes small `docs:` / `ci:` commits **directly to `main`** (for
-    example `20707c8 ci: allowlist ULID identifiers in the secrets scan`).
-- Merged PRs are squash-merged by hand; nothing enforces it.
+  - The coordinator also pushed small `docs:` / `ci:` commits **directly to `main`** (for
+    example `20707c8 ci: allowlist ULID identifiers in the secrets scan`). The ruleset ended that
+    on 2026-10-13; the last such commit was `0de85ae`.
+- Merged PRs were squash-merged by hand; nothing enforced it. The ruleset now does
+  (`allowed_merge_methods: ["squash"]`).
 
 Turning on *"require pull request reviews"* in this situation would block **every** merge, because
 there is no second GitHub account that could approve. That trade-off drives the two-phase plan
