@@ -13,8 +13,9 @@
 # Output: <out-dir>/LaravelExecutiveAI-<version>-<sha>[-unsigned].dmg (UDZO), the staging folder
 # next to it, and `dmg_path=` / `dmg_name=` lines appended to $GITHUB_OUTPUT when CI sets it.
 # The image holds the app, an /Applications symlink and a README.txt that states the signing
-# status and that no runtime package is bundled yet (OPEN-QUESTIONS A23). Nothing here signs
-# anything: sign.sh signs the app before this script runs and the image after it.
+# status and whether a runtime package is inside — read from the bundle itself
+# (Contents/Resources/runtime/manifest.json), never claimed. Nothing here signs anything: sign.sh
+# signs the app before this script runs and the image after it.
 
 set -euo pipefail
 set +x
@@ -96,6 +97,25 @@ else
   land as the Sprint 4 release gate (blueprint §14, backlog E4-6). Internal use only."
 fi
 
+# What the image says about the runtime is read out of the bundle: the S1-12 build unpacks the
+# published package into Contents/Resources/runtime/ before signing (OPEN-QUESTIONS A23, decided
+# 2026-10-11), and an image built before a package is published still has to be honest about it.
+RUNTIME_MANIFEST="$APP/Contents/Resources/runtime/manifest.json"
+if [ -f "$RUNTIME_MANIFEST" ]; then
+    RUNTIME_VERSION="$(sed -n 's/.*"runtime_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$RUNTIME_MANIFEST" | head -n 1)"
+    [ -n "$RUNTIME_VERSION" ] || die "$RUNTIME_MANIFEST has no runtime_version."
+    RUNTIME_TEXT="this image contains the PHP runtime package ${RUNTIME_VERSION} (the curated
+FrankenPHP build: PHP + Caddy in one signed binary, the Laravel core, manifest.json and
+SHA256SUMS). The installer verifies every file against that manifest and the binary's signature
+before anything runs, and installs it into ~/Library/Application Support on first launch. No
+Homebrew, Docker or system PHP is used or required."
+else
+    RUNTIME_TEXT="this image contains NO PHP runtime package, so the installer stops at
+PACKAGE_VERIFY with a clear error and installs nothing into ~/Library. A runtime is built,
+signed and published by the build-runtime workflow; this build was made before that package was
+pinned in packaging/manifest/runtime.json."
+fi
+
 cat > "$STAGING/README.txt" <<EOF
 Laravel Executive AI — ${PRODUCT} ${VERSION} (build ${SHA})
 
@@ -104,10 +124,7 @@ Status: ${STATUS_TEXT}
 Contents: ${APP_NAME} (the Mac app with the embedded Supervisor launch agent) and a link to
 /Applications. Drag the app to Applications to install.
 
-Runtime: this image contains NO PHP runtime package. The curated FrankenPHP binary cannot be
-shipped until two licence findings are decided (docs/OPEN-QUESTIONS.md A23: the "nomercure" Go
-build tag and GNU libiconv/LGPL via libxml2). The installer therefore stops at PACKAGE_VERIFY
-with a clear error. Nothing is installed into ~/Library by opening this image.
+Runtime: ${RUNTIME_TEXT}
 
 How it was built, how to verify the signature and what is still missing before a release:
 docs/operations/release-build.md in https://github.com/STAFE-GROUP-AB/laravel-executive-ai

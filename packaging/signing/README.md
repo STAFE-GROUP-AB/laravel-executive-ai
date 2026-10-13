@@ -8,8 +8,9 @@ Notarization and stapling (Sprint 4) are described in [`../notarization/README.m
 
 | File | Purpose |
 |---|---|
-| `sign.sh` | `app` signs the bundle inside-out (the Supervisor helper bundle — profile embedded first — then the app); `dmg` signs the image; `report` writes the codesign/spctl record; `cleanup` deletes the temporary keychain. Fails closed without an identity unless `LXAI_ALLOW_UNSIGNED=1`, and always fails closed without `APPLE_SUPERVISOR_PROFILE` when a helper bundle is present. |
-| `make-dmg.sh` | Wraps the app, an `/Applications` link and an honest `README.txt` in a UDZO image named `LaravelExecutiveAI-<version>-<sha>[-unsigned].dmg`. |
+| `sign.sh` | `app` signs the bundle inside-out (the Supervisor helper bundle — profile embedded first — then the app); `runtime` signs the bundled FrankenPHP binary (ADR-001 D2, called by `build-runtime.yml` before the package is assembled); `dmg` signs the image; `report` writes the codesign/spctl record; `cleanup` deletes the temporary keychain. Fails closed without an identity unless `LXAI_ALLOW_UNSIGNED=1`, and always fails closed without `APPLE_SUPERVISOR_PROFILE` when a helper bundle is present. |
+| `frankenphp.entitlements` | The runtime binary's entitlements: exactly `com.apple.security.cs.allow-jit` (ADR-001 D2). `sign.sh runtime` refuses the file if it ever grants a second key. |
+| `make-dmg.sh` | Wraps the app, an `/Applications` link and an honest `README.txt` in a UDZO image named `LaravelExecutiveAI-<version>-<sha>[-unsigned].dmg`; the README states whether a runtime package is inside, read from the bundle. |
 | `test/` | `node --test 'packaging/signing/test/*.test.mjs'` — shape tests for the workflow and both scripts (`fixtures` lane in `ci.yml`). |
 | `release-keys/` | *(not yet)* public keys for `git tag -s` and the detached manifest signatures, release policy §3.5 — a different signature from the Apple one, never confused with it. |
 
@@ -21,6 +22,7 @@ bytes. Inside-out, as Apple requires — nested code before the code that contai
 
 | # | Target | Identifier | Entitlements | Flags |
 |---|---|---|---|---|
+| 0 | `Contents/Resources/runtime/frankenphp` — **already signed** when it reaches the bundle (`sign.sh runtime`, in `build-runtime.yml`, before the package was assembled and published); `build-macos.yml` only unpacks and verifies it, and `sign.sh app` never touches it | `se.stafe.executive-ai.frankenphp` (`runtime.json#signing.identifier`) | `packaging/signing/frankenphp.entitlements` — exactly `com.apple.security.cs.allow-jit` (ADR-001 D2), nothing else, no sandbox, no keychain group | `--force --options runtime --timestamp` |
 | 1 | `Contents/Frameworks/*` (none today — DesignTokens is linked statically) | inferred | none | `--force --options runtime --timestamp` |
 | 2 | `Contents/Helpers/LaravelExecutiveAISupervisor.app` (the launch-agent **helper bundle**, ADR-001 D3 as amended by A24 + ADR-003 D5) — with `APPLE_SUPERVISOR_PROFILE` decoded into its `Contents/embedded.provisionprofile` **before** `codesign` runs | `<LXAI_BUNDLE_PREFIX>.supervisor` (= `PRODUCT_BUNDLE_IDENTIFIER` in `Supervisor.xcconfig`) | `apps/macos/LaravelExecutiveAISupervisor.entitlements` — `app-sandbox: false` plus the two *restricted* entitlements the profile authorises: `com.apple.application-identifier` = `$(AppIdentifierPrefix)se.stafe.executive-ai.supervisor` and the ONE `keychain-access-groups` entry `$(AppIdentifierPrefix)se.stafe.executive-ai.secrets` (ADR-003 D2/D5), with `$(AppIdentifierPrefix)` expanded to `<APPLE_TEAM_ID>.` by `sign.sh` because `codesign` does not expand build variables (Xcode does, into an `.xcent`) | same |
 | 3 | `LaravelExecutiveAI.app` | `CFBundleIdentifier` (`<LXAI_BUNDLE_PREFIX>.app`) | `apps/macos/LaravelExecutiveAI.entitlements` — hardened runtime only, no sandbox, no keychain group (ADR-003 D5) | same |
@@ -112,14 +114,17 @@ writes exactly that into the image's `README.txt`.
 
 ## 4. Not in this image, and not before notarization (§14)
 
-- **No runtime package.** `Contents/Resources/runtime/` is absent and `packaging/manifest/runtime.json`
-  stays `status: unbuilt`. The curated FrankenPHP binary cannot be shipped until OPEN-QUESTIONS
-  **A23** is decided (the `nomercure` Go tag for ADR-001 D1; GNU libiconv/LGPL via libxml2 for
-  ADR-007 D2.2 / L-1). When it is: build (`packaging/runtime/build-runtime.sh`), sign `frankenphp`
-  with the Developer ID identity, `--options runtime` and exactly `com.apple.security.cs.allow-jit`
-  (ADR-001 D2), assemble with `--status signed` so `manifest.json` hashes the signed bytes, copy to
-  `Contents/Resources/runtime/`, and add the directory to step 1 of the table in §1 (every Mach-O in
-  it must be signed before the app is). The installer fails closed at `PACKAGE_VERIFY` until then.
+- **The runtime package is in the image — but it is signed somewhere else** (OPEN-QUESTIONS **A23**,
+  decided 2026-10-11; row 0 of §1). `.github/workflows/build-runtime.yml` builds the curated
+  FrankenPHP binary, passes the ADR-007 D2 licence gate with no override, signs it with
+  `sign.sh runtime` (Developer ID, hardened runtime, exactly `com.apple.security.cs.allow-jit`),
+  assembles `runtime/<version>/` with `--status signed` so `manifest.json` hashes the signed bytes,
+  and publishes the directory as a tarball on a pre-release tag. `build-macos.yml` downloads the
+  asset `packaging/manifest/runtime.json#artifact` pins, checks its sha256, unpacks it into
+  `Contents/Resources/runtime/` and refuses a binary signed by another team — all before step 2, so
+  the app seals nested code that is already signed. While `runtime.json` has no published artifact
+  the step skips with a notice and the installer stops at `PACKAGE_VERIFY`, as it did before A23.
+  Details: `packaging/runtime/README.md` §5 and §7.
 - **No notarization, no staple.** Needs three more secrets that do not exist yet (App Store Connect
   API key id, issuer id, the `.p8`), `xcrun notarytool submit --wait`, `xcrun stapler staple`, and an
   `spctl … accepted` gate. Backlog row *E4-6 Release engineering and docs completeness* (Sprint 4);
@@ -168,7 +173,8 @@ Re-test on the next signed image (S1-14 lab Mac, Gatekeeper on):
       shows the profile's `Entitlements` covering both of those (`keychain-access-groups` =
       `[<TEAM ID>.*]`).
 - [ ] Launch the helper's inner executable directly. It must now **run and exit 78** (`EX_CONFIG`,
-      "the installer has not finished": no runtime installed yet — A23) instead of being killed.
+      "the installer has not finished": nothing is installed in Application Support until the
+      installer has copied the bundled runtime there) instead of being killed.
       Exit 137 again, or `log show --last 2m --predicate 'process == "amfid" OR process == "kernel"' | grep -i entitle`
       still reporting *restricted entitlements not validated*, means the profile is not being
       honoured — check the bundle id in the profile against `CFBundleIdentifier`, and that the

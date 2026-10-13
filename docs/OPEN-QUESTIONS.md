@@ -517,9 +517,54 @@ things the ADRs do not cover (`docs/architecture/runtime-layout.md` §5):
 **Status (S1-12, 2026-10-10):** S1-12 shipped the DMG pipeline **without a runtime** rather than wait:
 the image is app + Supervisor only, `Contents/Resources/runtime/` is absent, `runtime.json` stays
 `status: unbuilt`, and the image's `README.txt` says so. The installer stops at `PACKAGE_VERIFY` on
-that build. Both findings remain open; the steps that follow the decision (sign `frankenphp` with
-`allow-jit` only, re-assemble `--status signed`, copy into the bundle) are listed in
-`packaging/signing/README.md` §4 and `docs/operations/release-build.md` §5.
+that build. The steps that follow the decision (sign `frankenphp` with `allow-jit` only, re-assemble
+`--status signed`, copy into the bundle) were listed in `packaging/signing/README.md` §4 and
+`docs/operations/release-build.md` §5.
+
+**DECIDED (Andreas, 2026-10-11, delegated to the runtime agent):** both findings are fixed in the
+build recipe rather than argued away — **no legal-opinion route**.
+
+1. The **`nomercure` Go build tag** is applied (and `nobadger,nomysql,nopgx,nowatcher` as upstream
+   has them), on top of keeping Mercure and Vulcain out of the xcaddy `--with` list. ADR-001 D1 now
+   names the tag and the patch.
+2. **static-php-cli's libxml2 recipe is patched to use the macOS system iconv**, so no GNU libiconv
+   is statically linked and the LGPL question never arises for the shipped artefact. ADR-007 D2.2
+   already prescribed exactly this route ("use the macOS system iconv"); it is now recorded as done,
+   with the behavioural note below. Three edits to the pinned spc 2.8.5 source, each guarded by its
+   exact text and re-checked after the build (`packaging/runtime/build-runtime.sh`):
+   `config/lib.json` makes libxml2's `libiconv` dependency Linux-only, `config/ext.json` gives the
+   `iconv` extension `arg-type-macos: with` (so PHP configures `--with-iconv`, not
+   `--with-iconv=<buildroot>`), and the libxml2 recipe hands CMake `Iconv_INCLUDE_DIR` /
+   `Iconv_LIBRARY` from the macOS SDK — needed because spc's generated toolchain file restricts
+   `find_package()` to its own buildroot, so `find_package(Iconv)` otherwise fails outright
+   ("Could NOT find Iconv", measured 2026-10-13).
+
+**Evidence (built 2026-10-13, Apple M4 Max, macOS 26.6.2, Xcode 26.2, ~16 min cold; full numbers in
+[`docs/architecture/runtime-layout.md`](architecture/runtime-layout.md) §5):**
+
+- The licence gate **passes with nothing set** — `LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT` is not used,
+  and CI never sets it (pinned by `packaging/runtime/test/build-runtime-workflow.test.mjs`).
+  `spc dump-license` yields 12 notice files (curl, ICU, libpng, libsodium, libxml2, libzip, oniguruma,
+  OpenSSL, SQLite, zlib, zip, php-src), **0** with GPL/LGPL/AGPL text and **no libiconv entry at all**.
+- `go version -m` reports `build -tags=nobadger,nomysql,nopgx,nomercure,nowatcher` and **no**
+  `github.com/dunglas/mercure` or `vulcain` dependency line.
+- `otool -L` lists only `libSystem`, `libresolv`, `libc++`, `libutil`, `/usr/lib/libiconv.2.dylib`
+  and the CoreFoundation/CoreServices/SystemConfiguration/Security frameworks. The iconv entry is
+  the macOS system library: dynamically linked, provided by the OS, never redistributed by us —
+  and no `libiconv.a`/`libcharset.a` exists in the build tree (the recipe fails closed if one does).
+- Functional check on the artefact: `iconv` round-trips UTF-8 ↔ ISO-8859-1 and Windows-1252, and
+  libxml2 decodes `encoding="ISO-8859-1"` and `encoding="SHIFT_JIS"` documents correctly through the
+  system library — the one real risk of the change. **Behavioural note:** macOS's iconv reports
+  `ICONV_IMPL=libiconv, ICONV_VERSION=1.11` (GNU libiconv 1.17 before), and its `//TRANSLIT` output
+  differs (`Räksmörgås` → `R"aksm"oagas` instead of `Raksmorgas`). Nothing in the product uses
+  `//TRANSLIT`; a feature that needs it must transliterate in PHP, not in iconv.
+
+**Shipping it (S1-12, this PR):** the package is built, gated, signed and published by
+`.github/workflows/build-runtime.yml` (dispatch only) as a tarball on a pre-release tag
+`runtime-<php>-<frankenphp>-<n>`; `packaging/manifest/runtime.json` gains `status: signed` plus the
+`artifact` member that pins the asset URL, size and sha256; `build-macos.yml` downloads it, verifies
+the digest, unpacks it into `Contents/Resources/runtime/` **before** signing and refuses a runtime
+from another Apple team. A23 is **closed**.
 
 ### A24 — The Supervisor's container: bare tool (ADR-001 D3) or helper bundle (ADR-003 D5) — DECIDED 2026-10-11
 ADR-001 D3 places the Supervisor at `Contents/MacOS/LaravelExecutiveAISupervisor` (a bare Mach-O,

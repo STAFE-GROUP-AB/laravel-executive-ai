@@ -131,8 +131,11 @@ test('secrets are referenced only as `${{ secrets.APPLE_* }}`, only inside env b
         while (cursor >= 0 && ! /^\s+- name:/.test(lines[cursor])) {
             cursor -= 1;
         }
+        // Every step that sees a secret value is gated on the signing mode. A step may add
+        // further conditions (the runtime Team ID check also needs a bundled runtime), so the
+        // mode condition has to be part of the `if:`, not necessarily all of it.
         const step = lines.slice(cursor, index + 1).join('\n');
-        assert.match(step, /\n\s+if: steps\.mode\.outputs\.signed == 'true'\n/, `step at line ${cursor + 1} is gated on the signing mode`);
+        assert.match(step, /\n\s+if: [^\n]*steps\.mode\.outputs\.signed == 'true'/, `step at line ${cursor + 1} is gated on the signing mode`);
     }
 
     assert.doesNotMatch(workflow, /echo[^\n]*\$APPLE_/, 'no echo of an APPLE_* variable');
@@ -375,8 +378,11 @@ test('make-dmg.sh stages the app, an /Applications link and an honest README, an
     const readmeText = readFileSync(join(staging, 'README.txt'), 'utf8');
     assert.match(readmeText, /LaravelExecutiveAI 0\.0\.0 \(build abcdef1\)/);
     assert.match(readmeText, /UNSIGNED debug build/);
+    // No Contents/Resources/runtime/ in this fake bundle, so the image must say so rather than
+    // claim a runtime it does not carry.
     assert.match(readmeText, /NO PHP runtime package/);
-    assert.match(readmeText, /A23/);
+    assert.match(readmeText, /PACKAGE_VERIFY/);
+    assert.match(readmeText, /build-runtime workflow/);
     assert.match(readmeText, /This is not a release/);
     assert.match(readmeText, /docs\/operations\/release-build\.md/);
 
@@ -394,6 +400,29 @@ test('make-dmg.sh stages the app, an /Applications link and an honest README, an
 
     assert.match(dmg, /hdiutil create -volname "\$VOLNAME" -srcfolder "\$STAGING" -ov -format UDZO/);
     assert.match(dmg, /hdiutil verify "\$DMG_PATH"/);
+    rmSync(base, { recursive: true, force: true });
+});
+
+test('with a runtime package in the bundle, the image README names its version instead of the caveat', () => {
+    const base = mkdtempSync(join(tmpdir(), 'lxai-dmg-runtime-'));
+    const app = fakeApp(base);
+    const out = join(base, 'out');
+
+    mkdirSync(join(app, 'Contents', 'Resources', 'runtime'), { recursive: true });
+    writeFileSync(
+        join(app, 'Contents', 'Resources', 'runtime', 'manifest.json'),
+        `${JSON.stringify({ schema_version: 1, runtime_version: '0.1.0', executable: 'frankenphp', files: [] }, null, 4)}\n`,
+    );
+
+    const result = run(dmgScript, ['--app', app, '--out-dir', out, '--stage-only', '--sha', 'abcdef1', '--version', '0.0.0', '--status', 'signed']);
+    assert.equal(result.status, 0, result.stderr);
+
+    const readmeText = readFileSync(join(out, 'dmg-staging', 'README.txt'), 'utf8');
+    assert.match(readmeText, /contains the PHP runtime package 0\.1\.0/);
+    assert.match(readmeText, /verifies every file against that manifest/);
+    assert.doesNotMatch(readmeText, /NO PHP runtime package/);
+    assert.match(readmeText, /No\nHomebrew, Docker or system PHP is used or required\./);
+
     rmSync(base, { recursive: true, force: true });
 });
 

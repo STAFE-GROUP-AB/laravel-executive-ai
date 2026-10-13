@@ -9,7 +9,7 @@ import { chmodSync, existsSync, readFileSync, rmSync, statSync, symlinkSync, wri
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { AssembleError, EXECUTABLE_NAME, assembleRuntime, listAppFiles, packageFromRuntimeJson, parseArgs } from '../assemble-runtime.mjs';
+import { AssembleError, EXECUTABLE_NAME, assembleRuntime, listAppFiles, packageFromRuntimeJson, parseArgs, recordArtifact, updateRuntimeJson } from '../assemble-runtime.mjs';
 import {
     CHECKSUM_FILE_NAME,
     MANIFEST_FILE_NAME,
@@ -87,17 +87,104 @@ test('the written manifest.json is byte-for-byte what runtime.json records as pa
     rmSync(root, { recursive: true, force: true });
 });
 
-test('the committed runtime.json is unbuilt (package null) until S1-12 produces an artefact', () => {
+test('the committed runtime.json is internally consistent: a package only when built, an artifact only when signed', () => {
     const committed = readJson(COMMITTED_RUNTIME_JSON);
 
     assert.equal(committed.schema_version, 1);
-    assert.equal(committed.status, 'unbuilt');
-    assert.equal(committed.package, null);
-    assert.equal(packageFromRuntimeJson(COMMITTED_RUNTIME_JSON), null);
+    assert.ok(['unbuilt', 'built', 'signed'].includes(committed.status));
     assert.equal(committed.components.frankenphp.version, '1.13.0');
     assert.equal(committed.http.preferred_port, 8787);
     assert.ok(! committed.components.php_extensions.some((ext) => ['gmp', 'gettext', 'readline', 'imagick'].includes(ext)));
     assert.ok(committed.components.caddy_modules_excluded.some((module) => module.includes('mercure')));
+
+    if (committed.status === 'unbuilt') {
+        assert.equal(committed.package, null);
+        assert.equal(committed.artifact, null);
+        assert.equal(packageFromRuntimeJson(COMMITTED_RUNTIME_JSON), null);
+
+        return;
+    }
+
+    // Built or signed: `package` is a manifest the Swift verifier would accept, and it is the
+    // one PackageVerifier will compare the installed directory against.
+    const manifest = packageFromRuntimeJson(COMMITTED_RUNTIME_JSON);
+    assert.notEqual(manifest, null);
+    assert.equal(manifest.runtime_version, committed.runtime_version);
+    assert.equal(manifest.executable, EXECUTABLE_NAME);
+    assert.match(committed.source_commit, /^[0-9a-f]{40}$/);
+
+    if (committed.artifact !== null) {
+        assert.equal(committed.status, 'signed', 'only a signed package may be published');
+        assert.match(committed.artifact.sha256, /^[0-9a-f]{64}$/);
+        assert.ok(committed.artifact.url.endsWith(`/releases/download/${committed.artifact.tag}/${committed.artifact.asset}`));
+    }
+});
+
+test('recordArtifact pins where a signed package was published, and refuses everything else', () => {
+    const root = tempDir();
+    const good = {
+        tag: 'runtime-8.5.11-1.13.0-1',
+        asset: 'laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-1.tar.gz',
+        sha256: 'b'.repeat(64),
+        bytes: 123456,
+    };
+    good.url = `https://github.com/STAFE-GROUP-AB/laravel-executive-ai/releases/download/${good.tag}/${good.asset}`;
+
+    // An unbuilt manifest has nothing to publish.
+    const unbuilt = writeRuntimeJsonCopy(root);
+    expectRefusal(() => recordArtifact(unbuilt, good), /status "signed"/);
+
+    // Assemble, then sign-and-assemble: the signed assembly is what may be published.
+    const signed = assemble(root, { manifest: unbuilt, status: 'signed' }).manifest;
+    assert.equal(readJson(unbuilt).status, 'signed');
+    assert.equal(readJson(unbuilt).artifact, null, 'an assembly leaves no stale artifact behind');
+
+    const document = recordArtifact(unbuilt, good);
+    assert.deepEqual(document.artifact, { tag: good.tag, asset: good.asset, url: good.url, sha256: good.sha256, bytes: good.bytes });
+    assert.deepEqual(document.package, signed, 'recording an artifact does not touch the package');
+
+    for (const [broken, pattern] of [
+        [{ ...good, tag: 'runtime-8.5.11-1.13.0' }, /artifact-tag/],
+        [{ ...good, tag: 'v1' }, /artifact-tag/],
+        [{ ...good, url: 'http://github.com/x/y/releases/download/runtime-8.5.11-1.13.0-1/a.tar.gz' }, /release-asset URL/],
+        [{ ...good, url: 'https://example.com/a.tar.gz' }, /release-asset URL/],
+        [{ ...good, asset: 'other.tar.gz' }, /must point at the given tag and asset/],
+        [{ ...good, sha256: 'B'.repeat(64) }, /64 lowercase hex/],
+        [{ ...good, sha256: 'abc' }, /64 lowercase hex/],
+        [{ ...good, bytes: 0 }, /positive integer/],
+        [{ ...good, bytes: 'many' }, /positive integer/],
+    ]) {
+        expectRefusal(() => recordArtifact(unbuilt, broken), pattern);
+    }
+
+    // Re-recording the package after publishing clears the artifact: a re-assembled directory is
+    // not the one behind the published tarball, so the URL must not survive it.
+    assert.notEqual(readJson(unbuilt).artifact, null);
+    updateRuntimeJson(unbuilt, { manifest: signed, status: 'signed', sourceCommit: COMMIT, builtAt: '2026-10-13T00:00:00.000Z' });
+    assert.equal(readJson(unbuilt).artifact, null);
+
+    rmSync(root, { recursive: true, force: true });
+});
+
+test('--verify re-applies the installer rules to an existing directory', () => {
+    const root = tempDir();
+    const { directory } = assemble(root);
+    const cli = join(RUNTIME_DIR, 'assemble-runtime.mjs');
+
+    const ok = spawnSync(process.execPath, [cli, '--verify', directory], { encoding: 'utf8' });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /runtime 0\.1\.0, \d+ files/);
+
+    writeFileSync(join(directory, 'app', 'public', 'extra.php'), '<?php');
+    const unlisted = spawnSync(process.execPath, [cli, '--verify', directory], { encoding: 'utf8' });
+    assert.equal(unlisted.status, 1);
+    assert.match(unlisted.stderr, /not listed in the manifest/);
+
+    const missing = spawnSync(process.execPath, [cli, '--verify', join(root, 'nope')], { encoding: 'utf8' });
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /manifest\.json/);
+
+    rmSync(root, { recursive: true, force: true });
 });
 
 test('Caddyfile and php.ini are static: loopback only, env placeholders, no path, no secret', () => {

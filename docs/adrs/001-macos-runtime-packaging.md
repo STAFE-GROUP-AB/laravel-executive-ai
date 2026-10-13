@@ -62,6 +62,26 @@ contains only what Laravel 13 and this product need:
 session tokenizer xml xmlreader xmlwriter simplexml zlib opcache bcmath sodium zip pcntl posix
 exif gd` — plus `redis`/`pdo_mysql` only if ADR-002's advanced profile is adopted.
 
+**Two build-configuration requirements, added 2026-10-11 after the first real build (A23 decided by
+Andreas; Evidence E7). Neither is optional, and `packaging/runtime/build-runtime.sh` fails closed
+without them:**
+
+1. **The `nomercure` Go build tag.** Leaving Mercure and Vulcain out of
+   `SPC_CMD_VAR_FRANKENPHP_XCADDY_MODULES` is *not* enough: FrankenPHP's own `caddy/mercure.go` is
+   compiled unless the tag is set (`//go:build !nomercure`), and the first build without it linked
+   `github.com/dunglas/mercure v1.0.3` (AGPL-3.0) anyway. static-php-cli 2.8.5 hard-codes its xcaddy
+   tag list, so the recipe patches the pinned source behind an exact-string guard and then verifies
+   `build -tags=…nomercure…` in `go version -m` of the finished binary. Shipped tags:
+   `nobadger,nomysql,nopgx,nomercure,nowatcher`. (`nomercure` also drops FrankenPHP's Mercure-based
+   hot reload, which the product does not use.)
+2. **libxml2 and the `iconv` extension are built against the macOS system iconv**, never GNU
+   libiconv (LGPL-2.1), which spc 2.8.5 otherwise links statically because `libxml2` is a dependency
+   of `php` itself on Darwin and `dom`/`xml`/`simplexml` need libxml2. This is ADR-007 D2.2's
+   prescribed route; the three guarded edits to the pinned spc source are described in
+   `packaging/runtime/README.md` §1 and OPEN-QUESTIONS A23. The resulting binary links
+   `/usr/lib/libiconv.2.dylib` — a library macOS provides and we do not redistribute — and no
+   `libiconv.a` exists anywhere in the build tree.
+
 The upstream release artefact is used in Sprint 0 as the **measured reference** (Evidence E1–E4) and
 as the emergency fallback if our build pipeline is late; it is never shipped to users because of the
 AGPL/LGPL components. Build-time Homebrew on the CI runner (required by `build-static.sh` on macOS)

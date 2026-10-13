@@ -16,6 +16,22 @@
 //       [--out <dir>] [--manifest packaging/manifest/runtime.json] [--source-commit <sha>]
 //       [--built-at <iso>] [--status built|signed] [--no-update-manifest]
 //
+//   node packaging/runtime/assemble-runtime.mjs --record-artifact \
+//       --artifact-tag runtime-8.5.11-1.13.0-1 --artifact-url <release asset url> \
+//       --artifact-sha256 <64 hex> --artifact-bytes <n> [--manifest packaging/manifest/runtime.json]
+//
+//   node packaging/runtime/assemble-runtime.mjs --verify <directory>
+//
+// `--verify` re-runs the PackageVerifier rules (minus the code signature, which needs macOS) on an
+// existing directory: used on the unpacked tarball in build-runtime.yml and on
+// `Contents/Resources/runtime/` in build-macos.yml, so neither workflow ships a directory the
+// installer would reject.
+//
+// `--record-artifact` writes the `artifact` member only: where the signed package this
+// `runtime.json` already pins (`package`, `status: signed`) was published, so build-macos.yml can
+// download and verify it. An assembly always clears `artifact` first — a re-assembled directory
+// is not the one behind the published tarball.
+//
 // The app tree must already be `composer install --no-dev --optimize-autoloader`-ed and have run
 // `php artisan package:discover`. It must NOT contain `.env*`, a config/route/event cache
 // (ADR-003: nothing derived from the environment may be baked into the runtime), a database file,
@@ -108,6 +124,13 @@ export function parseArgs(argv) {
             case '--built-at': options.builtAt = next(); break;
             case '--status': options.status = next(); break;
             case '--no-update-manifest': options.updateManifest = false; break;
+            case '--record-artifact': options.recordArtifact = true; break;
+            case '--verify': options.verify = next(); break;
+            case '--artifact-tag': options.artifactTag = next(); break;
+            case '--artifact-asset': options.artifactAsset = next(); break;
+            case '--artifact-url': options.artifactUrl = next(); break;
+            case '--artifact-sha256': options.artifactSha256 = next(); break;
+            case '--artifact-bytes': options.artifactBytes = next(); break;
             default: fail(`unknown argument ${arg}`);
         }
     }
@@ -282,11 +305,63 @@ export function updateRuntimeJson(path, { manifest, status, sourceCommit, builtA
     document.built_at = builtAt ?? new Date().toISOString();
     document.source_commit = sourceCommit ?? document.source_commit ?? null;
     document.package = manifest;
+    // Whatever was published before describes different bytes than the directory just written.
+    document.artifact = null;
 
     if (document.source_commit === null) {
         fail('runtime.json needs a source_commit; pass --source-commit <sha> (CI: $GITHUB_SHA)');
     }
 
+    writeFileSync(path, `${JSON.stringify(document, null, 4)}\n`);
+
+    return document;
+}
+
+export const ARTIFACT_TAG_PATTERN = /^runtime-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[1-9][0-9]*$/;
+export const ARTIFACT_URL_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/releases\/download\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.tar\.gz$/;
+
+/**
+ * Records where the signed package this runtime.json pins was published. Refuses anything that
+ * would let `build-macos.yml` download bytes nobody verified: a document that is not `signed`
+ * with a `package`, a URL that is not a GitHub release asset, a tag the URL does not contain,
+ * or a digest that is not 64 hex characters.
+ */
+export function recordArtifact(path, { tag, asset, url, sha256, bytes }) {
+    const document = JSON.parse(readFileSync(path, 'utf8'));
+
+    if (document.status !== 'signed' || document.package === null) {
+        fail(`runtime.json must be status "signed" with a package before an artifact is recorded (status ${document.status}); assemble the signed binary first`);
+    }
+
+    if (! ARTIFACT_TAG_PATTERN.test(tag ?? '')) {
+        fail(`--artifact-tag ${tag} is not runtime-<php>-<frankenphp>-<n>`);
+    }
+
+    const resolvedAsset = asset ?? (url ?? '').split('/').pop();
+
+    if (! /^[A-Za-z0-9][A-Za-z0-9_.-]*\.tar\.gz$/.test(resolvedAsset ?? '')) {
+        fail(`--artifact-asset ${resolvedAsset} is not a .tar.gz file name`);
+    }
+
+    if (! ARTIFACT_URL_PATTERN.test(url ?? '')) {
+        fail(`--artifact-url ${url} is not a GitHub release-asset URL`);
+    }
+
+    if (! url.endsWith(`/releases/download/${tag}/${resolvedAsset}`)) {
+        fail('--artifact-url must point at the given tag and asset');
+    }
+
+    if (! isSha256Hex(sha256 ?? '')) {
+        fail('--artifact-sha256 must be 64 lowercase hex characters');
+    }
+
+    const size = Number(bytes);
+
+    if (! Number.isInteger(size) || size <= 0) {
+        fail('--artifact-bytes must be a positive integer');
+    }
+
+    document.artifact = { tag, asset: resolvedAsset, url, sha256, bytes: size };
     writeFileSync(path, `${JSON.stringify(document, null, 4)}\n`);
 
     return document;
@@ -313,8 +388,29 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     try {
         const options = parseArgs(process.argv.slice(2));
 
+        if (options.verify !== undefined) {
+            const manifest = verifyRuntimeDirectory(resolve(options.verify));
+            const total = manifest.files.reduce((sum, entry) => sum + entry.bytes, 0);
+
+            console.log(`ok    ${options.verify}: runtime ${manifest.runtime_version}, ${manifest.files.length} files, ${total} bytes, manifest.json and SHA256SUMS agree`);
+            process.exit(0);
+        }
+
         if (! existsSync(options.manifest)) {
             fail(`${options.manifest} does not exist`);
+        }
+
+        if (options.recordArtifact) {
+            const document = recordArtifact(options.manifest, {
+                tag: options.artifactTag,
+                asset: options.artifactAsset,
+                url: options.artifactUrl,
+                sha256: options.artifactSha256,
+                bytes: options.artifactBytes,
+            });
+
+            console.log(`ok    ${relative(REPO_ROOT, options.manifest)} records ${document.artifact.asset} (${document.artifact.bytes} bytes, sha256 ${document.artifact.sha256}) on ${document.artifact.tag}`);
+            process.exit(0);
         }
 
         const { directory, manifest } = assembleRuntime(options);
