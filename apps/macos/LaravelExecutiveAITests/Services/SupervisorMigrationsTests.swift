@@ -200,6 +200,39 @@ final class SupervisorMigrationsTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: socket.path), "shutdown unlinks the socket")
     }
 
+    /// A migration that never finishes must not hang the boot: it is stopped at the bound and
+    /// becomes the ordinary fail-closed path, with a reason the GUI can show. Without this, no
+    /// service would ever be spawned and "Start services" would hang too.
+    func testAMigrationThatNeverFinishesIsStoppedAtTheBound() async throws {
+        try installRuntime(frankenphp: Self.hangingMigrationFrankenphp)
+        let keychain = InMemoryKeychainStore()
+        var configuration = configuration(keychain: keychain, socketLabel: "hang")
+        configuration.migrationTimeout = .seconds(1)
+        let runtime = SupervisorRuntime(configuration: configuration)
+
+        let started = ContinuousClock.now
+        try await runtime.boot()
+        let elapsed = ContinuousClock.now - started
+
+        XCTAssertLessThan(elapsed, .seconds(30), "the boot is bounded, not waiting out the child's 120 s sleep")
+
+        for status in await runtime.statuses() {
+            XCTAssertEqual(status.state, .failed)
+            XCTAssertEqual(status.detail, "The database migrations did not finish (no result after 1 seconds); no service was started.")
+        }
+
+        XCTAssertEqual(spawnLines(), [Self.migrateCommand], "no child was spawned")
+
+        // The sleeping child was stopped, not left orphaned: it recorded its own pid (and `exec`s
+        // `sleep`, so that pid *is* the process the Supervisor signals).
+        let recorded = Self.text(at: paths.logs.appending(path: "migrate.pid")).trimmingCharacters(in: .whitespacesAndNewlines)
+        let pid = try XCTUnwrap(pid_t(recorded), "the one-shot recorded its pid: \(recorded.debugDescription)")
+        XCTAssertEqual(kill(pid, 0), -1, "pid \(pid) is still alive after the bound")
+        XCTAssertEqual(errno, ESRCH)
+
+        await runtime.shutdown()
+    }
+
     /// What the installer's resume path relies on: `prepare()` running a second time in the same
     /// Supervisor process — a GUI "Start services" — applies the migrations again rather than
     /// assuming the first boot did it, and succeeds because `migrate --force` is idempotent.
@@ -307,6 +340,20 @@ final class SupervisorMigrationsTests: XCTestCase {
     if [ "$3" = "migrate" ]; then
         echo "SQLSTATE[HY000]: General error: 5 database is locked" >&2
         exit 1
+    fi
+    echo "simulated runtime: $@"
+
+    """
+
+    /// A `migrate` that never finishes. `exec` so the recorded pid is the process that sleeps —
+    /// SIGTERM to the shell would otherwise leave `sleep` orphaned for two minutes.
+    private static let hangingMigrationFrankenphp = """
+    #!/bin/sh
+    mkdir -p "$LEA_LOG_DIR"
+    echo "$@" >> "$LEA_LOG_DIR/spawns.txt"
+    if [ "$3" = "migrate" ]; then
+        echo $$ > "$LEA_LOG_DIR/migrate.pid"
+        exec sleep 120
     fi
     echo "simulated runtime: $@"
 

@@ -82,7 +82,11 @@ it (`packaging/signing/README.md` §1, §5).
    ([health-contract.md](health-contract.md) §2), so without this step a fresh install can never
    become `ready`. Failure fails closed exactly like step 5: nothing is spawned, all three services
    are `failed` with the sanitised reason, the Supervisor keeps serving XPC; the artisan output is
-   in `migrate.log`.
+   in `migrate.log`. **Bounded at `migrationTimeout` (default 120 s)**: a wedged child is stopped
+   (SIGTERM → 5 s → SIGKILL) and reported as `no result after 120 seconds`, because a one-shot on
+   the boot path that could wait forever would spawn nothing, show three services with no reason,
+   and make "Start services" hang too — a dead end with nothing to diagnose. The bound is two
+   orders of magnitude above the estimated cost of the bundled migrations (§10 item 7).
 7. Spawn the three children (`ServiceSpec.coreServices`) and run the health monitor.
 
 Steps 5 and 6 together are the `beforeStart` the control surface re-runs for "Start services"

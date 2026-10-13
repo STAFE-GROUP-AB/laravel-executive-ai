@@ -13,6 +13,8 @@ actor ChildProcess {
     private let log: any LogSink
     private var process: Process?
     private var exited = false
+    /// Set by `run(timeout:)`'s watchdog before it stops the process.
+    private var timedOut = false
 
     init(spec: any ProcessLaunch, log: any LogSink) {
         self.spec = spec
@@ -100,6 +102,46 @@ actor ChildProcess {
         }
     }
 
+    /// As `run()`, but bounded: after `timeout` the process is stopped (SIGTERM, then SIGKILL) and
+    /// `ChildProcessError.timedOut` is thrown instead of an exit being reported.
+    ///
+    /// A one-shot on the boot path must never be able to wait forever. `run()` alone would hang
+    /// the whole Supervisor if the child wedged: no service would ever be spawned, the GUI would
+    /// show three services with no reason, and "Start services" would hang too — a dead end with
+    /// nothing to diagnose. A bound turns that into the ordinary fail-closed path.
+    func run(timeout: Duration) async throws -> ServiceExit {
+        let watchdog = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await self?.stopAfterTimeout()
+        }
+
+        defer { watchdog.cancel() }
+
+        let exit = try await run()
+
+        guard !timedOut else {
+            throw ChildProcessError.timedOut(spec.logName, afterSeconds: Int(timeout.components.seconds))
+        }
+
+        return exit
+    }
+
+    /// Only a process that is still running counts as timed out: one that exited in the same
+    /// instant the watchdog fired left on its own, and its status is the honest answer.
+    private func stopAfterTimeout() async {
+        guard let process, process.isRunning else {
+            return
+        }
+
+        timedOut = true
+        await terminate(grace: .seconds(5))
+    }
+
     /// SIGTERM, then SIGKILL if the process is still there after `grace`. Returns when the
     /// process is gone. Safe to call when it already left.
     func terminate(grace: Duration) async {
@@ -136,4 +178,6 @@ actor ChildProcess {
 enum ChildProcessError: Error, Equatable, Sendable {
     /// The spec's `logName`, never a path.
     case spawnFailed(String)
+    /// `run(timeout:)` gave up and stopped the process. Carries the spec's `logName`.
+    case timedOut(String, afterSeconds: Int)
 }

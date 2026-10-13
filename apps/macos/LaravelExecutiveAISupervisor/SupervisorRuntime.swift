@@ -31,6 +31,11 @@ struct SupervisorConfiguration: Sendable {
     var makeProbe: @Sendable (_ port: Int, _ grant: SupervisorGrant) -> any HealthProbing
     var liveInterval: Duration = .seconds(5)
     var readyInterval: Duration = .seconds(30)
+    /// How long `artisan migrate --force` may take before it is stopped and the boot fails closed
+    /// (services.md §2 step 6). Two orders of magnitude above the estimated cost of the bundled
+    /// migrations, because the only job of the bound is to turn a wedged child into a reason the
+    /// GUI can show instead of a boot that never finishes.
+    var migrationTimeout: Duration = .seconds(120)
     var random: @Sendable (Int) -> Data = SecureRandom.bytes
     var now: @Sendable () -> Date = { Date() }
     /// Tests only: `sun_path` holds 103 bytes and the system temporary directory is long.
@@ -185,12 +190,15 @@ actor SupervisorRuntime {
         // running it on every boot — and on every "Start services" — is safe.
         let migrations = OneShotSpec.migrations(runtime: runtime, paths: paths, port: port, secretsSocket: socket)
         let migrationLog: any LogSink = RotatingLogFile(url: logs.appending(path: "\(migrations.logName).log"))
+        let migrationTimeout = configuration.migrationTimeout
         let migrate: @Sendable () async throws -> Void = {
             let exit: ServiceExit
             SupervisorLog.boot.notice("applying database migrations")
 
             do {
-                exit = try await ChildProcess(spec: migrations, log: migrationLog).run()
+                exit = try await ChildProcess(spec: migrations, log: migrationLog).run(timeout: migrationTimeout)
+            } catch ChildProcessError.timedOut(_, let seconds) {
+                throw SupervisorBootError.migrationsFailed("no result after \(seconds) seconds")
             } catch {
                 throw SupervisorBootError.migrationsFailed("could not be started")
             }
