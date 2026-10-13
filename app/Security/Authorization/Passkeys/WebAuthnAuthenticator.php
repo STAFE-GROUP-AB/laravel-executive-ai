@@ -165,7 +165,7 @@ final class WebAuthnAuthenticator implements PasskeyAuthenticator
 
         $stored = PasskeyCredential::query()->create([
             'user_id' => $user->id,
-            'name' => $this->labelFor($name, $user),
+            'name' => $this->labelFor($name),
             'credential_id' => $credentialId,
             'public_key' => base64_encode($record->credentialPublicKey),
             'user_handle' => $record->userHandle,
@@ -401,7 +401,8 @@ final class WebAuthnAuthenticator implements PasskeyAuthenticator
         return ['type' => $trustPath::class];
     }
 
-    private function labelFor(?string $name, User $user): string
+    /** The owner's own label for the device, or a dated default; never derived from the credential. */
+    private function labelFor(?string $name): string
     {
         $label = trim((string) $name);
 
