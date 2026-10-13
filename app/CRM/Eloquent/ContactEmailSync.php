@@ -55,7 +55,15 @@ final class ContactEmailSync
     public function sync(Contact $contact, array $addresses, string $actorUserId, CarbonImmutable $now): void
     {
         $this->connections->connection()->transaction(function () use ($contact, $addresses, $actorUserId, $now): void {
+            // The contact came from a scoped read, and `contact_id` is a
+            // foreign key to a contact that belongs to exactly one
+            // organization — so the rows below are already this workspace's.
+            // The organization predicate is here anyway, because "every CRM
+            // query carries it" is cheaper to keep true than to reason about
+            // per call site, and `withTrashed()` is a place where a reader
+            // should not have to.
             $existing = ContactEmail::withTrashed()
+                ->where('organization_id', $contact->organization_id)
                 ->where('contact_id', $contact->getKey())
                 ->orderByDesc('position')
                 ->get();

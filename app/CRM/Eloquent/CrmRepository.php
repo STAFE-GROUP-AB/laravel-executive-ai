@@ -212,7 +212,14 @@ final class CrmRepository
             ->all();
 
         $this->connections->connection()->transaction(function () use ($contact, $allowed, $scope, $now): void {
-            $existing = CustomerContact::withTrashed()->where('contact_id', $contact->getKey())->get();
+            // Scoped by organization as well as by the contact: the contact
+            // came from a scoped read and its links cannot belong elsewhere,
+            // but `withTrashed()` bypasses enough of the normal reading that
+            // the predicate is worth stating rather than deducing.
+            $existing = CustomerContact::withTrashed()
+                ->where('organization_id', $contact->organization_id)
+                ->where('contact_id', $contact->getKey())
+                ->get();
 
             foreach ($existing as $link) {
                 $wanted = in_array((string) $link->customer_id, $allowed, true);
