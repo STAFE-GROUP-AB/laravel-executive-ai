@@ -29,7 +29,11 @@ const sign = readFileSync(signScript, 'utf8');
 const dmg = readFileSync(dmgScript, 'utf8');
 const readme = readFileSync(readmePath, 'utf8');
 
-const SECRET_NAMES = ['APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_TEAM_ID', 'APPLE_KEYCHAIN_PASSWORD'];
+const SECRET_NAMES = ['APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_TEAM_ID', 'APPLE_KEYCHAIN_PASSWORD', 'APPLE_SUPERVISOR_PROFILE'];
+
+// A24: the Supervisor is a helper application bundle, so it can carry the Developer ID
+// provisioning profile that authorises its restricted keychain-access-groups entitlement.
+const SUPERVISOR_BUNDLE = 'Contents/Helpers/LaravelExecutiveAISupervisor.app';
 
 const minimalEnv = { PATH: process.env.PATH, HOME: process.env.HOME ?? tmpdir(), CI: '1' };
 
@@ -44,6 +48,16 @@ function fakeApp(base, name = 'LaravelExecutiveAI.app') {
     writeFileSync(join(app, 'Contents', 'MacOS', 'LaravelExecutiveAI'), '#!/bin/sh\n');
 
     return app;
+}
+
+/// The embedded Supervisor helper bundle, as the app build produces it (A24).
+function fakeHelper(app) {
+    const helper = join(app, ...SUPERVISOR_BUNDLE.split('/'));
+    mkdirSync(join(helper, 'Contents', 'MacOS'), { recursive: true });
+    writeFileSync(join(helper, 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>se.stafe.executive-ai.supervisor</string></dict></plist>\n');
+    writeFileSync(join(helper, 'Contents', 'MacOS', 'LaravelExecutiveAISupervisor'), '#!/bin/sh\n');
+
+    return helper;
 }
 
 function indentation(line) {
@@ -96,7 +110,7 @@ test('secrets are referenced only as `${{ secrets.APPLE_* }}`, only inside env b
     for (const [line, index] of secretLines) {
         assert.match(
             line,
-            /^\s+(APPLE_[A-Z0-9_]+|HAS_[A-Z0-9_]+): \$\{\{ secrets\.APPLE_(CERTIFICATE_P12|CERTIFICATE_PASSWORD|TEAM_ID|KEYCHAIN_PASSWORD)( != '')? \}\}$/,
+            /^\s+(APPLE_[A-Z0-9_]+|HAS_[A-Z0-9_]+): \$\{\{ secrets\.APPLE_(CERTIFICATE_P12|CERTIFICATE_PASSWORD|TEAM_ID|KEYCHAIN_PASSWORD|SUPERVISOR_PROFILE)( != '')? \}\}$/,
             `line ${index + 1} maps a secret into env: ${line.trim()}`,
         );
 
@@ -150,13 +164,36 @@ test('xcodebuild itself never signs: Release build with CODE_SIGNING_ALLOWED=NO,
     assert.match(dmg, /^set \+x$/m);
 });
 
-test('the bundle check requires the Supervisor tool and the LaunchAgent plist that S1-07 embeds', () => {
+test('the bundle check requires the Supervisor helper bundle and the LaunchAgent plist that S1-07 embeds', () => {
     const locate = section(workflow, '- name: Locate the bundle', '- name: Sign the app and the Supervisor');
     const plists = readdirSync(join(root, 'packaging', 'manifest', 'launchd')).filter((name) => name.endsWith('.plist'));
 
     assert.equal(plists.length, 1, 'one LaunchAgent plist template');
-    assert.ok(locate.includes('Contents/MacOS/LaravelExecutiveAISupervisor'));
+    assert.ok(locate.includes(`${SUPERVISOR_BUNDLE}/Contents/MacOS/LaravelExecutiveAISupervisor`), 'the helper bundle executable');
+    assert.ok(locate.includes(`${SUPERVISOR_BUNDLE}/Contents/Info.plist`), "the helper bundle's Info.plist");
     assert.ok(locate.includes(`Contents/Library/LaunchAgents/${plists[0]}`));
+    assert.doesNotMatch(locate, /(?<!\.app\/)Contents\/MacOS\/LaravelExecutiveAISupervisor\b/, 'never the bare tool path next to the app executable (A24)');
+});
+
+test('the profile secret reaches only the signing step, and sign.sh embeds it in the helper bundle before signing', () => {
+    const signStep = section(workflow, '- name: Sign the app and the Supervisor', '- name: Create the disk image');
+    assert.match(signStep, /^\s+APPLE_SUPERVISOR_PROFILE: \$\{\{ secrets\.APPLE_SUPERVISOR_PROFILE \}\}$/m);
+
+    // The only step that sees it: no other occurrence anywhere in the workflow.
+    assert.equal((workflow.match(/secrets\.APPLE_SUPERVISOR_PROFILE/g) ?? []).length, 1);
+
+    const embed = sign.indexOf('embed_supervisor_profile "$supervisor"');
+    const signHelper = sign.indexOf('sign_one "$identity" "$supervisor"');
+    assert.ok(embed > 0 && embed < signHelper, 'the profile is embedded before the helper is signed');
+    assert.match(sign, /EMBEDDED_PROFILE_PATH="Contents\/embedded\.provisionprofile"/);
+    assert.match(sign, /SUPERVISOR_BUNDLE_PATH="Contents\/Helpers\/\$SUPERVISOR_NAME\.app"/);
+
+    // Fail closed: signing a helper with a restricted entitlement and no profile is what the lab
+    // run proved macOS kills, so there is no escape hatch for it.
+    assert.match(sign, /refusing to sign the Supervisor helper without APPLE_SUPERVISOR_PROFILE/);
+    assert.match(sign, /security cms -D -i "\$profile"/, 'the decoded profile is validated as a CMS blob');
+    assert.doesNotMatch(sign, /echo[^\n]*\$APPLE_SUPERVISOR_PROFILE/, 'the profile is never echoed');
+    assert.doesNotMatch(sign, /printf[^\n]*\$APPLE_SUPERVISOR_PROFILE[^|]*$/m, 'the profile only ever goes into base64 --decode');
 });
 
 test('the signing report and the image are uploaded for 14 days; the report and the keychain cleanup always run', () => {
@@ -208,7 +245,7 @@ test('the notarize job is present, disabled, downstream of build-macos and point
     assert.ok(workflow.includes('packaging/notarization/README.md'));
 });
 
-test('sign.sh: hardened runtime, secure timestamp, --force, never --deep when signing, Supervisor (own entitlements, Team ID prefix expanded) before the app', () => {
+test('sign.sh: hardened runtime, secure timestamp, --force, never --deep when signing, the Supervisor helper bundle (own entitlements, Team ID prefix expanded) before the app', () => {
     assert.match(sign, /codesign --force --options runtime --timestamp "\$@" --sign "\$identity" "\$target"/);
     for (const line of sign.split('\n').filter((candidate) => /codesign\b/.test(candidate) && /--sign\b/.test(candidate))) {
         assert.doesNotMatch(line, /--deep/, `no --deep while signing: ${line.trim()}`);
@@ -217,7 +254,7 @@ test('sign.sh: hardened runtime, secure timestamp, --force, never --deep when si
 
     const supervisor = sign.indexOf('sign_one "$identity" "$supervisor"');
     const app = sign.indexOf('sign_one "$identity" "$app"');
-    assert.ok(supervisor > 0 && app > supervisor, 'the Supervisor tool is signed before the app bundle');
+    assert.ok(supervisor > 0 && app > supervisor, 'the Supervisor helper bundle is signed before the app bundle');
     assert.match(sign, /--identifier "\$\{prefix\}\.supervisor" --entitlements "\$processed"/);
     assert.match(sign, /sign_one "\$identity" "\$app" --entitlements "\$APP_ENTITLEMENTS"/);
     assert.match(sign, /sed "s\/\\\$\(AppIdentifierPrefix\)\/\$\{APPLE_TEAM_ID\}\.\/g"/, 'expands $(AppIdentifierPrefix) to <TEAM ID>.');
@@ -244,9 +281,13 @@ test('the entitlements files sign.sh references exist, and only the Supervisor c
 
     assert.ok(prefix, 'LXAI_BUNDLE_PREFIX in Shared.xcconfig');
     assert.doesNotMatch(appText, /<key>keychain-access-groups<\/key>/, 'the GUI app has no keychain entitlement (ADR-003 D5)');
+    assert.doesNotMatch(appText, /<key>com\.apple\.application-identifier<\/key>/, 'and no restricted entitlement at all, so it needs no profile');
     assert.match(supervisorText, /<key>keychain-access-groups<\/key>/);
     assert.ok(supervisorText.includes(`<string>$(AppIdentifierPrefix)${prefix}.secrets</string>`), 'the one access group, prefixed by the Team ID at signing time');
-    assert.equal((supervisorText.match(/<key>/g) ?? []).length, 2, 'app-sandbox false + keychain-access-groups, nothing else');
+
+    // A24: both restricted entitlements mirror what the embedded Developer ID profile carries.
+    assert.ok(supervisorText.includes(`<string>$(AppIdentifierPrefix)${prefix}.supervisor</string>`), 'the application identifier the profile authorises');
+    assert.equal((supervisorText.match(/<key>/g) ?? []).length, 3, 'app-sandbox false + application-identifier + keychain-access-groups, nothing else');
 });
 
 test('no hard-coded identity, Team ID, certificate material or home path anywhere in the pipeline or its docs', () => {
@@ -292,6 +333,23 @@ test('sign.sh fails closed without an identity, skips only with LXAI_ALLOW_UNSIG
 
     const notAnApp = run(signScript, ['app', join(base, 'missing.app')], { LXAI_ALLOW_UNSIGNED: '1' });
     assert.equal(notAnApp.status, 1);
+
+    // A24: with an identity configured and a helper bundle in place, a missing or malformed
+    // provisioning profile stops the run before codesign is ever called — a signed helper without
+    // one is SIGKILLed by macOS over its restricted entitlement.
+    fakeHelper(app);
+    const identity = { APPLE_TEAM_ID: 'ABCDE12345', APPLE_SIGNING_IDENTITY: 'deadbeef' };
+
+    const noProfile = run(signScript, ['app', app], identity);
+    assert.equal(noProfile.status, 1, noProfile.stderr);
+    assert.match(noProfile.stderr, /refusing to sign the Supervisor helper without APPLE_SUPERVISOR_PROFILE/);
+    assert.match(noProfile.stderr, /A24/);
+
+    const badProfile = run(signScript, ['app', app], { ...identity, APPLE_SUPERVISOR_PROFILE: 'bm90LWEtcHJvZmlsZQ==' });
+    assert.equal(badProfile.status, 1, badProfile.stderr);
+    assert.match(badProfile.stderr, /does not decode to a provisioning profile/);
+    assert.doesNotMatch(badProfile.stderr, /bm90LWEtcHJvZmlsZQ==/, 'the value is not echoed back');
+    assert.ok(! existsSync(join(app, ...SUPERVISOR_BUNDLE.split('/'), 'Contents', 'embedded.provisionprofile')), 'a rejected profile is not left in the bundle');
 
     const usage = run(signScript, []);
     assert.equal(usage.status, 64);

@@ -141,23 +141,27 @@ jobs:
             echo "::error::Expected $APP_PATH after the Release build."
             exit 1
           fi
-          for required in Contents/MacOS/LaravelExecutiveAI Contents/MacOS/LaravelExecutiveAISupervisor Contents/Library/LaunchAgents/se.stafe.executive-ai.supervisor.plist; do
+          for required in Contents/MacOS/LaravelExecutiveAI Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/Info.plist Contents/Library/LaunchAgents/se.stafe.executive-ai.supervisor.plist; do
             if [ ! -f "$APP_PATH/$required" ]; then
-              echo "::error::$APP_PATH is missing $required (S1-07 embeds the Supervisor and its LaunchAgent plist)."
+              echo "::error::$APP_PATH is missing $required (S1-07 embeds the Supervisor helper bundle and its LaunchAgent plist; A24)."
               exit 1
             fi
           done
           echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" >> "$GITHUB_OUTPUT"
-          find "$APP_PATH" -maxdepth 4 | sort
+          find "$APP_PATH" -maxdepth 5 | sort
 
-      # Developer ID signing, inside-out: Supervisor tool (its entitlements, Team ID prefix
-      # expanded) first, then the app (its entitlements). Hardened runtime + secure timestamp.
+      # Developer ID signing, inside-out: the Supervisor helper bundle first — its entitlements with
+      # the Team ID prefix expanded, and APPLE_SUPERVISOR_PROFILE written into its
+      # Contents/embedded.provisionprofile, without which macOS refuses its restricted
+      # keychain-access-groups entitlement at launch (A24) — then the app (its entitlements).
+      # Hardened runtime + secure timestamp. sign.sh fails closed if the profile secret is missing.
       - name: Sign the app and the Supervisor
         if: steps.mode.outputs.signed == 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SUPERVISOR_PROFILE: ${{ secrets.APPLE_SUPERVISOR_PROFILE }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
         run: |

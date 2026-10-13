@@ -1,21 +1,35 @@
-// Settings for the `LaravelExecutiveAISupervisor` launch-agent executable (S1-07). Inherits
+// Settings for the `LaravelExecutiveAISupervisor` launch-agent helper (S1-07). Inherits
 // Shared.xcconfig.
 //
-// ADR-001 D3: a headless tool embedded at `Contents/MacOS/LaravelExecutiveAISupervisor` inside
-// the app bundle, so `SMAppService.agent(plistName:)` can own it through the plist in
-// `Contents/Library/LaunchAgents/`. ADR-003 D5: hardened runtime on, App Sandbox off, and it is
-// the ONE executable that carries `keychain-access-groups` (the entitlements file). Unsigned
-// builds (CI, local dev) never get the entitlement applied, which is why every Keychain and
-// launchd call in the code sits behind a protocol with a test double.
+// ADR-001 D3 (amended by A24, 2026-10-11) + ADR-003 D5: the Supervisor is a headless **helper
+// application bundle** embedded at `Contents/Helpers/LaravelExecutiveAISupervisor.app` inside the
+// app bundle, so `SMAppService.agent(plistName:)` can own it through the plist in
+// `Contents/Library/LaunchAgents/` and so it can carry `Contents/embedded.provisionprofile`. The
+// bundle is not cosmetic: `keychain-access-groups` is a restricted entitlement that macOS
+// validates at launch against an embedded Developer ID provisioning profile, and a bare Mach-O
+// cannot hold one — the lab run of the first signed build (2026-10-11, build 7a74ef5) was
+// SIGKILLed (exit 137) with the entitlement and no profile.
+//
+// Hardened runtime on, App Sandbox off, and it is the ONE executable that carries
+// `keychain-access-groups` (the entitlements file). Unsigned builds (CI, local dev) never get the
+// entitlement or the profile applied, which is why every Keychain and launchd call in the code
+// sits behind a protocol with a test double.
 
 #include "Shared.xcconfig"
 
 PRODUCT_NAME = LaravelExecutiveAISupervisor
 PRODUCT_BUNDLE_IDENTIFIER = $(LXAI_BUNDLE_PREFIX).supervisor
 
+// A real Info.plist, like the app's, so LSUIElement / LSBackgroundOnly and the enclosing-app key
+// are reviewable in diffs. It is excluded from both targets' synchronized-group membership
+// (pbxproj exception sets) so it is consumed here and never copied in as a resource.
+GENERATE_INFOPLIST_FILE = NO
+INFOPLIST_FILE = LaravelExecutiveAISupervisor/Info.plist
+INFOPLIST_KEY_NSHumanReadableCopyright =
+
 ENABLE_HARDENED_RUNTIME = YES
 ENABLE_APP_SANDBOX = NO
 CODE_SIGN_ENTITLEMENTS = LaravelExecutiveAISupervisor.entitlements
 
-// The tool is a build product of the app, never installed on its own.
+// The helper is a build product of the app, never installed on its own.
 SKIP_INSTALL = YES

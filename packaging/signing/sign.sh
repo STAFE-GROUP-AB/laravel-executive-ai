@@ -10,6 +10,10 @@
 #   APPLE_CERTIFICATE_P12        base64 of the "Developer ID Application" certificate + key (.p12)
 #   APPLE_CERTIFICATE_PASSWORD   the .p12 password
 #   APPLE_TEAM_ID                the 10-character Apple Team ID the certificate belongs to
+#   APPLE_SUPERVISOR_PROFILE     base64 of the Developer ID provisioning profile for the Supervisor
+#                                helper bundle (.provisionprofile). Required whenever the helper is
+#                                signed: `keychain-access-groups` is a restricted entitlement and
+#                                macOS SIGKILLs a process that carries one without a profile (A24).
 #   APPLE_KEYCHAIN_PASSWORD      optional; a random one is generated when empty
 #   APPLE_SIGNING_IDENTITY       optional; a SHA-1 hash or exact name when the default lookup
 #                                ("Developer ID Application: … (<APPLE_TEAM_ID>)") is ambiguous
@@ -23,10 +27,11 @@
 # is set, in which case they skip and say so. `report` never signs anything and records what it
 # finds; with LXAI_EXPECT_SIGNED=1 it exits 1 unless the app verifies as Developer ID signed.
 #
-# Order and entitlements (ADR-003 D5 table): nested frameworks first, then the Supervisor tool at
-# Contents/MacOS/LaravelExecutiveAISupervisor with LaravelExecutiveAISupervisor.entitlements
-# (its `$(AppIdentifierPrefix)` expanded to "<TEAM ID>." — codesign does not expand build
-# variables, Xcode does), then the app with LaravelExecutiveAI.entitlements. Never `--deep` for
+# Order and entitlements (ADR-003 D5 table): nested frameworks first, then the Supervisor helper
+# bundle at Contents/Helpers/LaravelExecutiveAISupervisor.app — its provisioning profile copied to
+# Contents/embedded.provisionprofile and signed with LaravelExecutiveAISupervisor.entitlements
+# (whose `$(AppIdentifierPrefix)` is expanded to "<TEAM ID>." here — codesign does not expand build
+# variables, Xcode does) — then the app with LaravelExecutiveAI.entitlements. Never `--deep` for
 # signing; `--deep --strict` only for verification. Details: packaging/signing/README.md.
 
 set -euo pipefail
@@ -38,9 +43,13 @@ APP_ENTITLEMENTS="$REPO_ROOT/apps/macos/LaravelExecutiveAI.entitlements"
 SUPERVISOR_ENTITLEMENTS="$REPO_ROOT/apps/macos/LaravelExecutiveAISupervisor.entitlements"
 SHARED_XCCONFIG="$REPO_ROOT/apps/macos/Config/Shared.xcconfig"
 SUPERVISOR_NAME="LaravelExecutiveAISupervisor"
+# A24: the Supervisor is a helper application bundle, not a bare tool in Contents/MacOS.
+SUPERVISOR_BUNDLE_PATH="Contents/Helpers/$SUPERVISOR_NAME.app"
+EMBEDDED_PROFILE_PATH="Contents/embedded.provisionprofile"
 
 : "${APPLE_CERTIFICATE_P12:=}"
 : "${APPLE_CERTIFICATE_PASSWORD:=}"
+: "${APPLE_SUPERVISOR_PROFILE:=}"
 : "${APPLE_TEAM_ID:=}"
 : "${APPLE_KEYCHAIN_PASSWORD:=}"
 : "${APPLE_SIGNING_IDENTITY:=}"
@@ -168,6 +177,57 @@ bundle_prefix() {
     printf '%s' "$prefix"
 }
 
+# Writes APPLE_SUPERVISOR_PROFILE into <helper>.app/Contents/embedded.provisionprofile.
+#
+# Fail closed, deliberately without an escape hatch: a helper signed with `keychain-access-groups`
+# and no profile is what the 2026-10-11 lab run proved macOS kills on sight (exit 137). Producing
+# one quietly would ship a build whose Supervisor can never start. The profile is a public
+# document (certificates and entitlements, no private key), but it is still never printed.
+embed_supervisor_profile() {
+    # Separate declarations: a single `local a=… b="$a/…"` is not reliably left-to-right under
+    # `set -u` in the runner's bash.
+    local helper="$1"
+    local profile="$helper/$EMBEDDED_PROFILE_PATH"
+
+    if [ -z "$APPLE_SUPERVISOR_PROFILE" ]; then
+        die "refusing to sign the Supervisor helper without APPLE_SUPERVISOR_PROFILE: keychain-access-groups is a restricted entitlement and macOS SIGKILLs a process that carries it with no embedded provisioning profile (OPEN-QUESTIONS A24). Set the secret as packaging/signing/README.md §2 describes."
+    fi
+
+    mkdir -p "$(dirname "$profile")"
+    if ! printf '%s' "$APPLE_SUPERVISOR_PROFILE" | base64 --decode > "$profile" 2>/dev/null; then
+        rm -f "$profile"
+        die "APPLE_SUPERVISOR_PROFILE is not valid base64."
+    fi
+
+    if [ ! -s "$profile" ] || ! security cms -D -i "$profile" >/dev/null 2>&1; then
+        rm -f "$profile"
+        die "APPLE_SUPERVISOR_PROFILE does not decode to a provisioning profile (expected a CMS blob readable by 'security cms -D')."
+    fi
+
+    chmod 644 "$profile"
+    log "embedded provisioning profile written to $SUPERVISOR_BUNDLE_PATH/$EMBEDDED_PROFILE_PATH."
+}
+
+# Prints the identifying fields and the entitlements of an embedded profile — never the blob.
+profile_summary() {
+    local profile="$1" plist key
+    [ -f "$profile" ] || { printf 'no %s in the bundle\n' "$EMBEDDED_PROFILE_PATH"; return 0; }
+
+    plist="$(mktemp "${TMPDIR:-/tmp}/lxai-profile.XXXXXX")"
+    if ! security cms -D -i "$profile" > "$plist" 2>/dev/null; then
+        rm -f "$plist"
+        printf 'unreadable provisioning profile\n'
+        return 0
+    fi
+
+    for key in UUID Name TeamIdentifier ExpirationDate; do
+        printf '%s: %s\n' "$key" "$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist" 2>/dev/null | tr '\n' ' ')"
+    done
+    printf 'Entitlements:\n'
+    plutil -extract Entitlements xml1 -o - "$plist" 2>/dev/null || printf '  (none)\n'
+    rm -f "$plist"
+}
+
 sign_one() {
     # sign_one <identity> <path> [extra codesign args…]
     local identity="$1" target="$2"
@@ -202,10 +262,13 @@ sign_app() {
         done < <(find "$app/Contents/Frameworks" -mindepth 1 -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) | sort)
     fi
 
-    # 2. The Supervisor tool, with the ONE keychain-access-groups entitlement (ADR-003 D2/D5).
-    supervisor="$app/Contents/MacOS/$SUPERVISOR_NAME"
-    if [ -f "$supervisor" ]; then
+    # 2. The Supervisor helper bundle, with the ONE keychain-access-groups entitlement
+    #    (ADR-003 D2/D5) and the Developer ID provisioning profile that authorises it (A24).
+    supervisor="$app/$SUPERVISOR_BUNDLE_PATH"
+    if [ -d "$supervisor" ]; then
         [ -f "$SUPERVISOR_ENTITLEMENTS" ] || die "the bundle embeds $SUPERVISOR_NAME but $SUPERVISOR_ENTITLEMENTS is missing."
+        [ -f "$supervisor/Contents/MacOS/$SUPERVISOR_NAME" ] || die "$SUPERVISOR_BUNDLE_PATH has no Contents/MacOS/$SUPERVISOR_NAME."
+        embed_supervisor_profile "$supervisor"
         processed="$(mktemp "${TMPDIR:-/tmp}/lxai-supervisor-entitlements.XXXXXX")"
         sed "s/\$(AppIdentifierPrefix)/${APPLE_TEAM_ID}./g" "$SUPERVISOR_ENTITLEMENTS" > "$processed"
         if grep -Fq '$(' "$processed"; then
@@ -215,7 +278,7 @@ sign_app() {
         sign_one "$identity" "$supervisor" --identifier "${prefix}.supervisor" --entitlements "$processed"
         rm -f "$processed"
     else
-        log "no Contents/MacOS/$SUPERVISOR_NAME in the bundle (S1-07 not merged into this build?); signing the app alone."
+        log "no $SUPERVISOR_BUNDLE_PATH in the bundle (S1-07 not merged into this build?); signing the app alone."
     fi
 
     # 3. The app itself, last.
@@ -264,10 +327,11 @@ verdict_for() {
 }
 
 write_report() {
-    local app="$1" report="$2" dmg="${3:-}" supervisor verdict verify_status=0
+    local app="$1" report="$2" dmg="${3:-}" supervisor profile verdict verify_status=0
     [ -d "$app" ] || die "$app is not a directory (expected LaravelExecutiveAI.app)."
     mkdir -p "$(dirname "$report")"
-    supervisor="$app/Contents/MacOS/$SUPERVISOR_NAME"
+    supervisor="$app/$SUPERVISOR_BUNDLE_PATH"
+    profile="$supervisor/$EMBEDDED_PROFILE_PATH"
     verdict="$(verdict_for "$app")"
     codesign --verify --deep --strict "$app" >/dev/null 2>&1 || verify_status=$?
 
@@ -276,10 +340,12 @@ write_report() {
         echo "generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
         echo "bundle:    $(basename "$app")"
         echo "verdict:   $verdict (codesign --verify --deep --strict exit $verify_status)"
-        if [ -f "$supervisor" ]; then
-            echo "supervisor: present, verdict $(verdict_for "$supervisor")"
+        if [ -d "$supervisor" ]; then
+            echo "supervisor: helper bundle present, verdict $(verdict_for "$supervisor")"
+            echo "profile:    $([ -f "$profile" ] && echo 'embedded.provisionprofile present' || echo 'MISSING — a restricted entitlement will be refused at launch (A24)')"
         else
             echo "supervisor: not embedded in this bundle"
+            echo "profile:    n/a"
         fi
         echo "expectation: $([ "$LXAI_EXPECT_SIGNED" = 1 ] && echo 'Developer ID signed' || echo 'unsigned debug build; rejections below are expected')"
         echo "notarization: not performed (Sprint 4 gate E4-6, blueprint §14); spctl is expected to reject until then"
@@ -290,13 +356,18 @@ write_report() {
         record codesign -dvvv "$app"
         echo "## entitlements (app)"
         record codesign -d --entitlements - --xml "$app"
-        if [ -f "$supervisor" ]; then
-            echo "## codesign --verify --strict --verbose=2 (Supervisor)"
-            record codesign --verify --strict --verbose=2 "$supervisor"
-            echo "## codesign -dvvv (Supervisor)"
+        if [ -d "$supervisor" ]; then
+            echo "## codesign --verify --deep --strict --verbose=2 (Supervisor helper bundle)"
+            record codesign --verify --deep --strict --verbose=2 "$supervisor"
+            echo "## codesign -dvvv (Supervisor helper bundle)"
             record codesign -dvvv "$supervisor"
-            echo "## entitlements (Supervisor)"
+            echo "## entitlements (Supervisor helper bundle)"
             record codesign -d --entitlements - --xml "$supervisor"
+            # A24: the entitlements above are only honoured if the profile below authorises them.
+            echo "## embedded provisioning profile (Supervisor helper bundle)"
+            record profile_summary "$profile"
+            echo "## helper bundle contents"
+            record find "$supervisor" -maxdepth 3
         fi
         echo "## spctl --assess --type execute --verbose (app)"
         record spctl --assess --type execute --verbose "$app"
@@ -317,8 +388,13 @@ write_report() {
         if [ "$verdict" != developer-id ] || [ "$verify_status" -ne 0 ]; then
             die "LXAI_EXPECT_SIGNED=1 but the app is '$verdict' (verify exit $verify_status). A signed build must verify."
         fi
-        if [ -f "$supervisor" ] && [ "$(verdict_for "$supervisor")" != developer-id ]; then
-            die "LXAI_EXPECT_SIGNED=1 but the embedded Supervisor is not Developer ID signed."
+        if [ -d "$supervisor" ]; then
+            if [ "$(verdict_for "$supervisor")" != developer-id ]; then
+                die "LXAI_EXPECT_SIGNED=1 but the embedded Supervisor helper bundle is not Developer ID signed."
+            fi
+            if [ ! -f "$profile" ]; then
+                die "LXAI_EXPECT_SIGNED=1 but the Supervisor helper bundle carries no $EMBEDDED_PROFILE_PATH; macOS would SIGKILL it over keychain-access-groups (OPEN-QUESTIONS A24)."
+            fi
         fi
     fi
 }

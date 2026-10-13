@@ -9,12 +9,20 @@
 	installer's BOOT_SERVICES state. The file name, the Label and the bundle-id prefix are the
 	A12 placeholder `se.stafe.executive-ai` (apps/macos/Config/Shared.xcconfig LXAI_BUNDLE_PREFIX).
 
+	BundleProgram points inside the Supervisor's own helper application bundle
+	(Contents/Helpers/LaravelExecutiveAISupervisor.app) rather than at a bare tool in
+	Contents/MacOS/, because `keychain-access-groups` is a restricted entitlement that macOS
+	validates at launch against an embedded provisioning profile and only a bundle can carry one
+	(A24, decided 2026-10-11 on the evidence of the first signed build; ADR-003 D5, ADR-001 D3 as
+	amended).
+
 	Nothing here is per machine: no absolute path, no user name, no port and no secret. The
 	Supervisor derives every path from its own bundle and the user's Library at run time, and
 	secrets never travel through launchd (ADR-003 D7 row 12).
 
 	Semantics under SMAppService (man 5 launchd.plist, ADR-001 V2):
-	  BundleProgram    app-bundle-relative executable; only valid for SMAppService-installed plists
+	  BundleProgram    app-bundle-relative executable; only valid for SMAppService-installed plists.
+	                   Here: the inner executable of the embedded helper bundle.
 	  RunAtLoad        start as soon as the agent is bootstrapped (register() and every login)
 	  KeepAlive        relaunch whenever the Supervisor exits, for any reason; launchd throttles
 	                   a job that exits faster than ThrottleInterval
@@ -26,14 +34,19 @@
 	  MachServices     the XPC control service the GUI connects to (ipc-contract §7); launchd
 	                   checks it in so NSXPCListener(machServiceName:) can serve it
 	  LimitLoadToSessionType  Aqua: a user GUI session, which is what a LaunchAgent is for
+	  AssociatedBundleIdentifiers  which bundles System Settings → Login Items attributes this job
+	                   to (man 5 launchd.plist): the app the user recognises, and the helper bundle
+	                   that is actually launched, so the entry is attributed to this product either
+	                   way
 	-->
 	<key>Label</key>
 	<string>se.stafe.executive-ai.supervisor</string>
 	<key>BundleProgram</key>
-	<string>Contents/MacOS/LaravelExecutiveAISupervisor</string>
+	<string>Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor</string>
 	<key>AssociatedBundleIdentifiers</key>
 	<array>
 		<string>se.stafe.executive-ai.app</string>
+		<string>se.stafe.executive-ai.supervisor</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

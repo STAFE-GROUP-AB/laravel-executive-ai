@@ -101,14 +101,16 @@ for (const name of plistFiles) {
         const plist = parsePlist(xml);
 
         assert.equal(plist.Label, label, 'Label equals the file name');
-        assert.equal(plist.BundleProgram, 'Contents/MacOS/LaravelExecutiveAISupervisor');
+        // A24: BundleProgram points inside the helper application bundle, never at a bare tool —
+        // a restricted entitlement is validated at launch against the bundle's embedded profile.
+        assert.equal(plist.BundleProgram, 'Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor');
         assert.equal(plist.RunAtLoad, true);
         assert.equal(plist.KeepAlive, true);
         assert.equal(plist.ThrottleInterval, 10);
         assert.equal(plist.ProcessType, 'Background');
         assert.equal(plist.ExitTimeOut, 30);
         assert.equal(plist.LimitLoadToSessionType, 'Aqua');
-        assert.deepEqual(plist.AssociatedBundleIdentifiers, ['se.stafe.executive-ai.app']);
+        assert.deepEqual(plist.AssociatedBundleIdentifiers, ['se.stafe.executive-ai.app', 'se.stafe.executive-ai.supervisor']);
         assert.deepEqual(Object.keys(plist.MachServices), ['se.stafe.executive-ai.supervisor.control']);
         assert.equal(plist.MachServices['se.stafe.executive-ai.supervisor.control'], true);
 
@@ -138,10 +140,31 @@ for (const name of plistFiles) {
     });
 }
 
-test('the Xcode project embeds the template at Contents/Library/LaunchAgents', () => {
+test('the Xcode project embeds the template at Contents/Library/LaunchAgents and the Supervisor as a helper bundle', () => {
     const project = readFileSync(join(repositoryRoot, 'apps/macos/LaravelExecutiveAI.xcodeproj/project.pbxproj'), 'utf8');
 
     assert.match(project, /dstPath = Contents\/Library\/LaunchAgents;/);
     assert.match(project, /packaging\/manifest\/launchd\/se\.stafe\.executive-ai\.supervisor\.plist/);
-    assert.match(project, /productType = "com\.apple\.product-type\.tool";/, 'the Supervisor is a separate tool target');
+
+    // A24: the Supervisor target produces an application bundle (it must carry a provisioning
+    // profile) and the app embeds it under Contents/Helpers.
+    assert.doesNotMatch(project, /productType = "com\.apple\.product-type\.tool";/, 'no bare tool target is left');
+    assert.match(project, /path = LaravelExecutiveAISupervisor\.app;/, 'the Supervisor product is a .app wrapper');
+    assert.match(project, /dstPath = Contents\/Helpers;/, 'embedded under Contents/Helpers');
+    assert.equal(
+        (project.match(/productType = "com\.apple\.product-type\.application";/g) ?? []).length,
+        2,
+        'two application targets: the app and the Supervisor helper',
+    );
+    const xcconfig = readFileSync(join(repositoryRoot, 'apps/macos/Config/Supervisor.xcconfig'), 'utf8');
+    assert.match(xcconfig, /^INFOPLIST_FILE = LaravelExecutiveAISupervisor\/Info\.plist$/m, 'the helper has its own Info.plist');
+    assert.match(xcconfig, /^GENERATE_INFOPLIST_FILE = NO$/m);
+
+    const info = readFileSync(join(repositoryRoot, 'apps/macos/LaravelExecutiveAISupervisor/Info.plist'), 'utf8');
+    const helperPlist = parsePlist(info);
+    assert.equal(helperPlist.CFBundlePackageType, 'APPL');
+    assert.equal(helperPlist.LSUIElement, true);
+    assert.equal(helperPlist.LSBackgroundOnly, true);
+    assert.equal(helperPlist.CFBundleIdentifier, '$(PRODUCT_BUNDLE_IDENTIFIER)');
+    assert.equal(helperPlist.LXAIAppBundleIdentifier, '$(LXAI_BUNDLE_PREFIX).app', 'the helper names the app it belongs to');
 });

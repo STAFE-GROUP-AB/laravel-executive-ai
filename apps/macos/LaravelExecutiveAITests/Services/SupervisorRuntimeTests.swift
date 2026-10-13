@@ -158,8 +158,18 @@ final class SupervisorRuntimeTests: XCTestCase {
         XCTAssertEqual(fromEnvironment.machServiceName, "se.example.prefix.supervisor.control")
         XCTAssertEqual(fromEnvironment.plistName, "se.example.prefix.supervisor.plist")
 
-        let fromBundle = SupervisorIdentity.resolve(environment: [:], executable: Bundle.main.bundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor"))
+        // A24: the Supervisor runs from a helper bundle nested in the app, so the *innermost*
+        // enclosing `.app` is the helper itself. Resolution must still answer the app's
+        // identifier, never `<prefix>.supervisor`.
+        let helperBundleURL = Bundle.main.bundleURL.appending(path: SystemPreflightProbes.SignedExecutable.supervisorBundlePath)
+        let fromBundle = SupervisorIdentity.resolve(
+            environment: [:],
+            executable: helperBundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor")
+        )
         XCTAssertEqual(fromBundle.appBundleIdentifier, Bundle.main.bundleIdentifier)
+        XCTAssertEqual(fromBundle.bundlePrefix, SupervisorIdentity.bundlePrefix(fromAppIdentifier: Bundle.main.bundleIdentifier ?? ""))
+        XCTAssertEqual(Bundle(url: helperBundleURL)?.bundleIdentifier, "\(fromBundle.bundlePrefix).supervisor", "the helper's own id is the one NOT used")
+        XCTAssertFalse(fromBundle.bundlePrefix.hasSuffix(".supervisor"))
 
         let fallback = SupervisorIdentity.resolve(environment: [:], executable: URL(fileURLWithPath: "/nowhere/tool"))
         XCTAssertEqual(fallback.bundlePrefix, SupervisorIdentity.defaultBundlePrefix)

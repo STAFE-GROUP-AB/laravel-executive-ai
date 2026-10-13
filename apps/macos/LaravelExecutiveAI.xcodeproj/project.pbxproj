@@ -17,7 +17,7 @@
 		0A000000000000000000007C /* IpcSigning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000003C /* IpcSigning.swift */; };
 		0A000000000000000000007D /* HealthDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000003D /* HealthDocument.swift */; };
 		0A000000000000000000007E /* HealthProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000003E /* HealthProbe.swift */; };
-		0A0000000000000000000079 /* LaravelExecutiveAISupervisor in Embed Supervisor */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000022 /* LaravelExecutiveAISupervisor */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		0A0000000000000000000079 /* LaravelExecutiveAISupervisor.app in Embed Supervisor */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000022 /* LaravelExecutiveAISupervisor.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0A000000000000000000007A /* se.stafe.executive-ai.supervisor.plist in Embed LaunchAgent plist */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000036 /* se.stafe.executive-ai.supervisor.plist */; };
 /* End PBXBuildFile section */
 
@@ -42,10 +42,10 @@
 		0A0000000000000000000058 /* Embed Supervisor */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
 			files = (
-				0A0000000000000000000079 /* LaravelExecutiveAISupervisor in Embed Supervisor */,
+				0A0000000000000000000079 /* LaravelExecutiveAISupervisor.app in Embed Supervisor */,
 			);
 			name = "Embed Supervisor";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,7 +66,7 @@
 /* Begin PBXFileReference section */
 		0A0000000000000000000020 /* LaravelExecutiveAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LaravelExecutiveAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A0000000000000000000021 /* LaravelExecutiveAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LaravelExecutiveAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		0A0000000000000000000022 /* LaravelExecutiveAISupervisor */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = LaravelExecutiveAISupervisor; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0000000000000000000022 /* LaravelExecutiveAISupervisor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LaravelExecutiveAISupervisor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A0000000000000000000030 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		0A0000000000000000000031 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		0A0000000000000000000032 /* Tests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tests.xcconfig; sourceTree = "<group>"; };
@@ -96,8 +96,16 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				main.swift,
+				Info.plist,
 			);
 			target = 0A0000000000000000000010 /* LaravelExecutiveAI */;
+		};
+		0A0000000000000000000045 /* Exceptions for "LaravelExecutiveAISupervisor" folder in "LaravelExecutiveAISupervisor" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0A0000000000000000000012 /* LaravelExecutiveAISupervisor */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -119,6 +127,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				0A0000000000000000000044 /* Exceptions for "LaravelExecutiveAISupervisor" folder in "LaravelExecutiveAI" target */,
+				0A0000000000000000000045 /* Exceptions for "LaravelExecutiveAISupervisor" folder in "LaravelExecutiveAISupervisor" target */,
 			);
 			path = LaravelExecutiveAISupervisor;
 			sourceTree = "<group>";
@@ -172,7 +181,7 @@
 			children = (
 				0A0000000000000000000020 /* LaravelExecutiveAI.app */,
 				0A0000000000000000000021 /* LaravelExecutiveAITests.xctest */,
-				0A0000000000000000000022 /* LaravelExecutiveAISupervisor */,
+				0A0000000000000000000022 /* LaravelExecutiveAISupervisor.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -275,8 +284,8 @@
 			packageProductDependencies = (
 			);
 			productName = LaravelExecutiveAISupervisor;
-			productReference = 0A0000000000000000000022 /* LaravelExecutiveAISupervisor */;
-			productType = "com.apple.product-type.tool";
+			productReference = 0A0000000000000000000022 /* LaravelExecutiveAISupervisor.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The Supervisor helper application bundle, embedded at
+	     Contents/Helpers/LaravelExecutiveAISupervisor.app (A24, decided 2026-10-11; ADR-003 D5,
+	     ADR-001 D3 as amended). It is an application bundle and not a bare tool for exactly one
+	     reason: `keychain-access-groups` is a restricted entitlement, macOS validates it at launch
+	     against an embedded provisioning profile, and only a bundle can carry
+	     Contents/embedded.provisionprofile. A bare Mach-O with the same entitlement is SIGKILLed.
+
+	     Never user-facing: LSUIElement + LSBackgroundOnly keep it out of the Dock and the app
+	     switcher, and it has no main nib and no window — `main.swift` runs `dispatchMain()`.
+	     Versions come from Config/Shared.xcconfig (release policy §2.3); never hand-edit them. -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Laravel Executive AI Supervisor</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSBackgroundOnly</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!-- The app this helper belongs to. `SupervisorIdentity` reads it to derive the bundle prefix:
+	     nested inside the app, the *innermost* enclosing `.app` is the helper itself, so walking up
+	     to the first one would answer `<prefix>.supervisor` instead of `<prefix>.app`. -->
+	<key>LXAIAppBundleIdentifier</key>
+	<string>$(LXAI_BUNDLE_PREFIX).app</string>
+</dict>
+</plist>
