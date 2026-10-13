@@ -423,6 +423,70 @@ the §3.4.1 checklist as a named new decision in the same PR and lands `tests/Se
 as a table test with one row per threat, plus `NoSocketTransportArchTest` for T-27's GAP. `ENG`, so no
 owner decision is waiting — but S2-16 (#98) must not ship a `Browser/Fetch` surface before S2-14 merges.
 
+### RESOLVED (S2-14, 2026-10-13) — one guard, specified as ADR-005 D4.11
+
+**Decision:** the §3.4.1 sixteen-row checklist is adopted verbatim as the specification and bound to
+one implementation, `App\Security\Egress\EgressGuard` with `AddressNormalizer`. The guard has an
+owner — workstream H, in `app/Security/Egress/` — and a named decision: **ADR-005 D4.11**, added in
+the same PR. The six previously unstated rules are now stated there, and the full operator-level
+document is [`docs/security/egress-guard.md`](security/egress-guard.md).
+
+What the decision settles, point by point against this entry's own list:
+
+- **Address normalisation.** Decimal, octal, hexadecimal, zero-padded, short-form and IPv4-mapped
+  IPv6 spellings reduce to the textual form of the **binary** address, and the deny ranges are tested
+  against that and nothing else. NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) wrappers are refused
+  **whole** rather than unwrapped, because a socket to one of them reaches a relay and the pin could
+  not describe what it connects to. Trailing dots, case, and Unicode or punycode spellings reduce to
+  one host.
+- **The userinfo trap.** A userinfo component, a second `@`, a control character or a
+  percent-encoded host is refused as `MalformedAuthority` — never stripped, because stripping would
+  connect to the second reading. The check runs on the authority **as written**, before
+  `parse_url()`, which rewrites a control character to `_` instead of failing.
+- **The metadata list.** All five named endpoints, by address as well as by name:
+  `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254`, `100.100.100.200`,
+  `metadata.google.internal`. The name check is the convenience; the address check is the control,
+  so a name that merely *resolves* to one is refused too.
+- **`100.64.0.0/10`.** Denied, and deliberately **not** widened by `LOCAL_ONLY_ALLOW_LAN`: it is the
+  tailnet range as well as CGNAT, and the toggle's warning says RFC 1918 and link-local.
+- **The Unix-socket prohibition — T-27's GAP, closed.** `unix:`, `http+unix:`, `npipe:`, `file:`,
+  `php:`, `data:`, `phar:` and schemeless or named-pipe targets are refused as *transports*. No HTTP
+  client in `app/` may be constructed with a Unix-socket or named-pipe option, enforced by
+  `tests/Security/NoSocketTransportArchTest.php`. Our own broker socket (ADR-003 D3.2) is on that
+  test's explicit local-IPC allowlist, which the same test holds to being neither an HTTP client nor
+  egress.
+- **Port restrictions.** `443` for a public HTTPS target, plus `8443` for a model provider, because
+  a self-hosted gateway on that port is a real configuration and refusing it would push owners to
+  disable the guard. Loopback is legitimate for three purposes only, and our own core's fixed
+  loopback port is denied to all of them except our own MCP server.
+- **Per-hop redirect revalidation.** Off by default (D4.2(c) unchanged); where following is enabled,
+  the whole checklist re-runs per hop. That holds structurally rather than by convention, because
+  Laravel pushes global HTTP middleware *inside* Guzzle's redirect middleware.
+- **Response size and content-type caps.** Deliberately **not** this guard's: it decides targets,
+  not bodies. They stay with the surface that reads a body — S2-16's `Browser/Fetch`, under
+  ADR-005 D4.8's 64 KiB truncation — and `docs/security/egress-guard.md` §8 says so explicitly so
+  the split is a decision and not an omission.
+- **Denial logging.** Every refused *attempt* writes one `audit_events` row, action
+  `egress.blocked`, outcome `refused`, carrying the requested host, the resolved address, the rule
+  and the purpose, and **never** the URL, whose query may hold a token. Asking the guard a question
+  — the `/settings/ai` screen explaining why a provider is unavailable — writes nothing, so a page
+  render cannot flood the trail.
+
+Plus the two properties the entry did not name and the item existed for: DNS is resolved **once per
+decision**, every A and AAAA record is evaluated, a host whose records disagree is refused outright,
+and the chosen address is **pinned at the socket** with `CURLOPT_RESOLVE`; and anything the guard
+cannot classify is refused with the rule that refused it, so there is no branch that permits a target
+because nothing matched it.
+
+**Evidence:** `tests/Security/SsrfGuardTest.php` (a table over every §3.4.1 row, 104 cases),
+`tests/Security/LocalOnlyEgressTest.php` (one test per ADR-004 D4 layer),
+`tests/Security/NoSocketTransportArchTest.php`. No test opens a socket: under `php artisan test` the
+container binds `LoopbackHostResolver`, so even a DNS lookup cannot happen by accident.
+
+**S2-16 (#98) is unblocked** and must declare `EgressPurpose::WebFetch` on every fetch, which is the
+strictest purpose: HTTPS only, port 443 only, no loopback target at all, and off entirely under
+`LOCAL_ONLY`.
+
 ### A16 — PWA browser-hardening headers are unspecified
 ADR-006 D3 fixes proxies, hosts, cookies and CSRF for both origins but sets no
 `Content-Security-Policy` (including `frame-ancestors`), `X-Frame-Options`, `Referrer-Policy`,
@@ -463,6 +527,45 @@ policies for one workspace impossible to record (`docs/architecture/data-model.m
 `tests/Integration/BackendContract/GovernanceSchemaContractTest.php`). Still open for S2-14: which
 transitions require re-auth, what the UI re-confirms, the named audit event, and the ADR-004
 amendment.
+
+### RESOLVED (S2-14, 2026-10-13) — the rule, as ADR-004 D9
+
+**Decision**, added as **ADR-004 D9** in the same PR, implemented in
+`App\Security\Privacy\PrivacyModeStore` and documented for operators in
+[`docs/architecture/privacy-modes.md`](architecture/privacy-modes.md):
+
+- **Where it lives.** `privacy_policies`, append-only, at most one live row per workspace.
+  `config('lea.privacy_mode')` keeps exactly two jobs — the value the install-time default row is
+  written from, and the fallback for a boot before migrations — and **the stored row always wins**.
+  Anything unparseable falls closed to `LOCAL_ONLY`.
+- **Who may change it.** The workspace owner, through a signed-in PWA session.
+  `OwnerAbilities::isOwner()` is the same check the IPC abilities use, so the menu bar cannot change
+  the mode at all and no artisan command does either. S2-19 (#101)'s `/admin` security-rules pane is
+  the one surface that calls the store.
+- **Whether a downgrade needs re-auth.** Yes, and **only** a downgrade. A change that widens where
+  model traffic may go — a mode of greater breadth, or `LOCAL_ONLY_ALLOW_LAN` turning on — needs a
+  fresh `CriticalAction::ChangePrivacyMode` proof (S2-05, #69) **and** an explicit UI
+  re-confirmation, so submitting the form is not the same as confirming it; the proof's verification
+  time lands in `reauthenticated_at`. **Tightening needs neither**, because a control that makes it
+  laborious to become stricter is a control that gets left loose.
+- **What audit event it writes.** `privacy.mode_changed`: actor `user:<ulid>`, subject
+  `privacy_policies/<id>`, context carrying the old and new mode, the old and new LAN flag, whether
+  the change widened the boundary, the re-authentication method and the owner's reason. The event
+  and the policy row are written in **one transaction** and the row stores the event id, so a mode
+  in force without an audit trail is not representable. A refused change writes neither.
+- **How the UI re-confirms, and the half of T-68 that is about honesty.** Every surface that
+  displays the mode now reads the store rather than the config seed — `/health/ready`, the menu bar
+  that polls it, and the PWA shell the brief and chat pages render inside. Enforcing the stored mode
+  while displaying the configured one would have told the owner the opposite of the truth at exactly
+  the moment it mattered.
+- **The LAN toggle.** Storable only in `LOCAL_ONLY` (`PrivacyMode::supportsLanToggle()`), because it
+  has nothing to widen in the other two modes — which is what lets the egress guard treat the opt-in
+  as a single branch (RFC 1918 and link-local, nothing else) rather than a special case per mode.
+  RR-18 is unchanged: off by default, warned, and a public IP never admitted in this mode.
+
+**Evidence:** `tests/Security/PrivacyModeDowngradeTest.php` — the gates, the append-only history, the
+audit event, and the brief surface reflecting the stored mode. **S2-19 (#101)** builds the pane on
+this store and adds no second writer.
 
 ### A19 — Contradiction: which processes may call Keychain APIs
 ADR-003 D2 says "exactly **one** process holds the shared access group: the Supervisor", its D5

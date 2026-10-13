@@ -16,7 +16,7 @@ use App\AI\Providers\ProviderConnections;
 use App\AI\Providers\ProviderRegistry;
 use App\AI\Providers\SupportedProviders;
 use App\AI\Routing\ModelCapabilityRegistry;
-use App\AI\Routing\PrivacyMode;
+use App\Security\Privacy\PrivacyModeStore;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
@@ -91,10 +91,15 @@ class AiServiceProvider extends ServiceProvider
 
             $this->app->bind(
                 SupportedProviders::adapterBinding($id),
-                fn (Application $app): AiProviderAdapter => $app->make(ProviderRegistry::class)->adapterFor(
-                    $id,
-                    PrivacyMode::fromConfigValue($app['config']->get('lea.privacy_mode')),
-                ),
+                function (Application $app) use ($id): AiProviderAdapter {
+                    // The stored policy, not the configured seed: S2-14 made
+                    // `privacy_policies` the source of truth and `lea.privacy_mode`
+                    // the install-time default the first row is written from
+                    // (OPEN-QUESTIONS A18).
+                    $policy = $app->make(PrivacyModeStore::class)->active();
+
+                    return $app->make(ProviderRegistry::class)->adapterFor($id, $policy->mode, $policy->allowLan);
+                },
             );
         }
     }

@@ -19,6 +19,14 @@ enum CriticalAction: string
 
     case RotateKeys = 'keys.rotate';
 
+    /**
+     * Widening the privacy mode, or turning `LOCAL_ONLY_ALLOW_LAN` on
+     * (OPEN-QUESTIONS A18, threat model T-68). Tightening it is not a critical
+     * action: a control that makes it laborious to become stricter is a control
+     * that gets left loose.
+     */
+    case ChangePrivacyMode = 'privacy.mode_change';
+
     public function label(): string
     {
         return __('security.reauth.actions.'.$this->value);

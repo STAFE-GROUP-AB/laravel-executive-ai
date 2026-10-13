@@ -168,9 +168,12 @@ column is named like it.
   tables classify their rows with `sensitivity_class` (`personal` on `email_connections` and
   `external_accounts`, `confidential` on `push_subscriptions`) and leave the values plaintext, so
   the two items do not half-apply each other's work.
-- **The privacy-mode rule** is S2-14 (#96): which transitions need the S2-05 re-authentication, what
-  the UI re-confirms, and the named audit event. S2-03 lands only the storage —
-  see [data-model](data-model.md) `privacy_policies` and OPEN-QUESTIONS **A18**.
+- **The privacy-mode rule** was S2-14 (#96) and has **landed**: `App\Security\Privacy\PrivacyModeStore`
+  is the one writer of `privacy_policies`, a widening transition needs the S2-05 re-authentication
+  plus a UI re-confirmation, tightening needs neither, and every change writes
+  `privacy.mode_changed` in the same transaction as the row (ADR-004 **D9**). S2-03 landed only the
+  storage — see [data-model](data-model.md) `privacy_policies`,
+  [privacy-modes](privacy-modes.md) and OPEN-QUESTIONS **A18**.
 - **The purge job itself** (`PurgeExpiredData`, §4.1) and the retention pane. This page defines what
   the job reads; it does not schedule it. A clockless rule means the job has nothing to do for those
   tables, which is why it is safe for the job to land later than the rules.

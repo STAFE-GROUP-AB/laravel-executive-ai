@@ -5,7 +5,7 @@
 | **Status** | Proposed |
 | **Date** | 2026-10-10 |
 | **Deciders** | D (AI/Agents) lead · reviewer H (Security/privacy) · reviewer B (Laravel platform) · Andreas for the model-license items handed to ADR-007 |
-| **Closes** | §15 item 4 (AI SDK half; MCP half is ADR-005) · §15 item 6 (runtime choice; licensing conclusion is ADR-007) · OPEN-QUESTIONS A10 |
+| **Closes** | §15 item 4 (AI SDK half; MCP half is ADR-005) · §15 item 6 (runtime choice; licensing conclusion is ADR-007) · OPEN-QUESTIONS A10 · **A18** (D9, added by S2-14) |
 
 ## Context
 
@@ -291,6 +291,55 @@ Handed to Andreas / ADR-007 as the **Legal / licensing input** this ADR cannot s
 (MIT) and the Apache-2.0 models need only attribution; (4) Qwen2.5-3B is excluded — confirm no one
 re-adds it. Newer families (Qwen 3.x, Llama 4, Gemma 4) may be added to this table only after their
 license pages are verified the same way; the SDK's own default-model string is not evidence.
+
+### D9. Where the privacy mode lives, who may change it, and what a change writes
+
+*Added by S2-14 (#96), 2026-10-13. Closes OPEN-QUESTIONS **A18**; threat model **T-68**.*
+
+D4 and D5 say what `LOCAL_ONLY`, `EU_RESTRICTED` and `CUSTOM` *do*. They did not say where the
+setting lives, who may move it, whether moving it needs fresh proof of presence, or what it records —
+and ADR-001 D4 had already removed the `.env` that would otherwise have been the answer by default.
+T-68 is precisely the gap: "the mode is turned down without the owner noticing", with "the UI may
+still suggest otherwise" as its second half. S2-03 landed the storage; this decision is the rule.
+
+1. **It lives in `privacy_policies`.** One row per change, append-only, never updated in place and
+   never soft-deleted; the previous row is stamped `superseded_at` and kept. `active_marker` is a
+   generated column plus a unique index on `(organization_id, active_marker)`, so two live policies
+   for one workspace are not a state the table can hold. `config('lea.privacy_mode')` keeps exactly
+   two jobs: the value the install-time default row is written from, and the fallback for a boot
+   before migrations. **The stored row always wins**, and `PrivacyMode::fromConfigValue()` falls
+   closed to `LOCAL_ONLY` for anything it cannot parse.
+2. **Every surface reads the row, not the seed.** `/health/ready`, the menu bar that polls it, and
+   the PWA shell the brief and chat pages render inside all report
+   `PrivacyModeStore::active()`. This is the half of T-68 that is about honesty rather than about
+   egress: a product that enforced the stored mode but displayed the configured one would be
+   telling the owner the opposite of the truth at exactly the moment it mattered.
+3. **Only the workspace owner may change it, and only from a PWA session.**
+   `OwnerAbilities::isOwner()` is the same check the IPC abilities use, so the menu bar cannot
+   change the mode at all and no `lea:` command does either. S2-19's `/admin` security-rules pane is
+   the one surface that calls `PrivacyModeStore::change()`.
+4. **A widening change needs re-authentication *and* a UI re-confirmation.** Widening means a mode
+   of greater breadth (`LOCAL_ONLY` → `EU_RESTRICTED` → `CUSTOM`) or `LOCAL_ONLY_ALLOW_LAN` turning
+   on. It requires a fresh `CriticalAction::ChangePrivacyMode` proof from the S2-05 re-authenticator
+   — a passkey or an emailed code, bound to the action, the session and a single-use nonce — plus an
+   explicit confirmation flag, so submitting the form is not the same as confirming it. The proof's
+   verification time is stored on the row in `reauthenticated_at`.
+   **Tightening needs neither.** A control that makes it laborious to become stricter is a control
+   that gets left loose, and nothing about moving toward `LOCAL_ONLY` needs to be discouraged.
+5. **The audit event is `privacy.mode_changed`.** One `audit_events` row per change, actor
+   `user:<ulid>`, subject `privacy_policies/<id>`, context carrying the old and new mode, the old and
+   new LAN flag, whether the change widened the boundary, the re-authentication method and the
+   owner's stated reason. The event and the policy row are written in **one transaction** and the
+   row stores the event id, so a mode in force without an audit trail is not representable. A
+   refused change writes neither.
+6. **`LOCAL_ONLY_ALLOW_LAN` is storable only in `LOCAL_ONLY`** (`PrivacyMode::supportsLanToggle()`),
+   because it has nothing to widen in the other two modes. That is what lets the egress guard treat
+   the opt-in as a single branch — RFC 1918 and link-local, nothing else — rather than a special
+   case per mode. RR-18 is unchanged: off by default, warned with "model traffic will leave this Mac
+   over your local network", and a public IP is never admitted in this mode.
+
+Evidence: `tests/Security/PrivacyModeDowngradeTest.php`;
+`docs/architecture/privacy-modes.md` for what each mode permits.
 
 ## Evidence
 

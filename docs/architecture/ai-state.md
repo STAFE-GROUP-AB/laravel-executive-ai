@@ -137,6 +137,26 @@ harness (`LXAI_INSTALL_SCREENSHOT_DIR` writes `docs/architecture/images/installe
 The installer's state machine, `AiSelectionApplying` and the Supervisor hand-off are unchanged
 (S1-05, S1-07).
 
+## 4a. The privacy mode the surfaces report (S2-14)
+
+Every surface that displays a privacy mode reads it from `App\Security\Privacy\PrivacyModeStore`,
+which returns the live `privacy_policies` row — **not** `config('lea.privacy_mode')`, which is now
+only the value the install-time default row is written from and the fallback for a boot before
+migrations. That applies to `/health/ready`'s `privacy_mode` field, the menu bar that polls it, and
+the `$shell` the PWA layout renders on every page.
+
+The reason is threat **T-68**'s second half: "model traffic leaves the Mac while the UI may still
+suggest otherwise". A build that enforced the stored mode while displaying the configured one would
+tell the owner the opposite of the truth at exactly the moment it mattered, and the two values can
+genuinely differ — the config is a packaged default, the row is what the owner last chose.
+
+Which providers SELECT_AI and `/settings/ai` may offer follows the same policy. `ProviderRegistry`
+takes the stored mode **and** the stored `LOCAL_ONLY_ALLOW_LAN` flag, so `buildable()` and
+`disabledBy()` answer for the policy in force, and a provider is greyed out with the
+`EgressRule` that refused it rather than hidden. What each mode permits is
+[`privacy-modes.md`](privacy-modes.md); the address rules behind the Local Only half are
+[`../security/egress-guard.md`](../security/egress-guard.md).
+
 ## 5. Not decided here
 
 - The `ai_runs` table and the `AiReadiness` rebinding over it (Sprint 2, data-model.md §3.1).

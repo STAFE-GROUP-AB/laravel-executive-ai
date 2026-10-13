@@ -5,7 +5,7 @@
 | **Status** | Proposed |
 | **Date** | 2026-10-10 |
 | **Deciders** | G (MCP/Automation) owner · A (macOS/Swift) for helper signing and IPC · H (Security/privacy) reviewer · Andreas (Owner) for ambiguity A1 and the Apple team identity (A12) |
-| **Closes** | Blueprint §15 item 4 (MCP transport half; the SDK half is ADR-004), §15 item 5, OPEN-QUESTIONS A1 |
+| **Closes** | Blueprint §15 item 4 (MCP transport half; the SDK half is ADR-004), §15 item 5, OPEN-QUESTIONS A1 · **A15** (D4.11, added by S2-14) |
 
 ## Context
 
@@ -281,6 +281,64 @@ lock screen. Scheduled automation (e.g. a nightly Safari task) is therefore expl
     approval" instead of acting. Authentication is a Sanctum personal access token with abilities,
     issued and revocable in the PWA; `Mcp::oauthRoutes()` (Passport) is deferred until a remote
     client needs it. The server validates `Origin` (spec MUST) and binds to `127.0.0.1` only.
+
+11. **D4.11 — The shared egress and SSRF guard (added by S2-14, 2026-10-13; closes OPEN-QUESTIONS
+    A15).** D4.2(b) above said "resolves DNS once, rejects loopback/RFC1918/link-local/cloud
+    metadata targets and pins the resolved IP for the request" and said the guard is *shared with
+    `Browser/Fetch`* — but nothing specified the parse-and-normalise step that has to precede the
+    ranges, the userinfo trap, the metadata list, `100.64.0.0/10`, the Unix-socket prohibition, the
+    port rules, per-hop redirect revalidation, the response caps or what a denial logs. A15 recorded
+    that gap; this decision closes it by adopting the threat model's §3.4.1 sixteen-row checklist
+    verbatim as the specification, and binding it to one implementation:
+    `App\Security\Egress\EgressGuard` with `AddressNormalizer`.
+
+    The six rules that were previously unstated, stated:
+
+    - **Normalise, then decide (rows 2, 8, 9).** Decimal (`2130706433`), octal (`0177.0.0.1`),
+      hexadecimal (`0x7f.1`), zero-padded, short-form (`127.1`) and IPv4-mapped IPv6
+      (`::ffff:127.0.0.1`) spellings are reduced to the textual form of the **binary** address and
+      the ranges are tested against that. Trailing dots, case and Unicode or punycode spellings
+      reduce to one host. A userinfo component, a second `@`, a control character or a
+      percent-encoded host is refused, never stripped. NAT64 (`64:ff9b::/96`) and 6to4
+      (`2002::/16`) wrappers are refused whole rather than unwrapped, because a socket to one of
+      them reaches a relay and the pin could not describe what it connects to.
+    - **The address list (rows 3–7).** `127.0.0.0/8`, `0.0.0.0/8`, `::1`; `10.0.0.0/8`,
+      `172.16.0.0/12`, `192.168.0.0/16`; `100.64.0.0/10`; `169.254.0.0/16`, `fe80::/10`;
+      `fc00::/7`; and by address as well as by name the five metadata endpoints `169.254.169.254`,
+      `169.254.170.2`, `fd00:ec2::254`, `100.100.100.200` and `metadata.google.internal`. Reserved,
+      documentation, benchmarking, multicast and broadcast space is refused too, because leaving it
+      out would classify it as "public".
+    - **No non-TCP transport (row 10) — closes T-27's GAP.** `unix:`, `http+unix:`, `npipe:`,
+      `file:`, `php:`, `data:`, `phar:` and a schemeless or named-pipe target are refused as
+      transports. No HTTP client in the codebase may be constructed with a Unix-socket or
+      named-pipe option, enforced by `tests/Security/NoSocketTransportArchTest.php`. Our own broker
+      socket (D3.2 of ADR-003) is a Unix socket on purpose and is on that test's explicit
+      local-IPC allowlist, which the same test holds to being neither an HTTP client nor egress.
+    - **Ports (row 11).** `443` for a public HTTPS target, plus `8443` for a model provider because
+      a self-hosted gateway on that port is a real configuration and refusing it would push owners
+      to disable the guard. Loopback is legitimate only for the local-runtime, model-provider and
+      MCP purposes, and our own core's fixed loopback port is denied to all of them except our own
+      MCP server. The local-runtime purpose additionally refuses a **public** address in every
+      mode — a local runtime is local by definition — so it is not the loosest rule set as soon as
+      the mode is not `LOCAL_ONLY`.
+    - **Resolve once, pin, revalidate per hop (rows 12, 13).** The name is resolved once per
+      decision, **every** A and AAAA record is evaluated, a host whose records disagree is refused
+      outright, and the chosen address is pinned with `CURLOPT_RESOLVE` so the socket connects to
+      the address that was judged while `Host` and SNI keep the name. Redirects are off by default
+      (D4.2(c) unchanged: any 3xx is an error for MCP and OAuth discovery); where following is
+      enabled at all, the whole checklist re-runs per hop, which holds because Laravel pushes
+      global HTTP middleware *inside* Guzzle's redirect middleware.
+    - **Fail closed, and say which rule (rows 14, 16).** An address the guard cannot classify is
+      refused with `EgressRule::Unclassifiable`. Every refusal names its `EgressRule`, and every
+      *attempt* that is refused writes one `audit_events` row — action `egress.blocked`, outcome
+      `refused` — carrying the requested host, the resolved address, the rule and the purpose, and
+      **never** the URL, whose query may hold a token. Asking the guard a question (the
+      `/settings/ai` screen explaining why a provider is unavailable) writes nothing.
+      Response size and content-type caps stay with the fetch surface that reads a body (S2-16,
+      ADR-005 D4.8's 64 KiB truncation); the guard decides targets, not bodies.
+
+    Evidence: `tests/Security/SsrfGuardTest.php` is a table over every §3.4.1 row;
+    `docs/security/egress-guard.md` is the operator-level document.
 
 ### D5 — No bypass; residual risks are accepted, not hidden
 

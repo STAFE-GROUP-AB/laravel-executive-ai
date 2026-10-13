@@ -90,6 +90,7 @@ return [
             'approvals.approve' => 'approving an outbound action',
             'remote-access.enable' => 'turning private remote access on',
             'keys.rotate' => 'rotating a key',
+            'privacy.mode_change' => 'widening the privacy mode',
         ],
     ],
 ];

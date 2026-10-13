@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Health;
 
+use App\Security\Privacy\PrivacyModeStore;
 use App\Support\Health\Checks\AuthLoginCheck;
 use App\Support\Health\Checks\BriefPlaceholderCheck;
 use App\Support\Health\Checks\DatabaseMigrationsCheck;
@@ -48,6 +49,7 @@ final class HealthService
         private readonly LatestBrief $latestBrief,
         private readonly Connectivity $connectivity,
         private readonly PendingApprovals $pendingApprovals,
+        private readonly PrivacyModeStore $privacyModes,
     ) {}
 
     /** @return array{status: 'ok'} */
@@ -173,10 +175,15 @@ final class HealthService
         return (int) intdiv(hrtime(true) - $sinceHrtime, 1_000_000);
     }
 
+    /**
+     * The mode actually in force, read from `privacy_policies` (S2-14,
+     * OPEN-QUESTIONS A18). Reporting `config('lea.privacy_mode')` here would
+     * make `/health/ready` and the menu bar say `LOCAL_ONLY` while a stored
+     * policy had widened the boundary — threat **T-68**'s "the UI may still
+     * suggest otherwise" in one line of code.
+     */
     private function privacyMode(): string
     {
-        $mode = config('lea.privacy_mode');
-
-        return in_array($mode, ['LOCAL_ONLY', 'EU_RESTRICTED', 'CUSTOM'], true) ? $mode : 'LOCAL_ONLY';
+        return $this->privacyModes->active()->configValue();
     }
 }

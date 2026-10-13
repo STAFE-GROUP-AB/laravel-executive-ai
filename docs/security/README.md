@@ -7,6 +7,7 @@ on are in [`docs/adrs/`](../adrs/README.md).
 | Document | Issue | What it covers |
 |---|---|---|
 | [threat-model.md](threat-model.md) — baseline threat model 1.0.0: ten trust boundaries with data-flow tables, 75 threats mapped to every §11 gate with its mitigation and the test that proves it, the SSRF control checklist, what FileVault does and does not protect while logged in, 25 accepted residual risks with accepting roles | S0-23 | §11 gates, §3.1 SQLite residual risk, §6 Mac helper privilege boundary, §13 workstream H "signed risk acceptance" |
+| [egress-guard.md](egress-guard.md) — the one shared SSRF and egress guard: why it is an object and not a habit, its parts, the four properties (normalise then decide; resolve once and pin at the socket; every private range; fail closed) and what each would cost if absent, the five `EgressPurpose` rule sets as a table, how to call it and how the arch test makes that mandatory, where ADR-004 D4 layer 3 sits in Guzzle's handler stack and why that is load-bearing, what CI proves versus the `tcpdump` lab protocol it does not, and four named residuals | S2-14 | ADR-005 **D4.11** (the §3.4.1 checklist), ADR-004 **D4**, OPEN-QUESTIONS **A15**, threats T-23 – T-29 |
 
 Planned by the backlog, not yet written:
 

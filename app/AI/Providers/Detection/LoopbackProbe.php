@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\AI\Providers\Detection;
 
+use App\Security\Egress\EgressPurpose;
+use App\Security\Egress\EgressServiceProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Response;
@@ -18,6 +20,13 @@ use Throwable;
  * convenience: a detector that accepted a hostname would be a DNS-rebinding
  * path straight through the Local Only boundary, so the restriction lives in
  * the probe rather than in each caller.
+ *
+ * Every request is additionally labelled `EgressPurpose::LocalRuntime`, which
+ * is what the S2-14 egress guard reads to decide which rules apply: loopback is
+ * legitimate here and in only two other purposes, our own core's port is not,
+ * and a public address is refused in every mode. The label is also what
+ * `NoSocketTransportArchTest` looks for — an outbound call site that is neither
+ * labelled nor inside `app/Security/Egress` fails that test.
  */
 final readonly class LoopbackProbe
 {
@@ -46,6 +55,7 @@ final readonly class LoopbackProbe
         try {
             return $this->http
                 ->withHeaders($headers)
+                ->withOptions([EgressServiceProvider::PURPOSE_OPTION => EgressPurpose::LocalRuntime])
                 ->withoutRedirecting()
                 ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->timeout(self::TOTAL_TIMEOUT_SECONDS)
@@ -69,6 +79,7 @@ final readonly class LoopbackProbe
     {
         try {
             return $this->http
+                ->withOptions([EgressServiceProvider::PURPOSE_OPTION => EgressPurpose::LocalRuntime])
                 ->withoutRedirecting()
                 ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->timeout(self::TOTAL_TIMEOUT_SECONDS)
