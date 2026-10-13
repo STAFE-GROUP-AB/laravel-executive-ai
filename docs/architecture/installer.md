@@ -17,10 +17,10 @@ explicit (`InstallState.allowedTransitions`); anything not listed throws
 | `WELCOME` | `PREFLIGHT` | Welcome CTA ("Install" / "Continue installation") | yes — screen 1 |
 | `PREFLIGHT` | `PACKAGE_VERIFY` | all ten checks ran, no blocker | no |
 | `PACKAGE_VERIFY` | `INSTALL_CORE` | manifest, `SHA256SUMS`, every file digest and the runtime signature verified | no |
-| `INSTALL_CORE` | `CREATE_OWNER` | runtime staged, re-hashed, activated (`current` flipped), data directory prepared | no |
+| `INSTALL_CORE` | `CREATE_OWNER` | runtime staged, re-hashed, activated (`current` flipped), data directory prepared, **and the Supervisor LaunchAgent registered so the core is running** (#124) | no (a Login Items approval is a click, not a password) |
 | `CREATE_OWNER` | `SELECT_AI` | owner form submitted and accepted by the core | yes — screen 4 |
 | `SELECT_AI` | `BOOT_SERVICES` | AI choice submitted (skip / detected local runtime / own key) | yes — screen 5 |
-| `BOOT_SERVICES` | `HEALTH_CHECK` | Supervisor LaunchAgent registered and started | no (a Login Items approval is a click, not a password) |
+| `BOOT_SERVICES` | `HEALTH_CHECK` | supervision confirmed still live and the SELECT_AI key handed to the Supervisor over XPC — the half of this state that genuinely depends on screen 5 (#124) | no (a Login Items approval is a click, not a password) |
 | `HEALTH_CHECK` | `READY` | `/health/ready` returned `ready: true` — never on a timer, never on `/health/live` | no |
 | `READY` | any optional step | Done-screen checklist (later sprints) | yes — screen 6 |
 | optional step | next optional step, or `READY` | the step finishes with an outcome | — |
@@ -36,8 +36,23 @@ Rules the machine enforces:
   files. A partial `INSTALL_CORE` is rolled back before the status becomes `cancelled`.
 - **Retry** re-runs the current state (re-entry is logged, which ends the measured run per
   install-measurement §4). For a waiting state the form is shown again.
+- **Resume re-establishes what a skipped state was responsible for** (#124). *A checkpoint
+  restores which states are done; it does not restore the processes those states started.* That
+  distinction is now explicit: each state declares its volatile postconditions in
+  `InstallState.volatileEffects`, and `resume()` re-establishes every one of them, in sequence
+  order, before the resume state runs — so "entering state N" means the same thing on a resumed
+  run as on a fresh one. `INSTALL_CORE` declares `supervisionRunning`, which is re-established by
+  the same idempotent `startSupervisor` call the fresh run makes; `SELECT_AI` declares
+  `pendingProviderKey`, which **cannot** be re-established (the key was only ever in memory,
+  ADR-003 D2), so that state is un-completed instead and screen 5 is shown again rather than the
+  install finishing with no provider configured. A state with a volatile effect that does not
+  declare one fails `InstallEntryConditionTests`.
 - **Rollback** removes the staging directory and any version directory `current` does not point
-  at. Offered on every `INSTALL_CORE` failure next to Retry and Cancel.
+  at. Offered on every `INSTALL_CORE` failure next to Retry and Cancel — except a failure of
+  `INSTALL_CORE`'s service-start step, which is reported as a `bootServices` failure precisely so
+  that it offers Retry and Cancel only: the runtime is installed and sound, so there is nothing
+  partial to remove. A retry re-enters `INSTALL_CORE`, sees an activated runtime and goes straight
+  back to starting the services without copying or re-hashing 180 MB again.
 - **Resume** continues from `InstallCheckpoint.resumeState` (section 3). A partial runtime found
   in the checkpoint is removed first.
 - **Verify before execute.** `INSTALL_CORE` installs only a `VerifiedPackage` produced by
@@ -171,10 +186,26 @@ so no runtime can be installed from an unsigned app.
 | **S1-06** runtime install — **delivered** ([runtime-layout.md](runtime-layout.md)) | `RuntimeInstalling` (`install(_:into:started:progress:)`, `rollback(_:in:)`, `rollbackToPrevious(in:)`), `RuntimeManifest`, `InstallPaths`, `BackupExcluding`, `RuntimeUninstaller`, `RuntimeEnvironment` | `RuntimeInstaller` with `TimeMachineBackupExclusion` — copies a verified package to `runtime/.staging-<v>/`, re-hashes, `chmod -R a-w`, renames to `runtime/<v>/`, flips `current`/`previous` atomically, garbage-collects older versions, creates `data/`, Logs and Caches, excludes the live database from Time Machine | `packaging/manifest/runtime.json` + `packaging/runtime/` (build, assemble, static Caddyfile/php.ini — the port is process environment, not a rendered file). Still open for S1-12: the signed binary and the bundled `Contents/Resources/runtime/` directory |
 | **S1-07** supervision — **delivered** ([services.md](services.md)) | `ServiceBooting` (`boot(runtime:port:) -> started \| requiresLoginItemApproval`, `openLoginItemsSettings()`), `AiSelectionApplying` | `LaunchAgentServiceBooter` over `SMAppServiceRegistrar` + `XPCSupervisorControlClient`; `SupervisorAiSelectionApplier` parks an own API key in `PendingSecretHandoff` until the Supervisor exists | The Supervisor tool (`apps/macos/LaravelExecutiveAISupervisor/`), the LaunchAgent plist (`packaging/manifest/launchd/`), `register()` → poll `services()` → hand the key over XPC → `.started`; `.requiresLoginItemApproval` when macOS wants the click. Still open: S1-12's signed bundle (unsigned builds fail closed at `register()`'s peer checks) and S1-14's lab verification |
 | **S1-08** IPC / health — **delivered** ([ipc-client.md](ipc-client.md) §6) | `HealthProbe` (`readiness() -> HealthReadiness{ready, failingChecks, aiState}`) | `IpcHealthProbe` over `LoopbackIpcClient` — `GET /health/ready` signed with the GUI's `menubar` grant (the route's scope is `menubar,supervisor`), the port read from the checkpoint's `preflight.port` when the probe runs, `200`/`503` decoded to `HealthReadiness`, transport failures and bad signatures counted as failed attempts; `live()` is the plain `/health/live` of preflight 6.8. `HEALTH_CHECK → READY` is reachable on a real install (`IpcHealthProbeTests.testTheInstallerReachesReadyThroughTheLiveProbe`). `UnavailableHealthProbe` stays for a build without a client | Still open: the signed S1-14 lab run, where the XPC pairing and the GUI's Keychain item are exercised for real |
-| **S1-02** owner — **delivered** ([auth.md](auth.md) §2, [ipc-contract.md](ipc-contract.md) §6.9) | `OwnerCreating` (`createOwner(OwnerDraft) -> OwnerHandoff`) | `IpcOwnerCreator` over `LoopbackIpcClient` — `POST /ipc/v1/owner` signed with the GUI's `menubar` grant (paired one state earlier, at `BOOT_SERVICES`), the port read from the checkpoint's `preflight.port` when the call runs, the Mac's zone and language sent with the draft. `200` → `alreadyExisted: false`; `409 owner_exists` → `alreadyExisted: true`, so a data-preserving reinstall advances instead of failing; anything else is `OwnerCreationError` | Still open: the signed S1-14 lab run on real hardware, where the XPC pairing and the GUI's Keychain item are exercised for real. There is no credential step to deliver — sign-in is a one-time code to that address (auth.md §3) and a passkey is added later (S2-05) |
+| **S1-02** owner — **delivered** ([auth.md](auth.md) §2, [ipc-contract.md](ipc-contract.md) §6.9) | `OwnerCreating` (`createOwner(OwnerDraft) -> OwnerHandoff`) | `IpcOwnerCreator` over `LoopbackIpcClient` — `POST /ipc/v1/owner` signed with the GUI's `menubar` grant, **paired lazily on this call** against the Supervisor `INSTALL_CORE` registered (#124; `BOOT_SERVICES` is two states *later*, and #121 shipped believing otherwise), after waiting for the core's unsigned `/health/live`; the port read from the checkpoint's `preflight.port` when the call runs, the Mac's zone and language sent with the draft. `200` → `alreadyExisted: false`; `409 owner_exists` → `alreadyExisted: true`, so a data-preserving reinstall advances instead of failing; anything else is `OwnerCreationError` | Still open: the signed S1-14 lab run on real hardware, where the XPC pairing and the GUI's Keychain item are exercised for real. There is no credential step to deliver — sign-in is a one-time code to that address (auth.md §3) and a passkey is added later (S2-05) |
 
 `InstallDependencies.simulated` (DEBUG, `LXAI_INSTALL_SIMULATE=1`) walks the whole flow against
 doubles under a temporary directory so the six screens can be exercised before those items land.
+
+### 6.1 What `ready` waits for, and the budget (#124)
+
+`HEALTH_CHECK` polls `/health/ready` on `HealthPollingPolicy`, which is **90 attempts × 2 s =
+180 s**. Three of the seven checks are produced by the scheduler's minute tick — `auth_login`'s
+self-test, `scheduler_selftest` itself and `brief_placeholder` — so the worst case is a tick that
+lands just under a minute after the owner exists, and `withoutOverlapping` can push it into the
+following minute. 180 s leaves one tick of slack and still sits inside blueprint §12.2's
+`p95 < 300 s`, helped by the services now running since `INSTALL_CORE` rather than since
+`BOOT_SERVICES`. The per-check producers are tabulated in
+[health-contract.md](health-contract.md) §2.1 — two of them did not exist before #124, and a check
+with no producer is a `READY` that can never be reached.
+
+`menubar_integration` is fed by the installer itself: `IpcHealthProbe` sends one heartbeat per
+20 s alongside its readiness polls, because during an install the installer *is* the GUI and the
+panel's refresh loop is not running (ipc-client.md §6.1).
 
 ## 7. Screens
 

@@ -105,7 +105,9 @@ actor SupervisorControlService: SupervisorControlling {
     private let authenticator: any DeviceOwnerAuthenticating
     private let now: @Sendable () -> Date
     private let random: @Sendable (Int) -> Data
-    /// Re-runs boot-time verification before `startAll` after a `failed` boot.
+    /// Re-runs the boot-time preparation — runtime verification, then `artisan migrate --force` —
+    /// before `startAll`, so a retry after a `failed` boot repairs the same preconditions
+    /// (services.md §2 steps 5–6).
     private let beforeStart: @Sendable () async throws -> Void
     private var key: IpcKey
     private var sessions: [IpcClient: String] = [:]

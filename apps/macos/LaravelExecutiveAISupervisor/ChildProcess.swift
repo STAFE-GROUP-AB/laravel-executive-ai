@@ -1,16 +1,20 @@
-// One supervised child (ADR-001 D3). Wraps `Foundation.Process`: spawns with exactly the
-// environment in the spec, pipes stdout and stderr into a log sink, reports the exit once, and
-// stops with SIGTERM followed by SIGKILL after a grace period.
+// One child (ADR-001 D3). Wraps `Foundation.Process`: spawns with exactly the environment in the
+// spec, pipes stdout and stderr into a log sink, reports the exit once, and stops with SIGTERM
+// followed by SIGKILL after a grace period.
+//
+// Both kinds of child go through this one type: a supervised `ServiceSpec`, started with
+// `start(onExit:)` and respawned by `ServiceSupervisor`, and the one-shot `OneShotSpec`, run to
+// completion with `run()` before anything is supervised at all.
 
 import Foundation
 
 actor ChildProcess {
-    let spec: ServiceSpec
+    let spec: any ProcessLaunch
     private let log: any LogSink
     private var process: Process?
     private var exited = false
 
-    init(spec: ServiceSpec, log: any LogSink) {
+    init(spec: any ProcessLaunch, log: any LogSink) {
         self.spec = spec
         self.log = log
     }
@@ -74,10 +78,26 @@ actor ChildProcess {
         } catch {
             stdout.fileHandleForReading.readabilityHandler = nil
             stderr.fileHandleForReading.readabilityHandler = nil
-            throw ChildProcessError.spawnFailed(spec.name)
+            throw ChildProcessError.spawnFailed(spec.logName)
         }
 
         self.process = process
+    }
+
+    /// Spawns and returns how it left, once it has left. For the one-shots that must finish
+    /// before anything is supervised (services.md §2 step 6): there is no restart budget and no
+    /// probe here — the caller reads the exit status and decides. Throws like `start(onExit:)`
+    /// when the process cannot be started at all.
+    func run() async throws -> ServiceExit {
+        try await withCheckedThrowingContinuation { continuation in
+            do {
+                try start { exit in
+                    continuation.resume(returning: exit)
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     /// SIGTERM, then SIGKILL if the process is still there after `grace`. Returns when the
@@ -114,5 +134,6 @@ actor ChildProcess {
 }
 
 enum ChildProcessError: Error, Equatable, Sendable {
-    case spawnFailed(ServiceName)
+    /// The spec's `logName`, never a path.
+    case spawnFailed(String)
 }

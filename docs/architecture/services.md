@@ -5,7 +5,7 @@
 | **Status** | Implemented (S1-07, #35): `apps/macos/LaravelExecutiveAISupervisor/` (the headless tool, shared into the app module for tests), `apps/macos/LaravelExecutiveAI/Services/` (the GUI side: booter, XPC client, panel service control), `apps/macos/LaravelExecutiveAI/IPC/IpcSigning.swift` (token and signature arithmetic, shared with S1-08 part 2), `packaging/manifest/launchd/`, `app/Security/Secrets/` + `config/secrets.php` + `App\Security\Ipc\BrokerKeySource` (the PHP end of the broker). S1-13 (#41) added `removeAllSecrets()` to the control surface and the uninstall order in §8; S2-04 (#87) gave it the A25 `keepApplicationKey` argument (`apps/macos/LaravelExecutiveAI/Install/Uninstaller.swift`). Real launchd, Keychain and XPC paths are exercised only on the S1-14 lab Mac; every test runs against recording doubles. |
 | **Blueprint** | §2 (separate supervised processes; `php artisan serve` forbidden), §9 (automatic launch, crash restart, bounded retries, health probes, "tydligt om användarinloggning krävs"), §12.1 `BOOT_SERVICES`, §16 step 5 (kill/restart and uninstall verified on a clean Mac — S1-14) |
 | **Decisions** | ADR-001 D3 (one LaunchAgent, the Supervisor; verify on every boot; backoff and bound; **user login required**), D4 (no `.env`, non-secret config as environment); ADR-003 D1 (what lives in the Keychain), D2 (one writer), D3 (the broker), D7 row 12 (no secret in any child's environment), D8 (reset pairing, uninstall); [ipc-contract.md](ipc-contract.md) §3.1–3.3 (`K`, pairing grant, tokens), §6.8/§7 (service control is XPC); [health-contract.md](health-contract.md) §1, §6 |
-| **Tests** | `apps/macos/LaravelExecutiveAITests/Services/` (`ServiceSupervisorTests`, `SupervisorSpawnTests`, `LaunchAgentServiceBooterTests`, `SupervisorSecretsTests`, `SecretsBrokerTests`, `SupervisorControlServiceTests`, `SupervisorRuntimeTests`, `IPCSigningFixtureTests`, `SupervisorBundleTests`), `tests/Feature/Secrets/`, `packaging/manifest/launchd/test/supervisor-plist.test.mjs` |
+| **Tests** | `apps/macos/LaravelExecutiveAITests/Services/` (`ServiceSupervisorTests`, `SupervisorSpawnTests`, `LaunchAgentServiceBooterTests`, `SupervisorSecretsTests`, `SecretsBrokerTests`, `SupervisorControlServiceTests`, `SupervisorRuntimeTests`, `SupervisorMigrationsTests`, `IPCSigningFixtureTests`, `SupervisorBundleTests`), `tests/Feature/Secrets/`, `packaging/manifest/launchd/test/supervisor-plist.test.mjs` |
 
 ## 1. Process tree
 
@@ -13,10 +13,16 @@
 launchd (the user's Aqua session)
 └── <prefix>.supervisor                      LaunchAgent, KeepAlive, ThrottleInterval 10 s
     └── LaravelExecutiveAISupervisor         Contents/Helpers/…app, headless Swift, the only Keychain writer
+        ├── frankenphp php-cli app/artisan migrate --force                  one-shot, runs to completion first
         ├── frankenphp run --config Caddyfile                               core      (loopback HTTP)
         ├── frankenphp php-cli app/artisan queue:work database …            worker
         └── frankenphp php-cli app/artisan schedule:work                    scheduler (+ schedule:run grandchildren)
 ```
+
+The first child is **not** supervised: it is a one-shot that must exit 0 before the other three are
+spawned at all (§2 step 6). It is never restarted, never probed, and never appears in `services()` —
+`ServiceStatus.name` stays `core|worker|scheduler` (ipc-contract §7.2). Its stdout and stderr go to
+`migrate.log` next to the children's own logs.
 
 `<prefix>` is `LXAI_BUNDLE_PREFIX` (`se.stafe.executive-ai` until A12). Three channels hang off the
 Supervisor, each with a different peer and trust model (ipc-contract §0):
@@ -64,12 +70,29 @@ it (`packaging/signing/README.md` §1, §5).
    envelope `hmac_key`); later boots read them. An all-zero `K` is refused on write and replaced on
    read. Keychain unavailable → exit 78.
 4. Start the secrets broker on `run/secrets.sock` and the XPC control listener — **before** any
-   child, so a verification failure in step 5 is visible from the GUI and recoverable.
+   child, so a failure in step 5 or 6 is visible from the GUI and recoverable.
 5. `PackageVerifier.verify(runtimeDirectory:)` — the same manifest + `SHA256SUMS` + per-file digest
    + no-unlisted-file + `SecStaticCode` check the installer ran, on every boot (ADR-001 D3). Failure:
    nothing is spawned, all three services are `failed` with the reason, the Supervisor keeps
    serving XPC. "Start services" from the GUI re-verifies before spawning.
-6. Spawn the three children (`ServiceSpec.coreServices`) and run the health monitor.
+6. **Run the migrations and wait for them.** `frankenphp php-cli app/artisan migrate --force`
+   (`OneShotSpec.migrations`) is spawned as a one-shot with the children's own environment and must
+   exit 0 before anything is supervised. Nothing else in the product applies migrations, and
+   `database_migrations` ("zero pending") is a hard dependency of every other `ready` check
+   ([health-contract.md](health-contract.md) §2), so without this step a fresh install can never
+   become `ready`. Failure fails closed exactly like step 5: nothing is spawned, all three services
+   are `failed` with the sanitised reason, the Supervisor keeps serving XPC; the artisan output is
+   in `migrate.log`.
+7. Spawn the three children (`ServiceSpec.coreServices`) and run the health monitor.
+
+Steps 5 and 6 together are the `beforeStart` the control surface re-runs for "Start services"
+(§7), so a repair followed by a retry from the GUI re-verifies *and* re-migrates. Running
+`migrate --force` on every boot and every start is safe because it is **forward-only and
+idempotent**: on an already-current database it applies nothing and exits 0.
+`migrate:fresh`, `migrate:refresh`, `migrate:rollback` and `db:wipe` are forbidden here and
+anywhere else — the data directory survives a reinstall by design ([installer.md](installer.md) §3,
+threat model T-72), and `SupervisorMigrationsTests` pins the argument vector literally as the
+regression guard.
 
 SIGTERM (launchd's `ExitTimeOut` is 30 s) stops the monitor, the listener and the broker, then
 every child with SIGTERM → 10 s → SIGKILL, and exits 0.
@@ -205,18 +228,27 @@ signature, 10 s per call.
 | `pair(client:) -> PairingGrant` | mints `session_id` (ULID), token, signing key, 30-day expiry (§3.2/§3.3); one live session per client | code-signing requirement |
 | `resetPairing() -> PairingGrant` | regenerates `K` in the Keychain, drops every session, rotates the Supervisor's own probe grant, returns a fresh `menubar` grant | the GUI clears `BriefCache` (`SupervisorServiceControl.resetPairing()`) |
 | `services() -> [ServiceStatus]` | §3 bookkeeping | — |
-| `restart(service:)`, `stopAll()`, `startAll()` | process control with the §4 budget; `startAll` re-verifies the runtime first | `stopAll` leaves launchd `KeepAlive` in place: the Supervisor keeps running, PHP stops |
+| `restart(service:)`, `stopAll()`, `startAll()` | process control with the §4 budget; `startAll` re-runs §2 steps 5–6 first — verify the runtime, then `migrate --force` — and refuses with the sanitised reason if either fails | `stopAll` leaves launchd `KeepAlive` in place: the Supervisor keeps running, PHP stops |
 | `elevate(sessionId:operation:nonce:) -> Elevation` | `LAContext.evaluatePolicy(.deviceOwnerAuthentication)`, then a one-shot §7.3 token (60 s) | live `menubar` session, slug and 22-char nonce validated |
 | `storeProviderApiKey(provider:apiKey:)` | SELECT_AI's own key → Keychain `ai-provider/<provider id>` through the one writer | provider must be a known adapter id |
 | `removeAllSecrets() -> [KeychainItemRef]` (S1-13, ipc-contract §7.2 addition) | uninstall: `SupervisorSecrets.removeAll()` — every account of every inventory service deleted through the one writer; every live session dropped; returns service/account names, never a value | called by the uninstaller **before** `unregister()`, because only this process holds the access group (ADR-003 D2) |
 
 Who calls what:
 
-- **Installer `BOOT_SERVICES`** — `LaunchAgentServiceBooter` (the live `ServiceBooting`):
-  `status()` → `register()` if needed → `.requiresLoginItemApproval` when macOS wants the click →
-  otherwise polls `services()` until the Supervisor answers, hands over the SELECT_AI key parked in
-  `PendingSecretHandoff` by `SupervisorAiSelectionApplier`, returns `.started`. A failed hand-off
-  keeps the key in memory for Retry; it never touches disk.
+- **Installer `INSTALL_CORE` (last step) and `BOOT_SERVICES`** — `LaunchAgentServiceBooter` (the
+  live `ServiceBooting`), in two halves with different prerequisites (#124, ADR-001 D3 as
+  amended):
+  - `startSupervisor(runtime:port:)`, called at the **end of `INSTALL_CORE`**: `status()` →
+    `register()` if needed → `.requiresLoginItemApproval` when macOS wants the click → otherwise
+    polls `services()` until the Supervisor answers, returns `.started`. From here on there is a
+    Supervisor and therefore a core, which is what `CREATE_OWNER` two states later needs — it had
+    neither before, and that is what the first signed build died of. Idempotent, so the retry
+    after the Login Items click costs nothing.
+  - `boot(runtime:port:)`, called at **`BOOT_SERVICES`**: the same idempotent check (supervision
+    can have lapsed while the person was typing), then hands over the SELECT_AI key parked in
+    `PendingSecretHandoff` by `SupervisorAiSelectionApplier`. A failed hand-off keeps the key in
+    memory for Retry; it never touches disk. This half stays here because it is the only part
+    that depends on a screen the person has not reached yet at `INSTALL_CORE`.
 - **Menu bar** — `SupervisorServiceControl` is the live `ServiceControlling` in `PanelPorts.live`:
   "Restart services" = `stopAll` + `startAll`; "Stop services" = `stopAll`; Settings →
   "Uninstall…" = `uninstall(keepingData:)` → the `Uninstaller` (§8).
@@ -269,8 +301,8 @@ starts, so a crash mid-way resumes without a second sweep or a second unregister
 
 ## 9. Logs
 
-- Children: `~/Library/Logs/<bundle id>/{core,worker,scheduler}.log`, 0600, rotated at 5 MB,
-  five generations kept (`RotatingLogFile`). Caddy logs JSON at `WARN`; Laravel's own channels
+- Children: `~/Library/Logs/<bundle id>/{core,worker,scheduler}.log`, plus `migrate.log` for the
+  §2 step 6 one-shot, 0600, rotated at 5 MB, five generations kept (`RotatingLogFile`). Caddy logs JSON at `WARN`; Laravel's own channels
   carry the ADR-003 Redactor.
 - Supervisor: unified log, subsystem `<prefix>.supervisor`, categories `boot`, `services`,
   `secrets-broker`, `control`. Every interpolated value is `.private` (T-39); only literals and
@@ -290,6 +322,15 @@ starts, so a crash mid-way resumes without a second sweep or a second unregister
    Developer-ID helper (ADR-003 R5).
 6. The broker's code-signature peer check against the signed FrankenPHP (T-36) — in CI only the
    uid, pid-tree and "no requirement → reject" conditions are provable.
+7. **The real §2 step 6**: a real FrankenPHP running the real `artisan migrate --force` against the
+   real SQLite file — CI drives a shell-script `frankenphp`, so what the tests prove is the
+   Supervisor's ordering, environment, argv, fail-closed path and idempotent re-run, never that
+   `migrate` itself succeeds. Measure the wall-clock cost twice, because it sits on the critical
+   path to `HEALTH_CHECK`/`READY`: a **cold first boot** (49 migrations pending, estimate 0.4–1.0 s
+   = framework boot plus one commit per migration) and a **later boot** (zero pending, estimate
+   0.2–0.4 s = framework boot plus one query). Record the measured numbers here; if the cold number
+   is far above the estimate, the installer's progress copy for `BOOT_SERVICES` needs to say the
+   database is being prepared.
 
 ## 11. Known limits
 

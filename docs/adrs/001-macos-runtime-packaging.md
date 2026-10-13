@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Proposed — awaiting DRI (Andreas) sign-off and the Sprint 1 clean-Mac prototype (S1-06) |
 | **Date** | 2026-10-10 |
-| **Amended** | 2026-10-11 (A24, delegated to ENG): **D3**'s container only — the Supervisor is a helper application bundle at `Contents/Helpers/LaravelExecutiveAISupervisor.app` with an embedded Developer ID provisioning profile, because a bare Mach-O carrying `keychain-access-groups` is SIGKILLed. Process model unchanged. |
+| **Amended** | 2026-10-11 (A24, delegated to ENG): **D3**'s container only — the Supervisor is a helper application bundle at `Contents/Helpers/LaravelExecutiveAISupervisor.app` with an embedded Developer ID provisioning profile, because a bare Mach-O carrying `keychain-access-groups` is SIGKILLed. Process model unchanged. · 2026-10-13 (#124, ENG): **D3** twice more, both found on hardware — `SMAppService.register()` moves from the installer's `BOOT_SERVICES` state to the end of `INSTALL_CORE`, because every state after it needs a core and only the Supervisor can make one; and a **one-shot `migrate --force`** precedes the three children, because nothing in the product ran migrations at all. Process model, child set and restart policy unchanged. |
 | **Deciders** | A (macOS/Swift) DRI, B (Laravel platform) DRI; reviewer H (Security/privacy); Owner Andreas for every licensing conclusion (OPEN-QUESTIONS §15.2 is `ENG+ANDREAS`) |
 | **Closes** | Blueprint §15 item 2 in full; §15 item 1 inputs (macOS floor, Intel yes/no) for S0-22; OPEN-QUESTIONS §15.1, §15.2, A5 (reading), A12 (dependency recorded, not resolved) |
 
@@ -141,13 +141,43 @@ Exactly one launchd job is registered, and it is a **LaunchAgent**, not a daemon
   requires (`keychain-access-groups`, `com.apple.application-identifier`), authorised by the
   Developer ID profile embedded at
   `Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/embedded.provisionprofile`.
-- Registered with `SMAppService.agent(plistName:)` → `register()` from the installer's
-  `BOOT_SERVICES` state; status read via `SMAppService.status`; `openSystemSettingsLoginItems()`
-  offered if status is `.requiresApproval`.
+- Registered with `SMAppService.agent(plistName:)` → `register()` from the **end of the
+  installer's `INSTALL_CORE` state** (amended 2026-10-13, see below); status read via
+  `SMAppService.status`; `openSystemSettingsLoginItems()` offered if status is `.requiresApproval`.
+
+> **Amended 2026-10-13 (#124): `register()` moves from `BOOT_SERVICES` to the end of
+> `INSTALL_CORE`.** Evidence: the signed build `6265ab8` was installed on the owner's Mac on
+> 2026-10-13 and stopped on the owner screen with *"pairing failed: the Supervisor did not
+> answer"*. Measured on that machine: the runtime was installed and activated, the checkpoint read
+> `last_completed_state: INSTALL_CORE`, **no `frankenphp` process was running**, and
+> `se.stafe.executive-ai.supervisor` was **absent from `launchctl print gui/$UID`** although the
+> helper bundle and its plist were both present in the installed app. Nothing had registered it,
+> because `BOOT_SERVICES` is two states *after* `CREATE_OWNER` in blueprint §12.1.
+>
+> Why this bullet was the thing to change, rather than the state sequence: the core cannot exist
+> before the Supervisor does. The Supervisor is the only Keychain writer (ADR-003 D2), it mints
+> `APP_KEY` and `K` on its first boot, and the core reads `APP_KEY` from its broker socket at boot
+> and **refuses to boot without it** (`App\Security\Secrets\SecretsServiceProvider`; D4 — there is
+> no `.env`). So a "transient core started by the installer" and a "one-shot `artisan`
+> invocation" are both impossible, and `SMAppService.register()` is already both "start it now"
+> and "bootstrap it at every login" — there is nothing left for a later state to make persistent.
+> `register()`'s only prerequisites are an activated runtime and the recorded port, which is
+> exactly what `INSTALL_CORE` has just produced; [services.md](../architecture/services.md) §2
+> step 2 already anticipated being started mid-install ("launchd retries every 10 s, which is the
+> right cadence for *the installer has not finished yet*"). Blueprint §12.1's nine states and
+> §12.3's six screens are **unchanged**; what remains in `BOOT_SERVICES` is the half that
+> genuinely depends on `SELECT_AI` — handing the API key to the one Keychain writer over XPC.
+>
+> A `.requiresApproval` answer now surfaces during `INSTALL_CORE` (screen 3) instead of after
+> screen 5, which is also where it belongs: the click is about the background service the install
+> has just set up. The retry path re-enters `INSTALL_CORE` and skips the reinstall, because the
+> runtime is already activated.
 
 The Supervisor, not launchd, owns the PHP processes. On start it (1) verifies the active runtime
-directory's checksums and code signature against `runtime.json` (fail closed), (2) spawns three
-children from `runtime/<version>/`, each on a private process group, (3) probes
+directory's checksums and code signature against `runtime.json` (fail closed), (1b) runs
+`artisan migrate --force` to completion and stops if it does not exit 0 (see the amendment below
+the table), (2) spawns three children from `runtime/<version>/`, each on a private process group,
+(3) probes
 `GET http://127.0.0.1:<port>/health/live` every 5 s and `/health/ready` every 30 s, (4) restarts a
 failed child with exponential backoff `1, 2, 4, 8, 16, 30 s` capped at **5 restarts per 10 minutes**,
 after which it marks the service `degraded`, surfaces the failure in the menu bar and stops retrying
@@ -158,6 +188,24 @@ until the user acts, and (5) hands secrets to PHP on boot (mechanism: ADR-003).
 | core HTTP | `frankenphp run --config Caddyfile` | `bind 127.0.0.1`, fixed port from preflight, no TLS on loopback, classic (non-worker) mode in v1 |
 | queue worker | `frankenphp php-cli artisan queue:work database --tries=3 --max-time=3600` | ADR-002 database queue |
 | scheduler | `frankenphp php-cli artisan schedule:work` | one process; §9 power rules apply |
+
+> **Amended 2026-10-13 (ENG).** A **one-shot precedes the three above**:
+> `frankenphp php-cli app/artisan migrate --force`, run to completion and required to exit 0
+> before anything in the table is spawned. Evidence that it was missing: nothing in the product
+> ran migrations at all — `grep -rn "migrate" app bootstrap config` found only comments, and
+> `ServiceSpec.coreServices` spawned exactly the three children above — while
+> [health-contract.md](../architecture/health-contract.md) §2 makes `database_migrations` ("zero
+> pending") a hard dependency of `ready` and of `auth_login`, `brief_placeholder`, `queue_worker`
+> and `scheduler_selftest`, so on a real install `ready` could never become true. Two tests
+> (`tests/Feature/Install/ReinstallPreservesDataTest.php`,
+> `tests/E2E/VerticalSliceTest.php`) already documented the step as the Supervisor's job.
+> The one-shot is not supervised, not probed and not in `services()`; it fails closed exactly like
+> the verification step (nothing spawned, all three `failed` with the reason, XPC still served).
+> `migrate --force` is forward-only and idempotent, and is the **only** database command the
+> Supervisor runs: `migrate:fresh`, `migrate:refresh`, `migrate:rollback` and `db:wipe` are
+> forbidden, because the data directory is preserved across reinstalls by design
+> ([installer.md](../architecture/installer.md) §3, threat model T-72). Nothing else in D3
+> changes. Details and the boot order: [services.md](../architecture/services.md) §2.
 
 Why one agent plus a supervisor instead of three launchd jobs: `BundleProgram` must be
 app-bundle-relative, but §12.1 puts the runtime in Application Support; health probing against

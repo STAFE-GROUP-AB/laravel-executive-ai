@@ -102,7 +102,17 @@ struct HealthPollingPolicy: Sendable {
     var maxAttempts: Int
     var interval: Duration
 
-    init(maxAttempts: Int = 60, interval: Duration = .seconds(2)) {
+    /// 180 s, from the arithmetic of what `ready` actually waits for (#124).
+    ///
+    /// Three of the checks are produced by the scheduler, which fires every minute:
+    /// `auth_login`'s self-test, `scheduler_selftest` itself and — since #124 — the placeholder
+    /// brief. The owner exists at `CREATE_OWNER`, so the worst case is that the tick which
+    /// satisfies all three lands just under a minute later, and `withoutOverlapping` can push it
+    /// to the following minute. 120 s (the old 60 × 2 s) left no room for that second tick; 180 s
+    /// leaves one, and still sits inside blueprint §12.2's `p95 < 300 s` for the whole install,
+    /// because the services have been running since `INSTALL_CORE` rather than since
+    /// `BOOT_SERVICES`.
+    init(maxAttempts: Int = 90, interval: Duration = .seconds(2)) {
         self.maxAttempts = maxAttempts
         self.interval = interval
     }
@@ -245,9 +255,15 @@ final class InstallStateMachine {
                 try await rollbackPartialRuntime()
             }
 
+            // The completed states are not re-entered, but their volatile postconditions must
+            // still hold when the resume state runs.
+            try await reestablishVolatileEffects(before: checkpoint.resumeState)
+
+            // Re-establishing can un-complete a state whose effect cannot be restored, which
+            // moves the target back to that state's screen — so the target is read afterwards.
             let target = checkpoint.resumeState
-            // Position silently on the predecessor: the completed states are not re-entered,
-            // and the transition table still validates the move into the resume state.
+            // Position silently on the predecessor: the transition table still validates the
+            // move into the resume state.
             state = InstallState.coreSequence[target.coreIndex! - 1]
             try await advance(from: target)
         }
@@ -513,7 +529,32 @@ final class InstallStateMachine {
         try verifier.verify(runtimeDirectory: directory)
     }
 
+    /// INSTALL_CORE has two steps: install the runtime, then start the services that run it.
+    ///
+    /// The second step is here and not in BOOT_SERVICES because of what comes between them.
+    /// CREATE_OWNER needs a core; a core needs the Supervisor, which is the only Keychain writer
+    /// (ADR-003 D2) and the only source of APP_KEY and `K` (services.md §2, ADR-001 D4: there is
+    /// no `.env`); and the Supervisor needs exactly what INSTALL_CORE has just produced — an
+    /// activated runtime and the port PREFLIGHT recorded. So this is the first moment it *can*
+    /// start and the last moment it *may* (#124). BOOT_SERVICES keeps the half that genuinely
+    /// depends on SELECT_AI. The blueprint §12.1 state sequence is unchanged.
     private func runInstallCore() async throws {
+        let runtime = try await installRuntimeIfNeeded()
+        try await startSupervisor(for: runtime)
+
+        coreCheckpoint = .completed
+        complete(.installCore)
+    }
+
+    /// Returns the activated runtime, installing it unless this run already did. A failure in the
+    /// service-start step leaves INSTALL_CORE incomplete with the runtime already activated, so a
+    /// retry or a resume must not copy and re-hash 180 MB again — nor roll it back, since there
+    /// is nothing partial about it.
+    private func installRuntimeIfNeeded() async throws -> InstalledRuntime {
+        if installedRuntime != nil || checkpoint.runtime?.activated == true {
+            return try resolvedRuntime()
+        }
+
         // Verify immediately before executing anything if this process has not done so yet
         // (resume, or retry after a rollback). Never install an unverified package.
         if verifiedPackage == nil {
@@ -544,14 +585,127 @@ final class InstallStateMachine {
             installedRuntime = runtime
             checkpoint.runtime = InstallCheckpoint.RuntimeProgress(version: runtime.version, stagingDirectoryName: nil, activated: true)
             runtimeHandle = nil
-            coreCheckpoint = .completed
-            complete(.installCore)
+            // Persisted now, before the services are started: if that step fails, a resume must
+            // see an activated runtime and skip straight back to it.
+            persistCheckpoint()
+
+            return runtime
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as RuntimeInstallError {
             throw InstallFailed(failure: .installCore(error.userFacingReason))
         } catch {
             throw InstallFailed(failure: .installCore("The runtime could not be installed."))
+        }
+    }
+
+    /// A resume skips every state the checkpoint says is complete, which is right for their
+    /// durable effects and wrong for their volatile ones (`InstallState.volatileEffects`). This
+    /// re-establishes each one, in sequence order, before the resume state runs — so that
+    /// "entering state N" means the same thing on a resumed run as on a fresh one.
+    ///
+    /// Idempotent by construction: every re-establish is the same call the fresh run makes, and
+    /// each of those already short-circuits when the effect is in place.
+    private func reestablishVolatileEffects(before target: InstallState) async throws {
+        guard let targetIndex = target.coreIndex else {
+            return
+        }
+
+        for skipped in InstallState.coreSequence.prefix(targetIndex) {
+            for effect in skipped.volatileEffects {
+                try Task.checkCancellation()
+                try await reestablish(effect, of: skipped)
+            }
+        }
+    }
+
+    private func reestablish(_ effect: InstallVolatileEffect, of skipped: InstallState) async throws {
+        switch effect {
+        case .supervisionRunning:
+            // The runtime on disk survived the relaunch; the Supervisor and its children did not.
+            try await startSupervisor(for: try resolvedRuntime())
+        case .pendingProviderKey:
+            // The key was held in memory only (ADR-003 D2) and this is a different process, so it
+            // is gone. If BOOT_SERVICES never completed it was never handed over either, and
+            // finishing the install with no provider configured would be a silent downgrade — so
+            // the state is un-completed and its screen is shown again.
+            guard case .ownApiKey = checkpoint.aiSelection,
+                  let last = checkpoint.lastCompletedState, let index = last.coreIndex,
+                  index < InstallState.bootServices.coreIndex!
+            else {
+                return
+            }
+
+            uncomplete(skipped)
+        }
+    }
+
+    /// Marks a state as not finished after all, so the resume target moves back to it. The
+    /// counterpart of `complete(_:)`, and the only honest answer when a postcondition cannot be
+    /// re-established without the person.
+    private func uncomplete(_ state: InstallState) {
+        guard let index = state.coreIndex, index > 0 else {
+            return
+        }
+
+        if state == .selectAI {
+            checkpoint.aiSelection = nil
+        }
+
+        if let last = checkpoint.lastCompletedState, let lastIndex = last.coreIndex, lastIndex >= index {
+            checkpoint.lastCompletedState = InstallState.coreSequence[index - 1]
+        }
+
+        persistCheckpoint()
+    }
+
+    /// The activated runtime, from this process's memory or from the checkpoint.
+    private func resolvedRuntime() throws -> InstalledRuntime {
+        if let installedRuntime {
+            return installedRuntime
+        }
+
+        guard let progress = checkpoint.runtime, progress.activated else {
+            throw InstallFailed(failure: .bootServices("No installed runtime was found."))
+        }
+
+        let runtime = InstalledRuntime(version: progress.version, directory: dependencies.paths.runtimeDirectory(version: progress.version))
+        installedRuntime = runtime
+
+        return runtime
+    }
+
+    /// Registers the Supervisor LaunchAgent and waits for it. Reported as a `bootServices`
+    /// failure, not an `installCore` one: the runtime is installed and sound, so "remove the
+    /// partial install" is the wrong offer — the right ones are Try again and Cancel.
+    private func startSupervisor(for runtime: InstalledRuntime) async throws {
+        guard let port = checkpoint.preflight?.port else {
+            throw InstallFailed(failure: .bootServices("Preflight did not record a free port; run the checks again."))
+        }
+
+        coreCheckpoint = .startingServices
+
+        let outcome: BootServicesOutcome
+
+        do {
+            outcome = try await dependencies.serviceBooter.startSupervisor(runtime: runtime, port: port)
+        } catch let error as ServiceBootError {
+            throw InstallFailed(failure: .bootServices(Self.describe(error)))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw InstallFailed(failure: .bootServices("The services could not be started."))
+        }
+
+        switch outcome {
+        case .started:
+            return
+        case .requiresLoginItemApproval:
+            // A sheet the person must act on: a click in System Settings, never a password.
+            // Retry re-enters INSTALL_CORE, which now skips the install and comes straight back
+            // here, because the runtime is already activated.
+            eventLog.humanInteractionStart()
+            throw InstallFailed(failure: .loginItemApprovalRequired)
         }
     }
 
@@ -583,16 +737,7 @@ final class InstallStateMachine {
             throw InstallFailed(failure: .bootServices("Preflight did not record a free port; run the checks again."))
         }
 
-        let runtime: InstalledRuntime
-
-        if let installedRuntime {
-            runtime = installedRuntime
-        } else if let progress = checkpoint.runtime, progress.activated {
-            runtime = InstalledRuntime(version: progress.version, directory: dependencies.paths.runtimeDirectory(version: progress.version))
-        } else {
-            throw InstallFailed(failure: .bootServices("No installed runtime was found."))
-        }
-
+        let runtime = try resolvedRuntime()
         let outcome: BootServicesOutcome
 
         do {

@@ -6,7 +6,13 @@
 //      verification failure is still observable and recoverable from the GUI;
 //   4. verify the runtime directory (checksums + signature) — fail closed: nothing is spawned,
 //      every service shows `failed` with the reason, "Start services" re-verifies;
-//   5. spawn the three children and run the health monitor.
+//   5. run `artisan migrate --force` as a one-shot and wait for it — forward-only, idempotent,
+//      and a hard precondition for the health contract's `database_migrations`; fails closed the
+//      same way as step 4;
+//   6. spawn the three children and run the health monitor.
+//
+// Steps 4 and 5 together are the `beforeStart` the control surface re-runs for "Start services",
+// so a repair followed by a retry from the GUI goes down exactly the same path as a boot.
 //
 // `SupervisorRuntime` is the composition root `main.swift` drives; everything it composes is
 // behind a protocol with a test double, and the pieces are tested individually.
@@ -36,6 +42,7 @@ enum SupervisorBootError: Error, Equatable, Sendable {
     case noRecordedPort
     case secretsUnavailable(String)
     case verificationFailed(String)
+    case migrationsFailed(String)
     case brokerFailed(String)
 
     /// Short, sanitised, fit for the menu bar (no path, no user name).
@@ -45,6 +52,7 @@ enum SupervisorBootError: Error, Equatable, Sendable {
         case .noRecordedPort: return "The installer did not record a loopback port; run the installer again."
         case .secretsUnavailable(let reason): return "The Keychain is not available to the Supervisor (\(reason))."
         case .verificationFailed(let reason): return "The installed runtime failed verification (\(reason))."
+        case .migrationsFailed(let reason): return "The database migrations did not finish (\(reason)); no service was started."
         case .brokerFailed(let reason): return "The secrets broker could not start (\(reason))."
         }
     }
@@ -169,6 +177,35 @@ actor SupervisorRuntime {
             }
         }
 
+        // The one-shot that has to finish before anything is supervised. Nothing else in the
+        // product applies migrations, and `database_migrations` ("zero pending") is a hard
+        // dependency of every other `ready` check (health-contract.md §2), so a fresh install
+        // could otherwise never become ready. `migrate --force` is forward-only and idempotent:
+        // on a database that is already current it applies nothing and exits 0, which is why
+        // running it on every boot — and on every "Start services" — is safe.
+        let migrations = OneShotSpec.migrations(runtime: runtime, paths: paths, port: port, secretsSocket: socket)
+        let migrationLog: any LogSink = RotatingLogFile(url: logs.appending(path: "\(migrations.logName).log"))
+        let migrate: @Sendable () async throws -> Void = {
+            let exit: ServiceExit
+            SupervisorLog.boot.notice("applying database migrations")
+
+            do {
+                exit = try await ChildProcess(spec: migrations, log: migrationLog).run()
+            } catch {
+                throw SupervisorBootError.migrationsFailed("could not be started")
+            }
+
+            guard exit.reason == .exited(status: 0) else {
+                // `migrate.log` has the artisan output; the reason here is status-only.
+                throw SupervisorBootError.migrationsFailed(exit.description)
+            }
+        }
+
+        let prepare: @Sendable () async throws -> Void = {
+            try await verify()
+            try await migrate()
+        }
+
         let control = SupervisorControlService(
             secrets: secrets,
             key: key,
@@ -177,7 +214,7 @@ actor SupervisorRuntime {
             authenticator: configuration.authenticator,
             now: configuration.now,
             random: configuration.random,
-            beforeStart: verify
+            beforeStart: prepare
         )
         self.control = control
 
@@ -204,19 +241,27 @@ actor SupervisorRuntime {
         }
 
         do {
-            try await verify()
+            try await prepare()
         } catch let error as SupervisorBootError {
-            log.error("boot verification failed: \(error.userFacingReason, privacy: .public)")
+            log.error("boot preparation failed: \(error.userFacingReason, privacy: .public)")
             await supervisor.markAllFailed(reason: error.userFacingReason)
             return
         }
 
-        log.notice("runtime verified; starting services on port \(port, privacy: .public)")
+        log.notice("runtime verified and migrations applied; starting services on port \(port, privacy: .public)")
         await supervisor.startAll()
     }
 
     func statuses() async -> [ServiceStatus] {
         await supervisor?.statuses() ?? []
+    }
+
+    /// The live control surface — what the GUI reaches over XPC (ipc-contract §7). Exposed so the
+    /// boot tests can drive "Start services" exactly as the menu bar does, including the re-run of
+    /// steps 5–6; the XPC transport itself is covered by `SupervisorControlServiceTests` and
+    /// `SupervisorControlXPC`.
+    func controlSurface() -> SupervisorControlService? {
+        control
     }
 
     func shutdown() async {

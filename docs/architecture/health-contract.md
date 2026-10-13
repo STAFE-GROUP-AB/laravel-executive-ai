@@ -95,6 +95,39 @@ they live in `config/health.php` and the schema does not fix them.
 `menubar_integration` and `http` depend on nothing. When a dependency fails the dependants report
 `skip` with `detail` naming the failed dependency.
 
+### 2.1 Who produces each of these on a fresh install (added 2026-10-13, #124)
+
+A check with no producer is a `ready` that can never be true. Three of the seven had that problem
+and it was found on hardware, not in CI, because every test seeded what it needed:
+
+| Check | Produced by | First `ok` after the services start |
+|---|---|---|
+| `http` | the request itself | immediately |
+| `database_migrations` | the **Supervisor's one-shot `migrate --force`**, before it spawns any child (ADR-001 D3 as amended, [services.md](services.md) §2). *Nothing ran migrations at all before #124.* | immediately |
+| `auth_login` | `CREATE_OWNER` for the owner row; the scheduler's `health:selftest` for the self-test | ≤ 60 s after the owner exists |
+| `brief_placeholder` | the scheduler's **`lea:brief:placeholder`** (`routes/console.php`). *The command existed and was idempotent, but nothing called it outside tests and documentation before #124.* | the same tick as `auth_login` |
+| `menubar_integration` | the GUI's heartbeat. During the install that is **`IpcHealthProbe`**, which sends one per 20 s alongside each readiness poll; after `READY` the panel's refresh loop takes over. *Before #124 the only sender was `PanelModel.refresh()`, which does not run in the first-run installer process, so this check could not pass during an install at all.* | the first readiness poll |
+| `queue_worker` | the `queue:work` child, processing the scheduler's `QueueSelftestJob` | ≤ 60 s |
+| `scheduler_selftest` | the `schedule:work` child | ≤ 60 s |
+
+Neither fix weakened a gate. The blueprint §12.2 requires a local brief placeholder for core-ready,
+so the missing half was the producer; and "menu integration" means *the GUI app is talking to the
+core*, which the installer — the same app, holding the same single `menubar` session — can say for
+itself and nothing else can say for it.
+
+Consequence for the installer's budget: three of these wait for a scheduler tick, so
+`HealthPollingPolicy` allows 180 s (90 × 2 s), one tick of slack over the worst case
+([installer.md](installer.md) §6).
+
+**Who makes `database_migrations` pass.** The **Supervisor**, before any of its three children
+exists: `frankenphp php-cli app/artisan migrate --force` is run as a one-shot on every boot and
+must exit 0, otherwise nothing is spawned and all three services report `failed`
+([services.md](services.md) §2 step 6, ADR-001 D3 as amended). This endpoint only *reads* the
+result — it never applies a migration itself, and neither does any other PHP path (§5: the
+endpoint "never … runs migrations"). So when `database_migrations` fails on a running install, the fix is in
+the Supervisor's `migrate.log`, not in the health code; and because the four dependants `skip`
+rather than `fail`, restarting the worker or the scheduler cannot clear it.
+
 ## 3. `ai_ready` and `ai_state`
 
 ```text

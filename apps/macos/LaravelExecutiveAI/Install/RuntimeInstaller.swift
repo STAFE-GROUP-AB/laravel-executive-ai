@@ -25,6 +25,10 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
     case verifyingInstalledFiles
     case activatingRuntime
     case preparingDataDirectory
+    /// Not the installer's own work: INSTALL_CORE's last step registers the Supervisor
+    /// LaunchAgent, which mints the keys, migrates the database and spawns the core, so that the
+    /// next screen has something to create the owner in (#124, services.md §2).
+    case startingServices
     case completed
 
     var label: String {
@@ -34,6 +38,7 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
         case .verifyingInstalledFiles: return "Verifying installed files"
         case .activatingRuntime: return "Activating runtime"
         case .preparingDataDirectory: return "Preparing data folder"
+        case .startingServices: return "Starting services"
         case .completed: return "Runtime installed"
         }
     }
@@ -47,7 +52,8 @@ enum InstallCoreCheckpoint: Equatable, Sendable {
             return 0.05 + 0.80 * min(max(copied, 0), 1)
         case .verifyingInstalledFiles: return 0.88
         case .activatingRuntime: return 0.94
-        case .preparingDataDirectory: return 0.97
+        case .preparingDataDirectory: return 0.96
+        case .startingServices: return 0.98
         case .completed: return 1
         }
     }

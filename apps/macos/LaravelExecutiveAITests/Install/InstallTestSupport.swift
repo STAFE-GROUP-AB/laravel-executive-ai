@@ -71,6 +71,12 @@ final class HangingHealthProbe: HealthProbe {
 }
 
 final class HangingServiceBooter: ServiceBooting {
+    /// INSTALL_CORE's half returns at once: the tests that use this park the machine in
+    /// BOOT_SERVICES, which is the half below.
+    func startSupervisor(runtime: InstalledRuntime, port: Int) async throws -> BootServicesOutcome {
+        .started
+    }
+
     func boot(runtime: InstalledRuntime, port: Int) async throws -> BootServicesOutcome {
         try await hangUntilCancelled()
         return .started

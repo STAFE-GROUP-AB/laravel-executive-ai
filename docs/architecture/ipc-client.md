@@ -187,14 +187,31 @@ failed attempt; a signed body that is not a health document is `invalidResponse`
 drives `InstallStateMachine` from Welcome to `READY` through this probe against the stubbed core, so
 `HEALTH_CHECK → READY` is now reachable on a real install (installer.md §6, S1-08 row).
 
+### 6.0 The installer's heartbeat (#124)
+
+`readiness()` sends `POST /ipc/v1/heartbeat` before it reads `/health/ready`, at most once per
+20 s. `ready` requires `menubar_integration` — an authenticated `menubar` heartbeat no older than
+120 s (health contract §2) — and the only sender used to be `PanelModel.refresh()`, which does not
+run in the first-run installer process, so on a real first install that check could never pass and
+`HEALTH_CHECK` could only time out after its whole budget.
+
+This is not a weaker gate. "Menu integration" means the GUI app is talking to the core, and during
+an install the installer **is** the GUI app, holding this process's one `menubar` session
+(`IpcClientFactory.liveSession`). One per 20 s is three times more often than the 120 s threshold
+needs and well inside §9's budget of 6/min. The send is best-effort: a failed heartbeat never turns
+a readiness poll into a probe error, because the readiness answer already reports the check as
+failing if none arrive.
+
 ### 6.1 The installer's owner creation (§6.9, #121)
 
 `IpcOwnerCreator` is the live `OwnerCreating` in `InstallDependencies.live`, replacing the
 `UnavailableOwnerCreator` stand-in that threw unconditionally and stopped every real install at
 screen 4. It reads the port from the checkpoint's `preflight.port` **when the call runs**, builds a
-client on the same one `menubar` session the panel and the probe use, and sends
-`POST /ipc/v1/owner` with screen 4's name and address plus the Mac's zone (`TimeZone.current`) and
-the installer's language — no workspace name, because the screen does not ask for one, and no
+client on the same one `menubar` session the panel and the probe use, **waits for the core's
+unsigned `/health/live`** (up to 20 s: `INSTALL_CORE` registered the Supervisor moments earlier
+and it still has to mint the keys, migrate and spawn, so a core that is merely slow must not be
+reported as a pairing failure — #124), and sends `POST /ipc/v1/owner` with screen 4's name and
+address plus the Mac's zone (`TimeZone.current`) and the installer's language — no workspace name, because the screen does not ask for one, and no
 credential, because there is none: sign-in is a one-time code to that address.
 
 The answer becomes one of three things:
