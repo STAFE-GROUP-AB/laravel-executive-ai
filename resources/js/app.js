@@ -8,7 +8,8 @@
  * Registers the service worker built from resources/js/service-worker.js to
  * public/sw.js. The worker caches the app shell only — see
  * docs/architecture/pwa.md for the allow/deny lists. Secure contexts only:
- * loopback counts as secure, so the Mac app's WKWebView and 127.0.0.1 work.
+ * loopback counts as secure, and the pages are served on `localhost` (ADR-006
+ * D3), which is also the only loopback host the passkeys above can run on.
  */
 import './passkeys.js';
 

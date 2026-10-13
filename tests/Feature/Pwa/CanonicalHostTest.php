@@ -58,9 +58,9 @@ it('keeps the method when the request is not a navigation', function (): void {
  * The boundary the change must not cross. `/ipc/*` and `/health/*` are
  * registered in the `api` group, which the redirect is not part of; the
  * middleware also refuses those paths itself, so registering it more widely
- * cannot break the Mac app. An unauthenticated IPC call answers the
- * contract's own 401 envelope, which is proof the request was routed rather
- * than bounced.
+ * cannot break the Mac app. A call that carries none of the contract's
+ * headers answers with the contract's own refusal, which is the proof that
+ * the request was routed rather than bounced.
  */
 it('never redirects the IPC channel on 127.0.0.1', function (string $method, string $path): void {
     $status = call($method, "http://127.0.0.1:8787{$path}")->getStatusCode();

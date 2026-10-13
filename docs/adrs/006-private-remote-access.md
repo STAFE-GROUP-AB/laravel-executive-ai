@@ -218,11 +218,14 @@ Harder:
 - Renaming the Mac changes the origin and orphans the installed iPhone PWA and its push subscription; the app warns about this on the confirmation screen and on rename detection (`DNSName` changed since enable).
 - The remote client always needs the Tailscale app signed in to the same tailnet; sharing the PWA with a colleague means sharing the node or inviting them to the tailnet — a tailnet-admin task, not an app task.
 - Session `secure` becomes per-request computed state; tests must cover both origins.
+- The loopback mode has two host names with different jobs (D3): `localhost` for browsers, `127.0.0.1` for IPC and the health probes. Anything new on loopback has to say which it is, and a browser-facing URL built from the IPC origin is a defect even though it loads — the passkey it silently removes is the only symptom.
 - `push_subscriptions` is a new table and a new Keychain identity (ADR-003 inventory must list `se.stafe.executive-ai.webpush`).
 
 **Forbidden in code review from now on:**
 - Any argv, config or string containing `funnel` outside the detection code and its tests; any invocation of `tailscale up`, `login`, `set`, `cert`, or `funnel`.
 - Binding the Laravel listener to anything but `127.0.0.1`/`::1`.
+- Handing a browser a loopback URL built on `127.0.0.1` (use `CoreClient.browserOrigin` / `PwaOrigin` in Swift, a relative URL or `url()` in Laravel), or naming `localhost` anywhere in the IPC client — the two are different hosts on purpose (D3), and `IpcOriginClientTest` and `PwaOriginTests` pin both directions.
+- Redirecting, rewriting or canonicalising `/ipc/*` or `/health/*`: a 3xx there is what the Swift client treats as a hijacked port (ipc-contract §5.2). A new non-browser endpoint belongs outside the `web` group rather than on the redirect's exclusion list.
 - `trustProxies(at: '*')`, trusting `HEADER_FORWARDED`/`X_FORWARDED_PORT`/`_AWS_ELB`, `preventRequestForgery(originOnly: true)` or `allowSameSite: true`.
 - Using `Tailscale-User-*` headers for authentication or authorization.
 - Static `SESSION_SECURE_COOKIE=false` on the remote origin; `SESSION_SAME_SITE=none`.
