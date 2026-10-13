@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\CRM\Eloquent\CurrentWorkspace;
+use App\CRM\Eloquent\EloquentWorkspaceRepository;
 use App\CRM\Search\DatabaseFullTextSearch;
 use App\CRM\Search\FullTextSearch;
+use App\CRM\WorkspaceRepository;
 use App\Http\View\Composers\ShellStateComposer;
 use App\Security\Audit\AuditLog;
 use App\Security\Authorization\Otp\OtpHasher;
@@ -36,6 +39,16 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AiReadiness::class, ConfiguredProviderAiReadiness::class);
         $this->app->singleton(PendingApprovals::class, NoPendingApprovals::class);
         $this->app->singleton(FullTextSearch::class, DatabaseFullTextSearch::class);
+
+        // S2-09: the §3 read contract over the S2-01 schema. Bound so the brief
+        // generator, the agent tools and the `crm.*` MCP tools resolve the
+        // interface and never the implementation (module-contracts.md §2).
+        $this->app->bind(WorkspaceRepository::class, EloquentWorkspaceRepository::class);
+
+        // `CurrentWorkspace` reads the session's memberships, so it is bound per
+        // request (`scoped`) rather than as a process-wide singleton: a queue
+        // worker handling two jobs must not inherit the first one's actor.
+        $this->app->scoped(CurrentWorkspace::class);
 
         $this->registerAuthentication();
         $this->redactFailedJobExceptions();
@@ -76,7 +89,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(Looping::class, QueueWorkerHeartbeat::class);
 
-        View::composer(['layouts.app', 'home.*', 'briefs.*', 'settings.*'], ShellStateComposer::class);
+        View::composer(['layouts.app', 'home.*', 'briefs.*', 'settings.*', 'crm.*'], ShellStateComposer::class);
     }
 
     /**

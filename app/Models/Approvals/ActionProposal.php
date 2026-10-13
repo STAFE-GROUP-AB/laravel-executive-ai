@@ -37,6 +37,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  *
  * @property string $id
  * @property string $organization_id
+ * @property ?string $source_id
+ * @property ?string $source_uri
  * @property ProposalKind $kind
  * @property ProposalStatus $status
  * @property ?string $ai_run_id

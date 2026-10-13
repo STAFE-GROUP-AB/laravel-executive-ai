@@ -64,7 +64,31 @@ function pwaPages(): array
         'briefs' => '/briefs',
         'brief' => route('briefs.show', $brief, false),
         'settings.ai' => route('settings.ai', [], false),
+        // S2-09: the four §1.2 CRM screens. They are in the sweep for the same
+        // reason as the rest — the phrase may exist on exactly one code path —
+        // and for one of their own: §4.2 forbids AI from blocking the CRM, so a
+        // CRM page that started saying "AI ready" would be the first sign that
+        // the assistant's state had leaked into a surface that does not need it.
+        'crm.customers' => route('crm.customers', [], false),
+        'crm.contacts' => route('crm.contacts', [], false),
+        'crm.projects' => route('crm.projects', [], false),
+        'crm.tasks' => route('crm.tasks', [], false),
     ];
+}
+
+/**
+ * Pages that render the AI state **badge** in the chrome but not the banner.
+ * The badge is a status indicator and belongs on every page; the banner is a
+ * call to action and belongs where acting on it makes sense. `/settings/ai` is
+ * the banner's own destination, a brief is a document, and the CRM works
+ * whether or not a provider exists (§4.2) — a banner there would read as a
+ * precondition for a screen that has none.
+ *
+ * @return list<string>
+ */
+function pagesWithoutTheBanner(): array
+{
+    return ['settings.ai', 'brief', 'briefs', 'crm.customers', 'crm.contacts', 'crm.projects', 'crm.tasks'];
 }
 
 beforeEach(function (): void {
@@ -92,7 +116,7 @@ it('never renders the AI ready phrase on any page while ai_ready is false', func
             ->and($html)->toContain(AiStateCopy::label($state))
             ->and(PwaFixtures::aiOnPhoneClaims($html))->toBe([]);
 
-        if ($label !== 'settings.ai' && $label !== 'brief' && $label !== 'briefs') {
+        if (! in_array($label, pagesWithoutTheBanner(), true)) {
             expect($html)->toContain('data-ai-state-banner="'.$state->value.'"');
         }
     }
