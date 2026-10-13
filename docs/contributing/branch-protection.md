@@ -5,9 +5,9 @@
 > conventional commits) · **Related:** `CONTRIBUTING.md`, `CODEOWNERS`,
 > `docs/operations/release-policy.md` §1.5 and §3, `.github/workflows/ci.yml`,
 > `docs/OPEN-QUESTIONS.md` A14.
-> **Status:** proposed 2026-10-10. **Nothing in this document is applied yet** — applying it is a
-> repository-admin action (§2). The configuration files are canonical:
-> `docs/contributing/rulesets/main-now.json` (apply now) and
+> **Status:** proposed 2026-10-10, **§1 applied 2026-10-13 as ruleset id 24986875** (§0) with two
+> deviations recorded in the §1.3 table. Applying it is a repository-admin action (§2). The
+> configuration files are canonical: `docs/contributing/rulesets/main-now.json` (applied) and
 > `docs/contributing/rulesets/main-target.json` (target state, once §5's decision is taken).
 
 ## 0. Current state, honestly
@@ -101,8 +101,8 @@ enforcement *Active*, target *Default branch*, then tick the settings in the tab
 | — require approval of the most recent push | off | with two accounts and one human it deadlocks when Andreas pushes a fix to a coordinator PR; revisit when a third reviewer exists |
 | — require conversation resolution | on | review comments are the review today (§6); they must be resolved, not merged over |
 | — allowed merge methods | `squash` only | the PR title is the commit header (§3) |
-| Require status checks to pass | `php`, `swift`, `secrets-scan`, `fixtures`, `commitlint` — source GitHub Actions (`integration_id` 15368) | the four `ci.yml` job names are declared stable in `ci.yml`'s header comment; `commitlint` is `.github/workflows/commitlint.yml` (§4). Names must match the `jobs.<id>.name` values exactly |
-| — require branches to be up to date (`strict`) | on | the checks must have run against `main` as it is now, not as it was when the branch was cut. Cost: with many parallel agent PRs, each PR needs *Update branch* (and a CI re-run) after every merge to `main`. If that becomes the bottleneck, enable a **merge queue** instead of turning `strict` off |
+| Require status checks to pass | `php`, `swift`, `secrets-scan`, `fixtures`, `commitlint`, **`parity`** — source GitHub Actions (`integration_id` 15368) | the `ci.yml` job names are declared stable in `ci.yml`'s header comment; `commitlint` is `.github/workflows/commitlint.yml` (§4). Names must match the `jobs.<id>.name` values exactly. `parity` was added when it was applied (2026-10-13): it is the §16 step 9 gate that must hold before any Sprint 3 workstream issue opens. `build-macos` is deliberately **not** required — it is path-filtered, so requiring it would block every PR that does not touch `apps/macos/**`. `sprint-2-exit` joins the list when S2-20 lands |
+| — require branches to be up to date (`strict`) | **off** (changed on apply, 2026-10-13) | proposed as `on`, applied as `off`. The reason is the cost line this row already predicted: with four to six agents merging in parallel, every open PR would need *Update branch* and a fifteen-minute macOS re-run after each merge, so the queue would spend more time re-running than reviewing. The checks still have to pass on the PR head, and squash-only linear history keeps `main` bisectable. A **merge queue** is the upgrade path if a PR ever merges green against a `main` that broke it |
 | — enforce on branch creation | yes (`do_not_enforce_on_create: false`) | no loophole through re-creating the branch |
 | Require signed commits | **off** | deliberately: agent commits are unsigned and there is no key custody for commit signing. The integrity guarantee the release needs comes from the **signed tag and signed manifests**, which the release policy (§3.3, §3.5) already requires and which CI verifies. Revisit when every committer has a hardware-backed signing key |
 | Require deployments / workflows / code scanning | off | nothing to require yet; `sca.yml` is scheduled, not a PR gate |
