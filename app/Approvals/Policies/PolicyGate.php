@@ -57,7 +57,7 @@ use Carbon\CarbonImmutable;
  * touch this row" with the dispatching user's memberships; this answers "may this
  * action be performed at all, and does it need a human". Both must pass, and
  * neither is a substitute for the other
- * ([authorization.md §9](../../docs/architecture/authorization.md)).
+ * (`docs/architecture/authorization.md` §9, and `docs/architecture/policy-gate.md` for this class).
  *
  * It is not the approvals engine either. The gate **reads** `action_approvals`; it
  * never writes one and never consumes a nonce (`ApprovalLedger` has no write

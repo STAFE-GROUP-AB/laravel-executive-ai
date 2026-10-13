@@ -118,6 +118,14 @@ appear in the payload the approver read. A recipient that arrived after the free
 or from a second model turn — is therefore not in the payload and is refused. That is
 `recipient_added` and `from_address_changed` from the §16.7 effect vocabulary, as a check.
 
+Comparison is per kind, and the asymmetry is deliberate: an **email** destination is folded to lower
+case, because a domain is case-insensitive and a recipient differing only in case is the same
+recipient the approver read; a **bundle id** is compared unfolded, because `com.apple.Safari` is the
+identifier Apple publishes and the ADR-005 D1.5 allowlist is written that way. `PolicyGateFailsClosedTest`
+asserts the positive half of this as well as the refusals — a check that refuses everything proves
+nothing, and folding one side of an exact-match comparison would have refused the one app the product
+permits while looking like security.
+
 Whether a socket may be opened to a host *at all* — DNS rebinding, link-local ranges, the
 `LOCAL_ONLY` tier, ADR-005 D4.9's approved host set — is `App\Security\Egress` (S2-14) and runs as
 well as this, not instead of it. The gate deliberately ships **no** `DestinationKind` for HTTP hosts:

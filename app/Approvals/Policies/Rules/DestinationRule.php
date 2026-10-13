@@ -145,8 +145,18 @@ final readonly class DestinationRule
         return array_values(array_unique($found));
     }
 
+    /**
+     * Comparison form, per kind. An email domain is case-insensitive, so folding
+     * case there is what makes `Zoe@Kund.Example` and `zoe@kund.example` the same
+     * destination rather than one the containment check would miss. A bundle id is
+     * **not** folded: `com.apple.Safari` is the identifier Apple publishes, the
+     * allowlist is written that way, and folding one side of an exact-match check
+     * would have refused the one app ADR-005 D1.5 permits.
+     */
     private function normalize(string $value): string
     {
-        return mb_strtolower(trim($value));
+        $value = trim($value);
+
+        return $this->kind === DestinationKind::EmailRecipients ? mb_strtolower($value) : $value;
     }
 }

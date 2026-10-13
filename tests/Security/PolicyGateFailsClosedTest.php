@@ -355,6 +355,58 @@ it('refuses input 5: a destination the frozen payload never named', function ():
     );
 })->group('security');
 
+it('lets through the destination each rule actually permits, so the refusals above are not refusals of everything', function (): void {
+    [, , $context, $accountId] = closedWorld();
+
+    // A check that refuses every input proves nothing. These two are the positive
+    // half of input 5, and they are what keeps a comparison bug from looking like
+    // security: the ADR-005 D1.5 allowlist entry is compared **unfolded** (an
+    // exact-match check with one side lowercased would have refused the one app the
+    // product permits), while an email domain is folded, because it is
+    // case-insensitive and the recipient the approver read may differ in case.
+    expect((new UiActionRule)->destinations()->refusal(ProposedAction::freeze(
+        UiActionRule::TOOL,
+        $context->organizationId,
+        ['app_bundle_id' => UiActionRule::DEFAULT_BUNDLE_ID],
+        [UiActionRule::DEFAULT_BUNDLE_ID],
+        SensitivityClass::Internal,
+    )))->toBeNull('the one bundle id ADR-005 D1.5 allows must pass');
+
+    expect((new OutgoingEmailRule)->destinations()->refusal(ProposedAction::freeze(
+        OutgoingEmailRule::TOOL,
+        $context->organizationId,
+        FrozenProposals::emailPayload($accountId, ['zoe@kund.example']),
+        ['Zoe@Kund.Example'],
+        SensitivityClass::Internal,
+        $accountId,
+    )))->toBeNull('a recipient differing only in case is the same recipient');
+
+    // And the whole gate agrees: the same UI action, fully formed and approved, is
+    // allowed — so every refusal in this file is about the thing it names.
+    [$organization, $approver, $uiContext] = closedWorld();
+
+    $payload = [
+        'session_id' => (string) Str::ulid(),
+        'app_bundle_id' => UiActionRule::DEFAULT_BUNDLE_ID,
+        'window_title' => 'Invoice 2026-114',
+        'element_role' => 'AXButton',
+        'element_label' => 'Send',
+        'action_type' => 'click',
+    ];
+
+    $proposal = FrozenProposals::freeze($organization, $payload, kind: ProposalKind::UiAction);
+    FrozenProposals::approve($proposal, $approver);
+
+    $verdict = app(PolicyGate::class)->authorize(
+        ProposedAction::fromProposal($proposal, UiActionRule::TOOL, [UiActionRule::DEFAULT_BUNDLE_ID], SensitivityClass::Internal),
+        $uiContext,
+    );
+
+    expect($verdict->permitsExecution())->toBeTrue()
+        ->and($verdict->rule)->toBe('ui_action')
+        ->and($verdict->approvalId)->not->toBeNull();
+})->group('security');
+
 it('refuses input 6: a budget a rule forgot to declare, and one the action exceeds', function (): void {
     [, , $context] = closedWorld();
 
