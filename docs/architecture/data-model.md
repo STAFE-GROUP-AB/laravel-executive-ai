@@ -69,7 +69,8 @@ the removal stays in `audit_events`.
 |---|---|
 | `user_id` | FK → `users.id` (`passkey_credentials_user_fk`) |
 | `name` | the owner's label for the device ("Phone"), or a dated default |
-| `credential_id` | base64url of the WebAuthn credential id; `passkey_credentials_credential_id_unique` |
+| `credential_id` | base64url of the WebAuthn credential id, up to **1364** characters (the spec's 1023 bytes, base64url-encoded). Deliberately **not** indexed |
+| `credential_id_hash` | `char(64)`, SHA-256 of `credential_id`; carries **`passkey_credentials_credential_id_hash_unique`** |
 | `public_key` | base64 of the COSE public key — public by design, hidden from serialisation |
 | `user_handle` | the user's ULID, as handed to the authenticator |
 | `sign_count` | the authenticator's counter; a value that does not advance is refused |
@@ -77,7 +78,30 @@ the removal stays in `audit_events`.
 | `backup_eligible`, `backed_up`, `uv_initialized` | WebAuthn backup/UV state, kept consistent per the spec |
 | `rp_id`, `origin` | the ADR-006 D3 origin this credential belongs to; every query is scoped by `rp_id` |
 | `last_used_at`, `created_at`, `updated_at` | |
-| indexes | `passkey_credentials_user_rp_index (user_id, rp_id)` |
+| indexes | `passkey_credentials_credential_id_hash_unique`, `passkey_credentials_user_rp_index (user_id, rp_id)` |
+
+**Why the identity of a credential is indexed through a hash (#117).** The table originally put the
+unique index on `credential_id` itself. On the `server` profile that is 1024 characters of `utf8mb4`
+— **4096 bytes against InnoDB's 3072-byte key limit** — so `migrate` aborted on that file and, since
+migrations run in order, every table after it was never created: the `server` profile was
+unmigratable from a clean database. Shortening the column was not available, because a credential id
+is up to 1023 bytes per the WebAuthn Level 2 spec and its base64url form reaches 1364 characters, so
+`1024` was already short for a conforming authenticator.
+
+So `credential_id` is wide and unindexed, and `credential_id_hash` carries the constraint.
+`App\Models\PasskeyCredential::hashFor()` is the single definition, a `saving` hook recomputes the
+column from `credential_id` on every write so no row can hold an index key that disagrees with its
+credential id, and `forCredentialId()` is the only way the authenticator looks one up. The fix is
+two migrations: the `create` migration was amended so a **fresh** database gets the right shape
+(safe because `migrate` never re-runs an applied migration), and
+`2026_10_13_000001_index_passkey_credential_id_by_hash` brings an **existing** database forward —
+adding the column, backfilling it, moving the index — with every step guarded so it is a no-op on a
+fresh one. `credential_id` is widened only off SQLite, which neither enforces nor even emits a
+`VARCHAR` length, so the `local` profile needs no table rebuild and no existing row is rewritten.
+
+The lane that would have caught it is now `server-profile` in `.github/workflows/ci.yml`: it
+migrates a clean MySQL 8.4 database, asserts no migration is left pending, and runs the
+`backend-contract` group — the ADR-002 D10 matrix that §5 below says must hold on both profiles.
 
 ### `auth_devices`
 
