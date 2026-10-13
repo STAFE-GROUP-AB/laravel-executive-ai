@@ -58,6 +58,11 @@ final class SecretPatterns
             'password', 'passwd', 'pwd', 'new_password', 'current_password', 'password_confirmation',
             'secret', 'client_secret', 'code_verifier', 'cookie', 'set_cookie', 'session', 'otp', 'otp_code',
             'one_time_code', 'verification_code', 'signing_key', 'mac', 'vapid_private_key',
+            // WebAuthn ceremony material (S2-05): no sink needs any of it, and the
+            // authenticator never passes it on purpose — this is the second layer.
+            'challenge', 'signature', 'client_data_json', 'clientdatajson', 'authenticator_data',
+            'authenticatordata', 'attestation_object', 'attestationobject', 'credential_id',
+            'credentialid', 'public_key', 'raw_id', 'rawid', 'user_handle', 'userhandle',
         ];
     }
 

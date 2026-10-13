@@ -17,7 +17,7 @@ phrases (`Tests\Support\PwaFixtures::AI_ON_PHONE_DENYLIST`).
 
 | Piece | File | Notes |
 |---|---|---|
-| Layout | `resources/views/layouts/app.blade.php` | Skip link, one `<main id="main">`, sidebar ≥ 1024 px, bottom tab bar below, safe-area insets (`pt-safe`, `pb-safe`, `pb-tabbar`), header with the AI state badge, approvals badge only when `pending_approvals > 0`, "Signed in as …", passkey status (`PasskeyAuthenticator::status()`), and the sign-out form posting to `route('logout')` (S1-02). |
+| Layout | `resources/views/layouts/app.blade.php` | Skip link, one `<main id="main">`, sidebar ≥ 1024 px, bottom tab bar below, safe-area insets (`pt-safe`, `pb-safe`, `pb-tabbar`), header with the AI state badge, approvals badge only when `pending_approvals > 0`, "Signed in as …", a link to "Sign-in and devices" (`/settings/security`, S2-05) carrying `data-passkeys-available` from `PasskeyAuthenticator::status()`, and the sign-out form posting to `route('logout')` (S1-02). |
 | Head | `resources/views/partials/head.blade.php` | Viewport with `viewport-fit=cover`, two `theme-color` metas (light/dark canvas), Apple `apple-mobile-web-app-*` metas, manifest and icon links, Vite assets. |
 | Pages | `resources/views/home/index.blade.php`, `resources/views/briefs/{index,show}.blade.php`, `resources/views/offline.blade.php` | `/home`, `/briefs`, `/briefs/{brief}`, `/offline`. |
 | Components | `resources/views/components/` | `brief-item`, `badge`, `empty-state`, `ai-state-banner`, `ai-state-badge`, `brief-state-badge`, `nav-link`, `icon`, `brand-mark`. |

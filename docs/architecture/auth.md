@@ -1,21 +1,27 @@
-# Authentication — owner account, one-time-code login, sessions (S1-02)
+# Authentication — owner account, one-time-code login, passkeys, sessions, re-auth (S1-02, S2-05)
 
-**Status:** Sprint 1 · **Workstream:** B (Laravel platform) with H (security) · **Issue:** #30
-**Binding references:** blueprint §11 (secure sessions, revocation, re-auth), §12.1 (`CREATE_OWNER`,
-no Terminal), §12.3 screen 4; ADR-006 D3 (two origins, cookie posture); threat model T-70, T-71,
-T-72 and open question A16; health contract §2 `auth_login`.
-**Code:** `app/Security/Authorization/`, `app/Security/Audit/AuditLog.php`,
-`app/Livewire/Auth/Login.php`, `app/Livewire/Install/CreateOwnerForm.php`,
+**Status:** Sprint 1 (S1-02) extended by Sprint 2 (S2-05) · **Workstream:** B (Laravel platform)
+with H (security) · **Issues:** #30, #69
+**Binding references:** blueprint §11 (passkeys/MFA, secure sessions, revocation, device
+management, re-auth), §12.1 (`CREATE_OWNER`, no Terminal), §12.3 screen 4; ADR-006 D3 (two origins,
+cookie posture, `rp.id` per origin); ADR-007 (dependency licences); threat model T-70, T-71, T-72
+and open question A16; health contract §2 `auth_login`; ipc-contract §7.3 (the Supervisor's
+elevation, the IPC-side counterpart of §7.4).
+**Code:** `app/Security/Authorization/` (`Otp/`, `Passkeys/`, `Devices/`, `Reauthentication/`,
+`SessionRevoker`), `app/Security/Audit/AuditLog.php`, `app/Livewire/Auth/`
+(`Login`, `Passkeys`, `Devices`, `Reauthenticate`), `app/Livewire/Install/CreateOwnerForm.php`,
 `app/Http/Middleware/{SecurityHeaders,ResolveRequestOrigin,EnsureNoOwnerExists}.php`,
-`routes/auth.php`, `resources/views/{layouts/auth,livewire/auth,livewire/install,mail/auth}`.
+`app/Http/Controllers/Pwa/SecuritySettingsController.php`, `routes/auth.php`, `routes/pwa.php`,
+`resources/js/passkeys.js`, `resources/views/{layouts/auth,livewire/auth,livewire/install,mail/auth,settings}`.
 **Tests:** `tests/Feature/Auth/`, `tests/Feature/Health/LoginSelfTestTest.php`,
-`tests/Security/OtpCredentialNeverLoggedTest.php`.
+`tests/Security/{OtpCredentialNeverLoggedTest,PasskeyPayloadNeverLoggedTest,ReauthRequiredTest}.php`.
 
 ## 1. Principles
 
-- **There is no password.** Every sign-in is a six-digit one-time code mailed to the account's
-  address. `users.password` stays nullable and is never read or written; no password route exists
-  (`AuthRoutesTest`). Passkeys are the Sprint 2 primary factor (§7).
+- **There is no password.** Every sign-in is either the six-digit one-time code mailed to the
+  account's address or a registered passkey. `users.password` stays nullable and is never read or
+  written; no password route exists (`AuthRoutesTest`). A passkey is an **addition**: the emailed
+  code stays the fallback and the recovery path on every origin and every device (§7).
 - **One owner.** The installer creates exactly one owner account; a repeated install cannot create
   a second one, silently or otherwise (§2, T-72).
 - **Sessions are server-side state.** The database `sessions` table is the source of truth, so a
@@ -111,13 +117,32 @@ request — one click, no mail to open. The environment check is on the applicat
   half of D3 lands with the remote origin (E4-1).
 - **Login** regenerates the session id; **logout** (`POST /logout`) invalidates the session and
   rotates the CSRF token.
-- **Revocation**: `App\Security\Authorization\SessionRevoker::revokeAll(User, actor, ?exceptSessionId)`
-  deletes the user's rows from `sessions` and rotates `remember_token`, so every browser is signed out
-  on its next request (`SessionRevocationTest` drives real requests with the cookie across a simulated
-  new PHP process). `php artisan lea:sessions:revoke {ulid|email} [--json]` is the operator and
-  Supervisor entry point. E2-3 builds device management on this primitive rather than replacing it.
-- **Re-authentication for critical actions** (T-71) is E2-3; the §11 approval paths that need it do
-  not exist yet in Sprint 1.
+- **Revocation**: `App\Security\Authorization\SessionRevoker` is the **only** code that deletes
+  session rows. `revokeAll(User, actor, ?exceptSessionId)` clears the user's rows from `sessions` and
+  rotates `remember_token`; `revokeSession(User, sessionId, actor)` (S2-05) ends exactly one. Either
+  way the browser is signed out on its next request (`SessionRevocationTest` and
+  `DeviceManagementTest` drive real requests with the cookie across a simulated new PHP process).
+  `php artisan lea:sessions:revoke {ulid|email} [--json]` is the operator and Supervisor entry point.
+
+### 5.1 Device management (S2-05)
+
+A **device** is a sign-in: `auth_devices` records the session it produced, how the person
+authenticated (`otp`, `passkey`, `owner_creation` — there is deliberately no `password` case), a
+short label derived from the User-Agent, the IP and the times. `App\Livewire\Auth\Devices`, on
+`/settings/security`, lists and ends them; `App\Security\Authorization\Devices\DeviceRegistry` is the
+service behind it.
+
+| Behaviour | Where | Note |
+|---|---|---|
+| Record the sign-in | `DeviceRegistry::record(User, Request, LoginMethod, ?PasskeyCredential)`, called by `Login` and `CreateOwnerForm` after `session()->regenerate()` | The session id comes from the store, not the request, so it is the id the browser will present |
+| List | `DeviceRegistry::active(User, ?currentSessionId)` | Joins `auth_devices` against the live `sessions` rows: a device whose session is gone is **not** listed, because it is already signed out. The current one is flagged, never revocable from this page ("Log out" does that) |
+| Revoke one | `DeviceRegistry::revoke(User, deviceId, actor)` → `SessionRevoker::revokeSession()` | Another user's device id and an unknown id both return `false` and change nothing |
+| Revoke every other | `DeviceRegistry::revokeOthers(User, currentSessionId, actor)` → `SessionRevoker::revokeAll(except:)` | Marks each row revoked and writes `auth.sessions_revoked` |
+| Labels | `Devices\DeviceLabel::fromUserAgent()` | "Chrome · Mac", "Safari · iPhone", "Mac app · Mac", else "Unrecognised browser". The full User-Agent stays on the row; the view model carries only the label, so a screenshot of the page is not a fingerprint |
+
+Audit events: `auth.device_revoked`, plus the `SessionRevoker`'s own `auth.session_revoked` /
+`auth.sessions_revoked`. `AuthDevice` hides `session_id` from serialisation, so a dump of the model
+cannot carry a live session id into a log line.
 
 ## 6. Health: the login self-test
 
@@ -135,16 +160,114 @@ parts, each recorded in the heartbeat so the check names what failed:
 `AuthLoginCheck` reports `owner account exists; login self-test failed (otp round-trip) <time>` when
 a part fails, and the ready document drops.
 
-## 7. Passkeys — stub, not silence
+## 7. Passkeys (S2-05)
 
-`App\Security\Authorization\Passkeys\PasskeyAuthenticator` is the interface (registration and
-authentication ceremonies with WebAuthn JSON shapes). Sprint 1 binds `NotYetAvailable`, which reports
-`PasskeyStatus{available: false, message: "Passkeys arrive in Sprint 2 (E2-3)", trackingUrl}` and
-throws `PasskeysUnavailableException` from every ceremony. The login page shows the status row with a
-link to **issue #69 (E2-3: passkey/WebAuthn login)**. `PasskeyStubTest` pins the binding; E2-3
-deletes the stub, the test and the row in the same PR.
+`App\Security\Authorization\Passkeys\PasskeyAuthenticator` is the interface; the binding is
+`WebAuthnAuthenticator` over **`web-auth/webauthn-lib` 5.3.9** (MIT, so ADR-007's licence rule is
+satisfied). The Sprint 1 `NotYetAvailable` stub, its binding, `PasskeyStubTest` and the login-page
+status row were deleted in the same PR that added this section.
 
-## 8. The credential never leaves the mail
+Why a library rather than our own: a relying party has to parse CBOR attestation objects, load COSE
+keys, verify ES256/RS256 signatures and apply the full W3C step list. That is exactly the kind of
+code where a subtle mistake is silent, and the library is the maintained, audited implementation the
+PHP ecosystem standardises on. The verification steps are the library's; the policy around them is
+ours.
+
+### 7.1 One relying party per origin (ADR-006 D3)
+
+`rp.id` is **never configured**: `RelyingParty::fromRequest()` takes it from the host the request
+arrived on, so the loopback origin and the Tailscale Serve origin are different relying parties. A
+credential registered on one is useless on the other — the browser will not offer it, and an
+assertion carrying the wrong `rpIdHash` is refused by `CheckRelyingPartyIdIdHash`
+(`PasskeyRegistrationTest`, "gives each ADR-006 D3 origin its own relying party"). The credential row
+stores both the `rp_id` and the full origin, and every query is scoped by `rp_id`.
+
+WebAuthn needs a domain name in a secure context. `http://127.0.0.1:<port>` is therefore **not**
+usable — browsers refuse an IP literal as an RP id — so `status()` says so in plain words and the
+ceremonies throw `PasskeysUnavailableException` instead of failing inside the browser. On that origin
+the emailed code is simply the only way in, which is the S1-02 behaviour unchanged. Opening the app
+on `http://localhost:<port>` or over the tailnet name gives passkeys.
+
+### 7.2 The ceremonies
+
+| Step | Server | Browser |
+|---|---|---|
+| Register | `registrationOptions(User)` — 32-byte challenge, `userVerification: required`, `residentKey: required`, `attestation: none`, already-registered credentials in `excludeCredentials` | `resources/js/passkeys.js` on `passkey:create`, through Vite with `Vite::cspNonce()`; no inline script, no CDN |
+| | `completeRegistration(User, credential, ?name)` — the library's creation ceremony, then one `passkey_credentials` row | — |
+| Authenticate | `authenticationOptions(email)` — the address is a **hint only**: an unknown one yields the same shape with an empty `allowCredentials`, so the page never reveals whether an account exists | `passkey:get` → `completePasskey` |
+| | `completeAuthentication(credential)` — returns the `User` or `null`; updates the sign counter, the backup flags and `last_used_at` | — |
+
+The challenge lives in the **session** for the length of one ceremony (`PendingCeremonies`,
+`ceremony_ttl_seconds`, default 120 s) and nowhere else. It is pulled out on first use — verified or
+not — so a replayed assertion has no challenge to match, and it is refused if the origin completing
+the ceremony is not the origin that issued it. A failed ceremony answers one of a fixed set of
+reason codes (`PasskeyCeremonyFailed`), never a message built from the payload.
+
+`attestation: none` is deliberate: which authenticator make the owner uses is not a trust decision
+for a single-owner, local-first product, and requesting attestation would only add an identifying
+certificate we would then have to store. `userVerification: required` is what makes a passkey a
+proof of presence *and* of a local unlock, which §7.4 relies on.
+
+### 7.3 Where it appears
+
+- `/login` offers "Sign in with a passkey" only when the origin supports passkeys, the browser
+  reports support, and a credential exists **for that origin**. The emailed code is always above it.
+- `/settings/security` (`App\Livewire\Auth\Passkeys`) lists, adds and removes passkeys. Removing the
+  last one is allowed — the code is the recovery path, so a passkey is never load-bearing.
+- EN/SV copy lives in `lang/{en,sv}/security.php`.
+
+### 7.4 Re-authentication for critical actions — the API other items call
+
+`App\Security\Authorization\Reauthentication\Reauthenticator` is the **PWA-side** primitive for
+§11's "re-auth för kritiska åtgärder" (threat model T-71). The menu bar has no PWA session, so its
+critical IPC operation uses the Supervisor's elevation instead (ipc-contract §7.3) — a different
+mechanism for a different surface; approvals are never grantable over IPC at all.
+
+A proof is bound to **three** things: the action, a single-use nonce, and a time window. **A merely
+fresh session never satisfies it** — that is the property `ReauthRequiredTest` proves for each of
+T-71's three paths, named once in `CriticalAction`:
+
+```php
+use App\Security\Authorization\Reauthentication\{CriticalAction, Reauthenticator, ReauthenticationRequired};
+
+// 1. The consumer opens a challenge and keeps the nonce with whatever it is about to do.
+$challenge = app(Reauthenticator::class)->challenge(CriticalAction::ApproveOutboundAction);
+
+// 2. It renders the card, which proves presence with a passkey or the emailed code and
+//    dispatches `reauth-satisfied` when it is done:
+//    <livewire:auth.reauthenticate :action="$challenge->action->value" :nonce="$challenge->nonce" />
+
+// 3. Immediately before the irreversible step — never earlier:
+try {
+    $proof = app(Reauthenticator::class)->assert(CriticalAction::ApproveOutboundAction, $nonce);
+} catch (ReauthenticationRequired $e) {
+    // $e->reason is missing | action_mismatch | not_verified | expired | consumed
+    return $this->askAgain($e);
+}
+
+$this->approve($proposal, $proof);   // $proof: action, nonce, method, verifiedAt, expiresAt
+```
+
+| Member | Meaning |
+|---|---|
+| `challenge(CriticalAction): ReauthChallenge` | Issues `{action, nonce, expiresAt}`; the nonce is stored in the session against the action. Writes `auth.reauth_challenged` |
+| `passes(CriticalAction, nonce): bool` | Whether `assert()` would succeed right now, **without** spending the proof. For enabling a button |
+| `assert(CriticalAction, nonce): ReauthProof` | Spends the proof and returns it, or throws `ReauthenticationRequired`. Writes `auth.reauth_consumed` / `auth.reauth_refused` |
+| `sendCode(): IssuedOtp` | The fallback factor: issues or reuses a code for the signed-in owner, under S1-02's double-send rule |
+| `satisfyWithOtp(nonce, code): OtpVerification` · `satisfyWithPasskey(nonce, credential): bool` · `passkeyOptions(): array` | What the card calls; a passkey belonging to anyone but the signed-in owner is refused |
+| `windowSeconds()` (`lea.auth.reauth.window_seconds`, 120 s) · `challengeTtlSeconds()` (300 s) | How long a proof lasts, and how long the owner has to answer |
+
+Rules a consumer can rely on: a proof for one action **never** satisfies another
+(`action_mismatch`); a proof is spent by the first accepting `assert()` (`consumed`); an unanswered
+challenge cannot be answered after `challengeTtlSeconds`; and nothing is ever written to the audit
+trail but the action, the method and the outcome — not the code, not the nonce, not the assertion.
+
+Known consumers: **S2-08** (approvals), **S2-19** (admin panes), **S2-14** (privacy downgrade).
+Adding a fourth critical path means a new `CriticalAction` case, a `lang` entry and a case in
+`ReauthRequiredTest`, which pins the enum's exact membership so the register and the code cannot
+drift apart.
+
+## 8. The credential never leaves the mail — and the WebAuthn payload never lands anywhere
 
 `tests/Security/OtpCredentialNeverLoggedTest.php` runs the whole round — `lea:owner:create --json`,
 request a code, one wrong attempt, the right one, logout, the health self-test — with the log
@@ -159,6 +282,20 @@ covers `otp`, `otp_code`, `one_time_code`, `verification_code`; the request body
 A development note: `MAIL_MAILER=log` writes the complete outgoing mail — code included — to the log
 file by design of that transport. That is why `OTP_AUTOFILL` exists for `local`, and why the packaged
 app must never ship with the log mailer (S1-06 bundles the configuration).
+
+**The WebAuthn half** (S2-05, same family): `tests/Security/PasskeyPayloadNeverLoggedTest.php` runs a
+complete round — register, sign in, one refused replay, re-authenticate for a critical action — with
+the log redirected to a scratch file, then sweeps the log, every `audit_events` row, `auth_devices`
+and `failed_jobs` for the registration challenge, the authentication challenge, the re-auth nonce,
+the client data, the authenticator data and the signature. Structural guards behind it: the
+library's validators keep their null logger and null event dispatcher, so the "checking the
+response" `info` line with the full payload is never emitted; audit context carries our row id, the
+`rp_id` and a reason code only; `PasskeyCredential` hides `credential_id`, `public_key`,
+`user_handle` and `trust_path` from serialisation; and the `Redactor`'s key list gained the ceremony
+keys (`challenge`, `signature`, `client_data_json`, `authenticator_data`, `attestation_object`,
+`credential_id`, `public_key`, `raw_id`, `user_handle`) as the second layer. What *is* stored on
+purpose is the credential's **public** key, id and counter — a relying party cannot verify later
+assertions without them.
 
 ## 9. Browser-hardening headers (open question A16)
 
@@ -191,5 +328,11 @@ belongs to the Tailscale Serve origin and is decided in E4-1.
   path (`lea:owner:create`) does not. S1-05 and S1-06 must decide whether the installer opens
   `/install/owner` in the PWA instead of calling the command, or whether the Supervisor hands the
   browser a first session some other way. Recorded for the Sprint 1 review.
-- Re-authentication for critical actions, device management, passkeys: **E2-3 (#69)**.
-- `TrustProxies`/`TrustHosts` for the tailnet origin, HSTS: **E4-1**.
+- Re-authentication for critical actions, device management and passkeys **landed in S2-05 (#69)**:
+  §5.1, §7. What is still open there: a passkey is registered per origin, so the owner adds one on
+  the loopback origin and another over the tailnet name; whether the installer should offer the
+  first passkey during `CREATE_OWNER` is an S2/S4 question, not decided here.
+- `TrustProxies`/`TrustHosts` for the tailnet origin, HSTS: **E4-1**. Until then the tailnet
+  relying-party id is exercised in tests through `remote.trusted_hosts`, the same config E4-1 writes.
+- The three §7.4 consumers do not exist yet: **S2-08** approvals, **S2-19** admin, **S2-14** privacy
+  downgrade. The primitive and its tests are deliberately ahead of them.

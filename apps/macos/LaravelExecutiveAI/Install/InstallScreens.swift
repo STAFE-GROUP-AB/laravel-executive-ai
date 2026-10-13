@@ -183,7 +183,9 @@ struct CreateOwnerScreen: View {
         InstallScreen(
             step: 4,
             title: "Create your account",
-            lead: "You are the owner. This account lives only on this Mac; a passkey or password is set up when you first open the app."
+            // S2-05: there is no password anywhere in the product. Sign-in is a one-time code by
+            // mail, and a passkey can be added later from Sign-in and devices (auth.md §1, §7).
+            lead: "You are the owner. This account lives only on this Mac; you sign in with a one-time code sent to this address, and can add a passkey later."
         ) {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s4) {
                 InstallCard {

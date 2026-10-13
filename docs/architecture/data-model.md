@@ -57,6 +57,42 @@ Owner and user accounts. **Password-less by design**: login is a one-time code b
 server-side revocation (`App\Security\Authorization\SessionRevoker`, [auth.md](auth.md) §5).
 `password_reset_tokens` is kept for the framework and unused by the OTP flow.
 
+### `passkey_credentials`
+
+Registered passkeys (S2-05, [auth.md](auth.md) §7). A credential record like `otp_codes`, not a
+business object: no organization, provenance or soft delete, and a removed passkey is deleted while
+the removal stays in `audit_events`.
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users.id` (`passkey_credentials_user_fk`) |
+| `name` | the owner's label for the device ("Phone"), or a dated default |
+| `credential_id` | base64url of the WebAuthn credential id; `passkey_credentials_credential_id_unique` |
+| `public_key` | base64 of the COSE public key — public by design, hidden from serialisation |
+| `user_handle` | the user's ULID, as handed to the authenticator |
+| `sign_count` | the authenticator's counter; a value that does not advance is refused |
+| `aaguid`, `transports`, `attestation_type`, `trust_path` | what the ceremony reported (`attestation: none`) |
+| `backup_eligible`, `backed_up`, `uv_initialized` | WebAuthn backup/UV state, kept consistent per the spec |
+| `rp_id`, `origin` | the ADR-006 D3 origin this credential belongs to; every query is scoped by `rp_id` |
+| `last_used_at`, `created_at`, `updated_at` | |
+| indexes | `passkey_credentials_user_rp_index (user_id, rp_id)` |
+
+### `auth_devices`
+
+One sign-in and the browser it came from (S2-05, [auth.md](auth.md) §5.1). `sessions` still decides
+whether a device is signed in; this table is what the Devices page lists.
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users.id` (`auth_devices_user_fk`) |
+| `session_id` | the `sessions.id` this sign-in produced; `auth_devices_session_id_unique`, hidden from serialisation |
+| `method` | `otp`, `passkey` or `owner_creation` (string + PHP enum `Devices\LoginMethod`; there is no `password`) |
+| `passkey_credential_id` | the passkey used, when the method was `passkey` |
+| `label` | "Chrome · Mac" and the like, from `Devices\DeviceLabel` |
+| `ip_address`, `user_agent` | the full User-Agent is kept on the row for the owner, never in the view model |
+| `signed_in_at`, `revoked_at`, `revoked_by` | |
+| indexes | `auth_devices_user_active_index (user_id, revoked_at)` |
+
 ### `otp_codes`
 
 One-time login codes (S1-02, [auth.md](auth.md) §3). Not a business object: a credential record

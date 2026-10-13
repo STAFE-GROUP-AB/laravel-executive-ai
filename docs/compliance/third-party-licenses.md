@@ -60,6 +60,7 @@ this table or the build fails.
 | livewire/livewire | TALL stack | MIT | https://github.com/livewire/livewire/blob/main/LICENSE.md | Notice | yes | ENG |
 | alpinejs/alpine | TALL stack | MIT | https://github.com/alpinejs/alpine/blob/main/LICENSE.md | Notice | yes | ENG |
 | tailwindcss | TALL stack | MIT | https://github.com/tailwindlabs/tailwindcss/blob/main/LICENSE | Notice | yes | ENG |
+| web-auth/webauthn-lib (pinned 5.3.9) | Passkey / WebAuthn ceremonies (§11, S2-05) | MIT | https://github.com/web-auth/webauthn-lib/blob/5.3.9/LICENSE | Notice. Pulls `spomky-labs/cbor-php`, `web-auth/cose-lib`, `spomky-labs/pki-framework` (all MIT), `paragonie/constant_time_encoding` (MIT) and `symfony/*` (MIT) | yes | ENG |
 | Remaining Composer / npm packages | — | Mix; expected MIT/BSD/Apache-2.0 | `composer licenses --format=json`, npm license report in CI (S0-05) | Each must be on the ADR-007 D2.1 list | per package, enforced by CI | ENG; exceptions ANDREAS |
 | cyclonedx/cyclonedx-php-composer | SBOM generation (dev only) | Apache-2.0 | https://github.com/CycloneDX/cyclonedx-php-composer | Not shipped | yes | ENG |
 | Swift packages (apps/macos) | Mac app | To be listed by S1 | `Package.resolved` → license report | Same rule | per package | ENG |

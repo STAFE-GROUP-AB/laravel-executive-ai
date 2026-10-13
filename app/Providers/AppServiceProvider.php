@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Http\View\Composers\ShellStateComposer;
+use App\Security\Audit\AuditLog;
 use App\Security\Authorization\Otp\OtpHasher;
-use App\Security\Authorization\Passkeys\NotYetAvailable;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
+use App\Security\Authorization\Passkeys\PendingCeremonies;
+use App\Security\Authorization\Passkeys\WebAuthnAuthenticator;
 use App\Security\Queue\RedactingFailedJobProvider;
 use App\Security\Secrets\Redactor;
 use App\Support\Health\AiReadiness;
@@ -37,8 +39,10 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * S1-02: one-time codes are HMACed with the application key; passkeys are
-     * the Sprint 1 stub until E2-3 (issue #69) binds a real authenticator.
+     * S1-02: one-time codes are HMACed with the application key. S2-05 binds
+     * the real WebAuthn authenticator; it reads the current request, so it is
+     * bound per request (`scoped`), never as a process-wide singleton — the
+     * relying party differs per origin (ADR-006 D3).
      */
     private function registerAuthentication(): void
     {
@@ -53,9 +57,13 @@ class AppServiceProvider extends ServiceProvider
             return new OtpHasher($key);
         });
 
-        $this->app->singleton(PasskeyAuthenticator::class, function (Application $app): PasskeyAuthenticator {
-            return new NotYetAvailable((string) $app['config']['lea.auth.passkeys.tracking_issue']);
-        });
+        $this->app->scoped(PendingCeremonies::class, fn (Application $app): PendingCeremonies => new PendingCeremonies($app['session.store']));
+
+        $this->app->scoped(PasskeyAuthenticator::class, fn (Application $app): PasskeyAuthenticator => new WebAuthnAuthenticator(
+            $app['request'],
+            $app->make(PendingCeremonies::class),
+            $app->make(AuditLog::class),
+        ));
     }
 
     public function boot(): void
