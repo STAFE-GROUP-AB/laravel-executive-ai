@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Auth;
 
 use App\Models\PasskeyCredential;
+use App\Security\Authorization\Gates\Abilities;
 use App\Security\Authorization\Otp\OtpVerification;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
 use App\Security\Authorization\Passkeys\PasskeysUnavailableException;
@@ -12,6 +13,7 @@ use App\Security\Authorization\Reauthentication\CriticalAction;
 use App\Security\Authorization\Reauthentication\Reauthenticator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -40,12 +42,16 @@ final class Reauthenticate extends Component
 
     public function mount(string $action, string $nonce): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $this->action = CriticalAction::from($action)->value;
         $this->nonce = $nonce;
     }
 
     public function startPasskey(Reauthenticator $reauth): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         try {
             $this->dispatch('passkey:get', id: $this->getId(), options: $reauth->passkeyOptions());
         } catch (PasskeysUnavailableException) {
@@ -56,6 +62,8 @@ final class Reauthenticate extends Component
     /** @param array<string, mixed> $credential */
     public function completePasskey(Reauthenticator $reauth, array $credential): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         if (! $reauth->satisfyWithPasskey($this->nonce, $credential)) {
             $this->addError('passkey', __('security.passkeys.errors.not_verified'));
 
@@ -67,11 +75,15 @@ final class Reauthenticate extends Component
 
     public function passkeyFailed(string $reason): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $this->addError('passkey', __('security.passkeys.errors.browser', ['reason' => preg_replace('/[^A-Za-z]/', '', $reason) ?? '']));
     }
 
     public function sendCode(Reauthenticator $reauth): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $issued = $reauth->sendCode();
 
         $this->code = '';
@@ -86,6 +98,8 @@ final class Reauthenticate extends Component
 
     public function verifyCode(Reauthenticator $reauth): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $this->validate(['code' => ['required', 'digits:'.(int) config('lea.auth.otp.length')]]);
 
         $submitted = $this->code;
@@ -104,6 +118,8 @@ final class Reauthenticate extends Component
 
     public function back(): void
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $this->step = 'choose';
         $this->code = '';
         $this->notice = null;
@@ -112,6 +128,8 @@ final class Reauthenticate extends Component
 
     public function render(PasskeyAuthenticator $passkeys): View
     {
+        Gate::authorize(Abilities::REAUTHENTICATE);
+
         $user = Auth::guard('web')->user();
         $rpId = $passkeys->status()->rpId;
 

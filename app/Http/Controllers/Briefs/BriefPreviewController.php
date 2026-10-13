@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Briefs;
 use App\Briefs\Render\BriefMailRenderer;
 use App\Http\Controllers\Controller;
 use App\Models\Brief;
+use App\Security\Authorization\Gates\Abilities;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -27,7 +28,7 @@ final class BriefPreviewController extends Controller
 
     public function html(Brief $brief): Response
     {
-        Gate::authorize('view', $brief);
+        Gate::authorize(Abilities::VIEW, $brief);
 
         $rendered = $this->renderer->renderBrief($brief);
 
@@ -37,7 +38,7 @@ final class BriefPreviewController extends Controller
 
     public function text(Brief $brief): Response
     {
-        Gate::authorize('view', $brief);
+        Gate::authorize(Abilities::VIEW, $brief);
 
         $rendered = $this->renderer->renderBrief($brief);
 

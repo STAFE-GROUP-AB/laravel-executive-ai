@@ -10,6 +10,7 @@ use App\Briefs\Render\BriefPage;
 use App\Http\Controllers\Controller;
 use App\Models\Brief;
 use App\Models\User;
+use App\Security\Authorization\Gates\Abilities;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -31,6 +32,8 @@ final class BriefsController extends Controller
 
     public function index(Request $request): View
     {
+        Gate::authorize(Abilities::VIEW_BRIEFS);
+
         /** @var User $user */
         $user = $request->user();
 
@@ -71,7 +74,7 @@ final class BriefsController extends Controller
             abort(404);
         }
 
-        Gate::authorize('view', $brief);
+        Gate::authorize(Abilities::VIEW, $brief);
 
         return $brief;
     }
