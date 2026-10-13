@@ -167,10 +167,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The trailing newline matters: `read` returns non-zero at EOF without one, which
+          # `set -e` would turn into a failed step.
           read -r status url sha256 bytes asset tag < <(node -e '
             const m = JSON.parse(require("fs").readFileSync("packaging/manifest/runtime.json", "utf8"));
             const a = m.artifact;
-            process.stdout.write([m.status, a?.url ?? "-", a?.sha256 ?? "-", a?.bytes ?? "-", a?.asset ?? "-", a?.tag ?? "-"].join(" "));
+            process.stdout.write([m.status, a?.url ?? "-", a?.sha256 ?? "-", a?.bytes ?? "-", a?.asset ?? "-", a?.tag ?? "-"].join(" ") + "\n");
           ')
           if [ "$status" != signed ] || [ "$url" = - ]; then
             echo "::notice title=build-macos::packaging/manifest/runtime.json is '$status' with no published artifact, so this image carries no runtime package. Run the build-runtime workflow and commit the runtime.json it publishes (packaging/runtime/README.md §5)."
