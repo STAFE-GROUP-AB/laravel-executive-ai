@@ -51,6 +51,16 @@ final class Abilities
 
     public const string VIEW_BRIEFS = 'viewBriefs';
 
+    /**
+     * The four §1.2 CRM screens (S2-09). One ability rather than four, because
+     * they ask the same narrower question the other page abilities ask — "is
+     * this a signed-in user of this install" — and the tenant decision stays
+     * with the row: `CrmRepository` scopes every query and the CRM policies
+     * answer for each record. A second ability per screen would be four copies
+     * of one question to keep in step.
+     */
+    public const string VIEW_CRM = 'viewCrm';
+
     public const string VIEW_AI_SETTINGS = 'viewAiSettings';
 
     public const string VIEW_SECURITY_SETTINGS = 'viewSecuritySettings';
@@ -83,6 +93,7 @@ final class Abilities
         self::ACCESS_ORGANIZATION,
         self::VIEW_HOME,
         self::VIEW_BRIEFS,
+        self::VIEW_CRM,
         self::VIEW_AI_SETTINGS,
         self::VIEW_SECURITY_SETTINGS,
         self::REVOKE_DEVICE,
@@ -104,6 +115,7 @@ final class Abilities
         self::ACCESS_ORGANIZATION,
         self::VIEW_HOME,
         self::VIEW_BRIEFS,
+        self::VIEW_CRM,
         self::VIEW_AI_SETTINGS,
         self::VIEW_SECURITY_SETTINGS,
     ];

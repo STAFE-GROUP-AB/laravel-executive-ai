@@ -17,6 +17,7 @@ phrases (`Tests\Support\PwaFixtures::AI_ON_PHONE_DENYLIST`).
 
 | Piece | File | Notes |
 |---|---|---|
+| Livewire page layout | `resources/views/layouts/page.blade.php` | S2-09: the component-shaped wrapper a full-page Livewire component uses (`#[Layout('layouts.page')]`), so there is one app shell rather than a second copy of it. Livewire 3's `#[Layout]` renders its layout as an anonymous Blade component with the page as `$slot`; `layouts/app.blade.php` is a `@yield` layout. This file is the three lines that join them. |
 | Layout | `resources/views/layouts/app.blade.php` | Skip link, one `<main id="main">`, sidebar ≥ 1024 px, bottom tab bar below, safe-area insets (`pt-safe`, `pb-safe`, `pb-tabbar`), header with the AI state badge, approvals badge only when `pending_approvals > 0`, "Signed in as …", a link to "Sign-in and devices" (`/settings/security`, S2-05) carrying `data-passkeys-available` from `PasskeyAuthenticator::status()`, and the sign-out form posting to `route('logout')` (S1-02). |
 | Head | `resources/views/partials/head.blade.php` | Viewport with `viewport-fit=cover`, two `theme-color` metas (light/dark canvas), Apple `apple-mobile-web-app-*` metas, manifest and icon links, Vite assets. |
 | Pages | `resources/views/home/index.blade.php`, `resources/views/briefs/{index,show}.blade.php`, `resources/views/offline.blade.php` | `/home`, `/briefs`, `/briefs/{brief}`, `/offline`. |
@@ -33,7 +34,11 @@ templates (asserted by `HomePageTest`), so the pages run unchanged under S1-02's
 `Content-Security-Policy` (`App\Http\Middleware\SecurityHeaders`: `script-src 'self' 'nonce-…'`,
 `connect-src 'self'`, `frame-ancestors 'none'`; A16). Livewire and Alpine are not loaded on these
 pages yet: Sprint 1's pages are static server renders; when a page needs them, use `@livewireScripts`
-(it picks up `Vite::cspNonce()`), never a CDN, and give any inline bootstrap the nonce.
+(it picks up `Vite::cspNonce()`), never a CDN, and give any inline bootstrap the nonce. S2-09 is the
+first item that needed them: `layouts/app.blade.php` now carries `@livewireStyles` and
+`@livewireScripts`, which emit one nonce'd `<style>` element and one same-origin `<script src>` (Alpine
+ships inside that bundle, so there is no second tag and still no inline script of ours anywhere) —
+asserted per CRM page by `tests/Feature/CRM/CrmScreenAccessibilityTest.php`.
 
 Only loopback host names are trusted (`App\Http\Middleware\TrustLoopbackHosts`, prepended to the
 global stack in `bootstrap/app.php`; ADR-006 D3): a request carrying any other `Host` is refused
@@ -70,6 +75,7 @@ and `routes/auth.php` (S1-02), so the `web` middleware group applies. The route 
 | `GET /briefs` | `briefs` | `auth` | Every version visible to the user, newest first: subject, version, `generated_at`, `delivery_state`, fresh/stale, document id. Wide table scrolls inside its own container. |
 | `GET /briefs/{brief}` | `briefs.show` | `auth` + `BriefPolicy::view` | The full brief (§3). A brief outside the user's organizations is a 403 (same as the S1-03 preview routes); an unknown id is a 404. |
 | `GET /briefs/{brief}/parity.json` | `briefs.parity` | `auth` + `BriefPolicy::view` | The parity payload the page was rendered from, as JCS canonical JSON (`Cache-Control: no-store`), for S1-10. |
+| `GET /crm/customers` · `/crm/contacts` · `/crm/projects` · `/crm/tasks` | `crm.customers` … `crm.tasks` | `auth` + `viewCrm` | The four §1.2 CRM screens (S2-09, [crm.md](crm.md)): one full-page Livewire component each, listing, creating, reading, updating and deleting its record type on one page. Deletion is approval-driven (§11), so there is no destroy route and no record ULID in a URL. |
 | `GET /offline` | `offline` | `web` minus session, CSRF and queued cookies | The precached offline page. No `Set-Cookie`, no per-user state. |
 
 `{brief}` is either a version row id (`briefs.id`, that exact version — what the version history
@@ -217,6 +223,13 @@ Rendered from the fixture pack (placeholder, `brief-stale`, `brief-canonical`; `
   page here) and "Reconfigure AI" on error. `/settings/ai` renders §12.3 screen 5 read-only:
   nothing preselected, only adapter-backed providers (none today, said honestly); the choice
   itself is made on the Mac. See [ai-state.md](ai-state.md).
-- **Sprint 2+** — `/assistant`, `/approvals`, `/crm/*`, Livewire/Alpine (nonce'd, bundled), push
+- **S2-09** (this sprint) — `/crm/customers`, `/crm/contacts`, `/crm/projects`, `/crm/tasks`, and
+  Livewire/Alpine through `@livewireScripts` under the CSP nonce. The bottom tab bar is three tabs
+  (Home, Briefs, CRM): the four CRM screens share one tab there, because four more would make every
+  tab too narrow for a 44 px target, and the CRM pages carry their own tab row. The sidebar lists all
+  four under a group label. The AI state **badge** is on these pages like everywhere else; the
+  **banner** is not — §4.2 says AI must never block the CRM, and a call to action there would read as
+  a precondition. See [crm.md](crm.md).
+- **Sprint 2+** — `/assistant`, `/approvals`, the activity timeline (S2-10), push
   notifications (a separate worker concern, still never carrying brief text), user-approved
   offline data and unsent drafts (§1.2) behind an explicit opt-in, not in the shell cache.

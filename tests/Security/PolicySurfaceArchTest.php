@@ -79,6 +79,14 @@ const PWA_ROUTE_TABLE = [
     'GET briefs/{brief}/preview/text' => Abilities::VIEW,
     'GET settings/ai' => Abilities::VIEW_AI_SETTINGS,
     'GET settings/security' => Abilities::VIEW_SECURITY_SETTINGS,
+    // S2-09: the four §1.2 CRM screens. One page ability for all four — they
+    // ask the same "is this a signed-in user" question the other page
+    // abilities ask; the tenant decision is the row's (`CrmRepository` scopes
+    // every query, the CRM policies answer per record).
+    'GET crm/customers' => Abilities::VIEW_CRM,
+    'GET crm/contacts' => Abilities::VIEW_CRM,
+    'GET crm/projects' => Abilities::VIEW_CRM,
+    'GET crm/tasks' => Abilities::VIEW_CRM,
     // No tenant data in reach: the owner-creation page is guarded by
     // EnsureNoOwnerExists, /login by the guest middleware, /logout only ends
     // the caller's own session, /offline carries no per-user state at all.
