@@ -928,8 +928,8 @@ cast added anywhere else.
 
 The list lives in **`App\Security\Secrets\EncryptedAttributeInventory`**, and the models do not
 declare their own casts: `App\Models\Concerns\EncryptsSensitiveAttributes` reads that registry, so the
-casts and ADR-003 D8's re-encryption job (`App\Security\Secrets\AppKeyRotation`) are the *same* list
-and the job cannot fall behind a cast by omission. The migration is
+casts and ADR-003 D8's re-encryption pass (`App\Security\Secrets\AppKeyRotation`) are the *same* list
+and the pass cannot fall behind a cast by omission. The migration is
 `2026_10_13_000013_encrypt_sensitive_attributes_at_rest`.
 
 **If `core.app-key` is lost, these columns are unreadable and no support path recovers them.** That is
@@ -1035,7 +1035,10 @@ columns were untouched, the index moved and still constrains, and a replay chang
 `SecretsServiceProvider`, which sets `app.key` and `app.previous_keys` before the encrypter resolves
 (ADR-003 D3.3). So the instant a new key is written every existing row still reads, because Laravel
 falls back through `previous_keys` (Evidence E35) — which is what makes
-`App\Security\Secrets\AppKeyRotation` safe to be *queued*. It re-encrypts every inventoried value under
+`App\Security\Secrets\AppKeyRotation` safe to be *deferred*. (It is a tenant-wide maintenance pass
+serialised by a cache lock rather than a queued job, because the key is install-wide and four of the
+eight tables it rewrites are append-only by policy — #127,
+[authorization.md §10](authorization.md).) It re-encrypts every inventoried value under
 the current key, rewrites `address_hash`, and records counts and column names in `audit_events` —
 never a value. A value no key can read is counted and reported, never overwritten: that row's contents
 are already gone, and writing a re-encrypted nothing over it would destroy the only evidence that a key

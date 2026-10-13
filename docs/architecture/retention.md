@@ -177,6 +177,16 @@ column is named like it.
 - **The purge job itself** (`PurgeExpiredData`, §4.1) and the retention pane. This page defines what
   the job reads; it does not schedule it. A clockless rule means the job has nothing to do for those
   tables, which is why it is safe for the job to land later than the rules.
+
+  One thing about it **is** settled, by #127: the purge has **no user principal**, so it cannot be a
+  `ShouldQueue` job running as its dispatcher the way S2-06 requires of everything that reaches
+  tenant data. It deletes rows across every tenant on a schedule with nobody asking, and one
+  dispatcher's memberships do not describe that. It is therefore a member of the tenant-wide
+  maintenance category — `App\Security\Authorization\Maintenance\TenantWideMaintenance`,
+  [authorization.md §10](authorization.md) — which also explains why §4's "erasure is the retention
+  job's, not a policy's" and authorization §3's "`forceDelete` is refused to everybody" are
+  consistent: the purge does not delete as a user with a very strong role, it deletes as an
+  operation no user is behind. §10.5 is the checklist for whoever writes it.
 - **GDPR export and erasure** (§3.2, §10.3 item 3). Erasure is the path that removes a
   `keep_until_erased` row; it is its own item and will reference the `basis` column when it has to
   justify refusing to erase something held under a legal obligation.

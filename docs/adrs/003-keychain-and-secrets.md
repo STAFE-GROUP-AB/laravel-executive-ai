@@ -331,9 +331,20 @@ its value with the redactor so even unknown formats are caught).
   `docs/operations/uninstall.md` §3, §4, §5, §7 and §9 are the user-facing half, including the plain
   statement that a lost `core.app-key` is unrecoverable by any party.
 - **`APP_KEY` rotation.** `core.app-key` envelope holds `current` and `previous[]`; Laravel decrypts
-  with previous keys when the current fails (E35). Rotation is an admin action in the PWA that writes
-  the envelope and re-encrypts `encrypted` attributes in a queued job; sessions are invalidated. The
-  pass is `App\Security\Secrets\AppKeyRotation` (S2-04): it re-encrypts every attribute in
+  with previous keys when the current fails (E35). Rotation is an admin action in the PWA that
+  *requests* the rotation — the Supervisor writes the envelope and sessions are invalidated — and the
+  re-encryption of `encrypted` attributes then runs as a **tenant-wide maintenance pass serialised by
+  a cache lock**, not as a queued job and not inline in the admin action.
+
+  **Wording corrected by #127, 2026-10-13.** This bullet used to say the re-encryption runs "in a
+  queued job", which S2-06 (#88) made impossible — see the paragraph below for the collision and
+  [authorization.md §10](../architecture/authorization.md) for the category that resolves it. The
+  queue was never what made this safe: the one-at-a-time guarantee comes from the
+  `lea:app-key:reencrypt` lock, the same device this D8 already uses to serialise token refreshes,
+  and the admin action may not call the pass inline because that would be a user reaching every
+  organization's rows through a class no policy is about.
+
+  The pass is `App\Security\Secrets\AppKeyRotation` (S2-04): it re-encrypts every attribute in
   `App\Security\Secrets\EncryptedAttributeInventory` under the current key, rewrites the keyed blind
   index `contact_emails.address_hash` — whose HMAC key is derived from the application key, so every
   index key changes when the envelope does — and records counts in `audit_events`, never a value. A
@@ -342,25 +353,28 @@ its value with the redactor so even unknown formats are caught).
   still reads, which is what makes a *deferred* re-encryption safe at all.
   `tests/Security/AppKeyRotationTest.php` proves both directions.
 
-  **Open with S2-04, tracked as #127: "in a queued job" is not yet literally true, and the reason
-  is a collision worth recording.** S2-06 (#88) requires every `ShouldQueue` class that reaches tenant data to run
-  as the user that dispatched it, because there is deliberately no privileged job identity
-  (`AuthorizesQueuedWork`, threat model T-73). A key rotation cannot satisfy that: the key is
-  install-wide, so a dispatcher's memberships are the wrong scope, and four of the eight tables it
-  must rewrite — `ai_runs`, `tool_runs`, `source_records`, `memory_sources` — are **append-only by
-  policy**, so `update` is false for them to every user by design. A rotation that honoured the
-  policy would leave the install half under each key; one that overrode it would be the privileged
-  job identity S2-06 exists to prevent. So re-encryption is not a user action at all: it belongs
-  with the S2-04 migration that first wrote those columns — a storage-layer pass triggered by a key
-  change. S2-04 therefore ships it as a plain action serialised by a cache lock
-  (`lea:app-key:reencrypt`), with the same behaviour and the same tests, and the **retention purge**
-  (S2-03) and the **backup job** (ADR-002 D5) will need the same category. Naming that category —
-  "tenant-wide maintenance, authorised by not being a user action" — is **issue #127**: a marker
-  whose members an arch test enumerates, a rule that a member is unreachable from any user-facing
-  surface, its own audit actor shape, and a written statement of what it may not do. **#127 also
-  corrects the "in a queued job" wording in this bullet**, so this paragraph is the signpost for a
-  sentence that currently contradicts the code rather than a silent discrepancy. It was not S2-04's
-  to take alone, and S2-04 deliberately invented no exception for itself in the meantime.
+  **Why not a queued job — the collision S2-04 surfaced and #127 settled.** S2-06 (#88) requires
+  every `ShouldQueue` class that reaches tenant data to run as the user that dispatched it, because
+  there is deliberately no privileged job identity (`AuthorizesQueuedWork`, threat model T-73). A key
+  rotation cannot satisfy that: the key is install-wide, so a dispatcher's memberships are the wrong
+  scope, and four of the eight tables it must rewrite — `ai_runs`, `tool_runs`, `source_records`,
+  `memory_sources` — are **append-only by policy**, so `update` is false for them to every user by
+  design. A rotation that honoured the policy would leave the install half under each key; one that
+  overrode it would be the privileged job identity S2-06 exists to prevent. So re-encryption is not a
+  user action at all: it belongs with the S2-04 migration that first wrote those columns — a
+  storage-layer pass triggered by a key change.
+
+  **#127 names that category and closes it:** `App\Security\Authorization\Maintenance\TenantWideMaintenance`,
+  "tenant-wide maintenance, authorised by not being a user action"
+  ([authorization.md §10](../architecture/authorization.md)). `AppKeyRotation` is its first member.
+  Membership is enumerated by `tests/Security/MaintenanceCategoryArchTest.php`, so a second member is
+  a reviewed decision rather than an import; a member is unreachable from any route, Livewire action,
+  tool or queued job and may not read `auth()`, `request()` or a `User`; its audit actor is
+  `maintenance:AppKeyRotation` rather than `job:…`, because this repository also writes `job:` for
+  pre-identity *user* actions; and §10.4 states what the category may not do — above all that it is
+  not a way to reach tenant data on behalf of a user. The **retention purge** (S2-03) and the
+  **backup job** (ADR-002 D5) are the next two members and are deliberately not retrofitted;
+  §10.5 is what their authors do.
 - **IPC key rotation.** `ipc.menubar` is regenerated on every reinstall and by a "Reset security
   pairing" action; the menu bar re-pairs through the Supervisor (S0-15).
 - **Compromise response.** The broker's **locked** state (D3.2) refuses all `get`s instantly from the

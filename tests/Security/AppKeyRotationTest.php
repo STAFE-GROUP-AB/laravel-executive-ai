@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\AuditEvent;
 use App\Models\CRM\Commitment;
 use App\Models\CRM\ContactEmail;
+use App\Security\Authorization\Maintenance\MaintenanceActor;
 use App\Security\Secrets\AppKeyRotation;
 use App\Security\Secrets\EncryptedAttributeInventory;
 use App\Security\Secrets\SensitiveAttributeRewriter;
@@ -99,7 +100,7 @@ it('keeps a row written under a previous key readable before the rotation runs',
     // E35, stated as the property that matters operationally: the rotation may stay
     // pending for as long as it likes, because nothing is unreadable while the old key
     // is in the envelope. That is what makes a deferred re-encryption safe at all —
-    // see AppKeyRotation on why it is not a ShouldQueue job yet.
+    // see AppKeyRotation on why it is not a ShouldQueue job (settled by #127).
     ApplicationKeys::with($new, [$old], function () use ($ids): void {
         expect(array_filter(app(SensitiveAttributeRewriter::class)->unreadable()))->toBe([])
             ->and(ContactEmail::query()->findOrFail($ids['contact_emails'])->address)->toBe(SensitiveAttributeFixtures::ADDRESS)
@@ -147,7 +148,10 @@ it('records the rotation in the audit trail with counts and never a value', func
     $context = $event->context ?? [];
     $serialised = (string) json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    expect($event->actor)->toBe('job:AppKeyRotation')
+    // #127: the actor is the tenant-wide maintenance shape, not `job:`, because
+    // this repository also writes `job:` for pre-identity *user* actions
+    // (`job:CreateOwnerForm`). `AuditCompletenessTest` owns the rest of that rule.
+    expect($event->actor)->toBe(MaintenanceActor::PREFIX.'AppKeyRotation')
         ->and($event->outcome)->toBe('ok')
         ->and($context['attributes'] ?? null)->toBe(count(EncryptedAttributeInventory::qualifiedColumns()))
         ->and($context['rows_reencrypted'] ?? null)->toBe(count(EncryptedAttributeInventory::qualifiedColumns()))
