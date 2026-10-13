@@ -64,13 +64,28 @@ final class TenantRowFactory
      * Every table in the schema that carries `organization_id` — the tenant
      * boundary, read from the database rather than from a list.
      *
+     * **The schema argument is not optional.** With `schema: null`, MySQL's
+     * grammar compiles `table_schema not in ('information_schema', 'mysql',
+     * 'ndbinfo', 'performance_schema', 'sys')` — it excludes the *system*
+     * schemas and returns every table in every other database on the server.
+     * On a developer machine running Herd that is thousands of tables from
+     * unrelated projects, several hundred of which happen to carry an
+     * `organization_id`, so this sweep enumerated names that do not exist in
+     * the database under test and the policy assertion failed with a count
+     * nobody could explain. SQLite cannot show it: one connection is one file.
+     * CI could not show it either, because its MySQL holds only the test
+     * database — the sweep was right there by coincidence, not by construction.
+     *
+     * `getCurrentSchemaListing()` is the portable answer: `['main']` on SQLite,
+     * `[<database>]` on MySQL, and both grammars accept the array.
+     *
      * @return list<string>
      */
     public static function tenantTables(): array
     {
         $tables = [];
 
-        foreach (Schema::getTableListing(schema: null, schemaQualified: false) as $table) {
+        foreach (Schema::getTableListing(schema: Schema::getCurrentSchemaListing(), schemaQualified: false) as $table) {
             if (in_array('organization_id', array_column(Schema::getColumns($table), 'name'), true)) {
                 $tables[] = $table;
             }
