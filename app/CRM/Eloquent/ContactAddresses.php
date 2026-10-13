@@ -9,35 +9,38 @@ use App\Models\CRM\ContactEmail;
 /**
  * The one place this module looks a contact up **by email address**.
  *
- * It exists because of a single coming change and is deliberately the only
- * call site for it. S2-04 (#87) encrypts `contact_emails.address` at rest: the
- * column becomes ciphertext and the unique index moves to a `char(64)`
- * `address_hash`, after which the address can no longer be compared,
- * prefixed or `LIKE`d in SQL. `ContactEmail::forAddress()` is the lookup that
- * hashes and hits that index.
+ * `contact_emails.address` is encrypted at rest (S2-04, #87): the column holds
+ * ciphertext from a randomised encrypter, so the same address yields different
+ * bytes every time and the column cannot be compared, prefixed or `LIKE`d in
+ * SQL at all. The identity of an address is indexed through `address_hash`, a
+ * keyed HMAC, and `ContactEmail::forAddress()` is the scope that hashes and
+ * hits that index — including under each previous application key, so a lookup
+ * still finds a row an interrupted key rotation has not rewritten yet.
  *
- * So the predicate lives here, once, and the migration to the hashed lookup is
- * a change to `contactIdsFor()` and nothing else. The alarm that the change is
- * due is a test, not a comment: `tests/Feature/CRM/ContactsCrudTest.php`
- * ("finds a contact by any of its addresses", "refuses an address another
- * contact already uses") fails the moment the column stops being matchable.
+ * Both reads here go through that scope, and they are the module's only ones.
+ * Keeping them in one class is what made the encryption a two-line change
+ * rather than a hunt, and `tests/Feature/CRM/ContactsCrudTest.php` ("finds a
+ * contact by any of its addresses", "refuses an address another contact
+ * already uses") is what proves the lookup still works through the index it
+ * actually has.
  *
  * Nothing else in this module touches the column. In particular the full-text
  * search does **not**: the `contacts` corpus covers `display_name`,
  * `given_name`, `family_name`, `title` and `notes` only, and
- * `CrmSearchContractTest` already pins that addresses are not indexed on either
- * profile ("contacts · addresses are not indexed"). Sorting is by
- * `display_name`. An encrypted address therefore changes the search not at all.
+ * `CrmSearchContractTest` pins that addresses are not indexed on either profile
+ * ("contacts · addresses are not indexed"). Sorting is by `display_name`. The
+ * encrypted address therefore changes the CRM search not at all.
  *
  * Addresses are stored lower-cased and are unique per organization, which is
  * what makes "the sender address is contact X's" a deterministic rule (§5.6).
- * Normalisation happens here so a caller cannot skip it.
+ * Normalisation is `ContactEmail::normalize()` — the same function the hash is
+ * taken over, so a lookup can never normalise differently from the index.
  */
 final class ContactAddresses
 {
     public static function normalize(string $address): string
     {
-        return mb_strtolower(trim($address));
+        return ContactEmail::normalize($address);
     }
 
     /**
@@ -63,7 +66,7 @@ final class ContactAddresses
 
         return ContactEmail::query()
             ->where('organization_id', $organizationId)
-            ->where('address', $normalized)
+            ->forAddress($normalized)
             ->pluck('contact_id')
             ->map(static fn (mixed $id): string => (string) $id)
             ->values()
@@ -90,7 +93,7 @@ final class ContactAddresses
 
         $holders = ContactEmail::withTrashed()
             ->where('organization_id', $organizationId)
-            ->where('address', $normalized)
+            ->forAddress($normalized)
             ->pluck('contact_id')
             ->map(static fn (mixed $id): string => (string) $id)
             ->values()

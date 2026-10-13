@@ -32,10 +32,12 @@ uses(DatabaseTransactions::class);
  * same row instead of colliding with its own tombstone.
  *
  * `it finds a contact by any of its addresses` and `it refuses an address
- * another contact already uses` are also the alarm for S2-04 (#87), which
- * encrypts `contact_emails.address` and moves the unique index to
- * `address_hash`: they fail the moment the column stops being matchable, and
- * `App\CRM\Eloquent\ContactAddresses` is the one call site to change.
+ * another contact already uses` are also what holds the lookup together with
+ * S2-04 (#87), which encrypts `contact_emails.address` and moves the unique
+ * index onto `address_hash`: the column can no longer be matched in SQL, so
+ * both cases resolve through `ContactEmail::forAddress()` by way of
+ * `App\CRM\Eloquent\ContactAddresses` — this module's only call site for
+ * matching on an address, and the reason that change touched two lines.
  */
 
 it('requires a signed-in user', function (): void {

@@ -184,9 +184,10 @@ exactly the same text and the `search` contract group can demand the same hit se
   `contacts.notes`
 
 Nothing else. In particular **not** `contact_emails.address`: the `contacts` corpus does not index
-addresses on either profile, and `CrmSearchContractTest` already pins that ("contacts · addresses are
-not indexed"). Sorting is by `display_name`. So S2-04's encryption of that column
-([§6.1](#61-the-one-column-the-screens-look-up-by-hand)) changes the search not at all.
+addresses on either profile, and `CrmSearchContractTest` pins that ("contacts · addresses are not
+indexed"). Sorting is by `display_name`. So S2-04's encryption of that column
+([§6.1](#61-the-one-column-the-screens-look-up-by-hash)) changes the CRM search not at all — which is
+the claim that mattered while the two items were open at the same time.
 
 Two consequences that are deliberate rather than incidental:
 
@@ -203,18 +204,22 @@ A term contributes at most `QueryPage::MAX_LIMIT` hit ids. The corpus returns id
 is the first 500 matches in id order; past it, the person narrows by typing a second word, since
 every term must match.
 
-### 6.1 The one column the screens look up by hand
+### 6.1 The one column the screens look up by hash
 
-`ContactAddresses` is the module's only call site for matching a contact **by email address**, and it
-exists because of a single coming change. S2-04 (#87) encrypts `contact_emails.address`: the column
-becomes ciphertext and the unique index moves to a `char(64)` `address_hash`, after which the address
-cannot be compared, prefixed or `LIKE`d in SQL. `ContactEmail::forAddress()` is the lookup that
-hashes and hits that index.
+`contact_emails.address` is encrypted at rest (S2-04, #87). Laravel's encrypter is randomised, so the
+same address yields different bytes every time and the column cannot be compared, prefixed or `LIKE`d
+in SQL at all; the identity of an address is indexed through `address_hash`, a keyed HMAC, and
+`ContactEmail::forAddress()` is the scope that hashes and hits it — under each previous application
+key as well, so a lookup still finds a row an interrupted key rotation has not rewritten yet
+(ADR-003 D8).
 
-So the predicate lives in one place, and the migration to the hashed lookup is a change to
-`ContactAddresses::contactIdsFor()` and nothing else. The alarm that the change is due is a test, not
-a comment: `ContactsCrudTest` ("finds a contact by any of its addresses", "refuses an address another
-contact already uses") fails the moment the column stops being matchable.
+`App\CRM\Eloquent\ContactAddresses` is this module's **only** call site for matching a contact by
+address, and both of its reads go through that scope. Keeping them in one class is what made the
+encryption a two-line change here rather than a hunt through forms and repositories;
+`ContactsCrudTest` ("finds a contact by any of its addresses", "refuses an address another contact
+already uses") is what proves the lookup still works through the index it actually has. Normalisation
+is `ContactEmail::normalize()`, the same function the hash is taken over, so a lookup cannot normalise
+differently from the index.
 
 Two reads, deliberately different: `contactIdsFor()` sees live rows only, because the read contract
 says a soft-deleted row is never returned; `isTaken()` counts soft-deleted rows too, because a unique
