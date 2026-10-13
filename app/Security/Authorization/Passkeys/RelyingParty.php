@@ -15,8 +15,12 @@ use Illuminate\Http\Request;
  * ever verified against the exact origin its challenge was issued for.
  *
  * WebAuthn needs a domain name as the RP id: browsers refuse an IP literal,
- * so `http://127.0.0.1:<port>` cannot run a ceremony at all. The authenticator
- * reports that honestly instead of failing inside the browser.
+ * so `http://127.0.0.1:<port>` cannot run a ceremony at all. That is why
+ * ADR-006 D3 makes `http://localhost:<port>` the browser origin the product
+ * opens, and why a browser request on `127.0.0.1` is redirected there
+ * (`RedirectToCanonicalHost`). A request that still arrives on an IP literal
+ * — a hand-typed address, a bare IP — is reported honestly by `status()`
+ * instead of failing inside the browser; the emailed code still works.
  */
 final readonly class RelyingParty
 {

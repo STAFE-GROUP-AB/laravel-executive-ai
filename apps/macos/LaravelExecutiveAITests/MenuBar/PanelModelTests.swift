@@ -226,21 +226,39 @@ final class PanelModelTests: XCTestCase {
 
     // MARK: - Actions (§1.1)
 
-    func testOpenFullBriefAndOpenPWAUseThePWAOrigin() async {
-        let (model, _, spies) = makePanelModel(health: .aiReady)
+    /// ADR-006 D3 (#109): every URL the panel hands to a browser is on `localhost`, the one
+    /// loopback host that can be a WebAuthn relying party, while `client.origin` stays the
+    /// `127.0.0.1` the IPC contract requires. `PwaOriginTests` owns the rewriting rules.
+    func testOpenFullBriefAndOpenPWAUseTheCanonicalBrowserOrigin() async {
+        let (model, client, spies) = makePanelModel(health: .aiReady)
         await model.refresh()
 
         model.openFullBrief()
         model.openPWA()
         model.openDiagnostics()
         model.openAction(id: "01M4FJ7WN0BRGSZJGNGZ5FSVT5")
+        // The core still produces `open_url` on the IPC address (the fixture pack records it);
+        // the panel canonicalises it rather than relying on the core's redirect.
+        model.openApproval(PendingApproval(
+            id: "01M4FJ7XM84RV70ZSNAMPQ03HX",
+            kind: "mail.send",
+            title: "Reply to a customer",
+            summary: "",
+            createdAt: "2026-10-10T08:00:00Z",
+            expiresAt: "2026-10-10T08:15:00Z",
+            briefItemId: nil,
+            openUrl: "http://127.0.0.1:8787/approvals/01M4FJ7XM84RV70ZSNAMPQ03HX"
+        ))
 
         XCTAssertEqual(spies.urlOpener.opened.map(\.absoluteString), [
-            "http://127.0.0.1:8787/briefs/01M4FJ7GY0PZH6YA3D9574XN5K",
-            "http://127.0.0.1:8787/home",
-            "http://127.0.0.1:8787/admin",
-            "http://127.0.0.1:8787/approvals/01M4FJ7WN0BRGSZJGNGZ5FSVT5",
+            "http://localhost:8787/briefs/01M4FJ7GY0PZH6YA3D9574XN5K",
+            "http://localhost:8787/home",
+            "http://localhost:8787/admin",
+            "http://localhost:8787/approvals/01M4FJ7WN0BRGSZJGNGZ5FSVT5",
+            "http://localhost:8787/approvals/01M4FJ7XM84RV70ZSNAMPQ03HX",
         ])
+        XCTAssertEqual(client.origin.absoluteString, "http://127.0.0.1:8787", "the IPC origin is unchanged by any of this")
+        XCTAssertTrue(spies.urlOpener.opened.allSatisfy { $0.host() == "localhost" })
     }
 
     func testPauseAndResumeAiActionsToggleThroughTheClient() async {

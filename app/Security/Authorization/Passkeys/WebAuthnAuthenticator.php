@@ -59,6 +59,12 @@ final class WebAuthnAuthenticator implements PasskeyAuthenticator
 
     private const int RS256 = -257;
 
+    /**
+     * The relying-party ids the library may verify over plain HTTP. `localhost`
+     * is a secure context by the fetch standard, and it is the browser origin
+     * the product opens on loopback (ADR-006 D3) precisely so this list has an
+     * entry at all; the tailnet origin is HTTPS and needs none.
+     */
     private const array SECURED_RP_IDS = ['localhost'];
 
     private ?SerializerInterface $serializer = null;

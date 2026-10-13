@@ -84,22 +84,37 @@ followed by `serve status --json`, which must report no handler for `<dnsname>:4
 
 ### D3. Laravel configuration matrix for the tunnelled origin
 
-Laravel always listens on loopback HTTP; the remote origin exists only as the TLS-terminating proxy in `tailscaled`. The app therefore serves **two origins from one process**: `http://127.0.0.1:<port>` (the Mac app's WKWebView and local browsers) and `https://<dnsname>` (tailnet clients). The proxy headers Serve sets were verified in the Tailscale source (`ipn/ipnlocal/serve.go`, function `addProxyForwardedHeaders`): `X-Forwarded-Host` = incoming `Host`, `X-Forwarded-Proto: https` when TLS terminated, `X-Forwarded-For` = the client's tailnet address. Serve also sets `Tailscale-User-Login`, `Tailscale-User-Name`, `Tailscale-User-Profile-Pic` after deleting any client-supplied copies.
+Laravel always listens on loopback HTTP; the remote origin exists only as the TLS-terminating proxy in `tailscaled`. The app therefore serves **two origins from one process**: the loopback origin (local browsers) and `https://<dnsname>` (tailnet clients). The proxy headers Serve sets were verified in the Tailscale source (`ipn/ipnlocal/serve.go`, function `addProxyForwardedHeaders`): `X-Forwarded-Host` = incoming `Host`, `X-Forwarded-Proto: https` when TLS terminated, `X-Forwarded-For` = the client's tailnet address. Serve also sets `Tailscale-User-Login`, `Tailscale-User-Name`, `Tailscale-User-Profile-Pic` after deleting any client-supplied copies.
+
+**The loopback origin a browser is sent to is `http://localhost:<port>` — one browser host, and not the IPC host** (amended 2026-10-13, issue #109; S2-05 surfaced the consequence that forced the choice).
+
+The two loopback names reach the same socket, and this decision assigns each one job:
+
+| Channel | Host | Why that one |
+|---|---|---|
+| Browser — the PWA, every URL the product opens | **`localhost`** | A WebAuthn relying-party id cannot be an IP literal, so on `127.0.0.1` a passkey ceremony cannot start at all and §11's passkey requirement is unreachable for everyone who does not use the tailnet origin. `localhost` is a secure context for plain HTTP by the fetch standard, is a legal RP id, and `TrustHosts` already admits it (the row below, S1-04). |
+| IPC — `/ipc/*`, and the Supervisor's `/health/*` probes | **`127.0.0.1`**, unchanged | ipc-contract §1.1: the literal IP so no resolver configuration can point the client somewhere else, and so §5.2's `Host` check is one fixed string. This is deliberately *not* the browser host and must not be merged into it; `IpcOriginClientTest` pins that the Swift client never so much as names `localhost`. |
+
+What opens `localhost`: the menu bar's "Open PWA", "Open full brief", diagnostics and the approval deep links (`CoreClient.browserOrigin` over `PwaOrigin`, which canonicalises an `open_url` the core produced on the IP literal), and the installer's Done screen.
+
+**Consequence — a browser request on `127.0.0.1` is redirected to the same path on `localhost`** (`App\Http\Middleware\RedirectToCanonicalHost`, in the `web` group only; `302` for a navigation, `307` otherwise so a POST keeps its body). Session cookies are host-only (`SESSION_DOMAIN = null`, the row below), so without this a bookmark on the IP literal would give a person a second browser identity: a session on one host, a passkey on the other, and no visible reason the passkey is never offered. The redirect excludes `/ipc/*` and `/health/*` — a 3xx there is what the Swift client treats as a hijacked port (§5.2), so redirecting them would turn a working core into "core unreachable". The cookie is not migrated; the person signs in on the canonical host, which is where the product sends them anyway.
+
+What would make this wrong: a browser shipping WebAuthn support for IP-literal relying parties (then `127.0.0.1` could be the single loopback host and the redirect would be dead weight); or a future channel on the `web` group that a non-browser client calls on `127.0.0.1` — that client would be redirected, and the fix is to register it outside the `web` group rather than to loosen the redirect. On an origin that is still an IP literal — a hand-typed address, a bare IP — passkeys stay unavailable and `PasskeyAuthenticator::status()` says so in both languages; the emailed one-time code is unchanged and remains the recovery path (auth.md §7.1).
 
 | Setting | Loopback request (Mac app) | Remote request (via Serve) | How it is decided |
 |---|---|---|---|
 | Listener bind | `127.0.0.1:<port>` | same process, same bind | fixed; never `0.0.0.0` |
-| `APP_URL` | `http://127.0.0.1:<port>` | unchanged in `.env` | `APP_URL` is only the fallback for non-HTTP contexts (artisan, queue) |
+| `APP_URL` | `http://localhost:<port>` | unchanged in `.env` | `APP_URL` is only the fallback for non-HTTP contexts (artisan, queue) — and in those it is a *browser* URL (a queued brief mail's CTA), so it is the canonical host, not the IPC one. Written by the installer (`RuntimeEnvironment.supervisorEnvironment`) |
 | `config('remote.origin')` | `null` when disabled | `https://<dnsname>` when `Active` | written by the Mac app on enable/disable (`config/remote.php`, env `REMOTE_ORIGIN`); never derived from a request |
 | `TrustProxies` `at:` | `['127.0.0.1', '::1']` | same | `tailscaled` connects to Laravel from loopback, so loopback is the only trusted proxy; `'*'` is forbidden |
 | `TrustProxies` `headers:` | `Request::HEADER_X_FORWARDED_FOR \| HEADER_X_FORWARDED_HOST \| HEADER_X_FORWARDED_PROTO` | same | exactly the three headers Serve sets; `HEADER_X_FORWARDED_PORT`, `_AWS_ELB` and `HEADER_FORWARDED` are not trusted |
-| `TrustHosts` `at:` | `^127\.0\.0\.1$`, `^localhost$` | plus `^<dnsname-escaped>$` only when `remote.origin` is set | closure `fn () => config('remote.trusted_hosts')`; `subdomains: false`. Rejects spoofed `X-Forwarded-Host` from other local processes |
-| URL generation root | `http://127.0.0.1:<port>` | `https://<dnsname>` | middleware `ResolveRequestOrigin` (after `TrustProxies`/`TrustHosts`) calls `URL::forceRootUrl($request->getSchemeAndHttpHost())` and `URL::forceScheme($request->getScheme())`; queued jobs use `remote.origin ?? APP_URL` |
-| `X-Lxai-Origin` response header | `127.0.0.1:<port>` | `<dnsname>` | set by the same middleware; used by D2 verify |
+| `TrustHosts` `at:` | `^127\.0\.0\.1$`, `^localhost$`, `^\[::1\]$` (the IP literals are trusted so `/ipc/*` and `/health/*` answer on them; browser routes on them redirect) | plus `^<dnsname-escaped>$` only when `remote.origin` is set | closure `fn () => config('remote.trusted_hosts')`; `subdomains: false`. Rejects spoofed `X-Forwarded-Host` from other local processes |
+| URL generation root | `http://localhost:<port>` (the request's own host, after the redirect) | `https://<dnsname>` | middleware `ResolveRequestOrigin` (after `TrustProxies`/`TrustHosts`) calls `URL::forceRootUrl($request->getSchemeAndHttpHost())` and `URL::forceScheme($request->getScheme())`; queued jobs use `remote.origin ?? APP_URL` |
+| `X-Lxai-Origin` response header | the request's own host — `localhost:<port>` for a browser, `127.0.0.1:<port>` for `/ipc/*` and `/health/*` | `<dnsname>` | set by the same middleware; used by D2 verify |
 | `SESSION_DRIVER` | `database` (ADR-002 SQLite) | same | one session store, cookies are per-origin anyway |
 | `SESSION_SECURE_COOKIE` | `false` (loopback HTTP; the cookie never leaves the machine) | `true` | not a static env value: `ResolveRequestOrigin` sets `config(['session.secure' => $request->isSecure()])` per request. Static `true` would break the loopback WKWebView; static `false` is forbidden on the remote origin |
 | `SESSION_SAME_SITE` | `lax` | `lax` | `strict` breaks the notification-tap deep link (D5) which arrives as a top-level navigation |
-| `SESSION_DOMAIN` | `null` | `null` | host-only cookies; the two origins never share a cookie |
+| `SESSION_DOMAIN` | `null` | `null` | host-only cookies; the two origins never share a cookie — which is why the loopback origin has exactly one browser host and `127.0.0.1` redirects to it |
 | `SESSION_HTTP_ONLY` | `true` | `true` | |
 | `SESSION_PARTITIONED` | `false` | `false` | single-site app |
 | CSRF (`PreventRequestForgery`) | token fallback (`Sec-Fetch-Site` is only sent over HTTPS) | `Sec-Fetch-Site` same-origin check, token fallback | default two-layer mode; `originOnly: true` and `allowSameSite: true` are forbidden |
@@ -203,11 +218,14 @@ Harder:
 - Renaming the Mac changes the origin and orphans the installed iPhone PWA and its push subscription; the app warns about this on the confirmation screen and on rename detection (`DNSName` changed since enable).
 - The remote client always needs the Tailscale app signed in to the same tailnet; sharing the PWA with a colleague means sharing the node or inviting them to the tailnet — a tailnet-admin task, not an app task.
 - Session `secure` becomes per-request computed state; tests must cover both origins.
+- The loopback mode has two host names with different jobs (D3): `localhost` for browsers, `127.0.0.1` for IPC and the health probes. Anything new on loopback has to say which it is, and a browser-facing URL built from the IPC origin is a defect even though it loads — the passkey it silently removes is the only symptom.
 - `push_subscriptions` is a new table and a new Keychain identity (ADR-003 inventory must list `se.stafe.executive-ai.webpush`).
 
 **Forbidden in code review from now on:**
 - Any argv, config or string containing `funnel` outside the detection code and its tests; any invocation of `tailscale up`, `login`, `set`, `cert`, or `funnel`.
 - Binding the Laravel listener to anything but `127.0.0.1`/`::1`.
+- Handing a browser a loopback URL built on `127.0.0.1` (use `CoreClient.browserOrigin` / `PwaOrigin` in Swift, a relative URL or `url()` in Laravel), or naming `localhost` anywhere in the IPC client — the two are different hosts on purpose (D3), and `IpcOriginClientTest` and `PwaOriginTests` pin both directions.
+- Redirecting, rewriting or canonicalising `/ipc/*` or `/health/*`: a 3xx there is what the Swift client treats as a hijacked port (ipc-contract §5.2). A new non-browser endpoint belongs outside the `web` group rather than on the redirect's exclusion list.
 - `trustProxies(at: '*')`, trusting `HEADER_FORWARDED`/`X_FORWARDED_PORT`/`_AWS_ELB`, `preventRequestForgery(originOnly: true)` or `allowSameSite: true`.
 - Using `Tailscale-User-*` headers for authentication or authorization.
 - Static `SESSION_SECURE_COOKIE=false` on the remote origin; `SESSION_SAME_SITE=none`.

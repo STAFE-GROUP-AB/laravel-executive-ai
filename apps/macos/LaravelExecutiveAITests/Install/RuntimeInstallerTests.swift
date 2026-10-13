@@ -368,7 +368,10 @@ final class RuntimeInstallerTests: XCTestCase {
         XCTAssertEqual(environment["PHPRC"], runtime.directory.path)
         XCTAssertEqual(environment["APP_ENV"], "production")
         XCTAssertEqual(environment["APP_DEBUG"], "false")
-        XCTAssertEqual(environment["APP_URL"], "http://127.0.0.1:8788")
+        // ADR-006 D3: the canonical browser origin, so a queued brief mail's CTA lands on the host
+        // the session and the passkey live on. The listener bind is LEA_HTTP_PORT on 127.0.0.1.
+        XCTAssertEqual(environment["APP_URL"], "http://\(PwaOrigin.host):8788")
+        XCTAssertEqual(environment["APP_URL"], "http://localhost:8788")
         XCTAssertEqual(environment["LEA_BACKEND_PROFILE"], "local")
         XCTAssertEqual(environment.count, 10)
 

@@ -37,7 +37,7 @@ return [
         'status' => [
             'available' => 'Passkeys work on this address (:rp).',
             'insecure' => 'Passkeys need an HTTPS address or localhost; this page is on :origin.',
-            'ip_literal' => 'Passkeys need a host name rather than an IP address; this page is on :origin. Open the app on localhost or over your private remote address.',
+            'ip_literal' => 'Passkeys need a host name rather than an IP address; this page is on :origin. The app opens on localhost, where passkeys work — open it from the menu bar, or use your private remote address.',
         ],
         'errors' => [
             'unavailable' => 'Passkeys are not available on this address. Use the emailed code.',

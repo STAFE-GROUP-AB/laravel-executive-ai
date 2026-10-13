@@ -436,6 +436,13 @@ final class PanelModel {
 
     // MARK: - Actions (§1.1)
 
+    /*
+     * Every URL below is built on `client.browserOrigin` — `http://localhost:<port>`, the one
+     * browser origin where a passkey can exist (ADR-006 D3). `client.origin` is the IPC address
+     * and stays out of the browser; a deep link the core produced is canonicalised the same way,
+     * so the person never lands on a second host with its own cookie jar.
+     */
+
     func openFullBrief() {
         guard let id = latestBriefId else {
             openPWA()
@@ -443,15 +450,15 @@ final class PanelModel {
             return
         }
 
-        ports.urlOpener.open(client.origin.appending(path: "briefs").appending(path: id))
+        ports.urlOpener.open(client.browserOrigin.appending(path: "briefs").appending(path: id))
     }
 
     func openPWA() {
-        ports.urlOpener.open(client.origin.appending(path: "home"))
+        ports.urlOpener.open(client.browserOrigin.appending(path: "home"))
     }
 
     func openDiagnostics() {
-        ports.urlOpener.open(client.origin.appending(path: "admin"))
+        ports.urlOpener.open(client.browserOrigin.appending(path: "admin"))
     }
 
     func openApproval(_ approval: PendingApproval) {
@@ -459,11 +466,11 @@ final class PanelModel {
             return
         }
 
-        ports.urlOpener.open(url)
+        ports.urlOpener.open(PwaOrigin.canonical(url))
     }
 
     func openAction(id: String) {
-        ports.urlOpener.open(client.origin.appending(path: "approvals").appending(path: id))
+        ports.urlOpener.open(client.browserOrigin.appending(path: "approvals").appending(path: id))
     }
 
     func togglePauseAI() async {

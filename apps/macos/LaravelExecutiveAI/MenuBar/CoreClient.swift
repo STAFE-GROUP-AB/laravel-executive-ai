@@ -70,8 +70,9 @@ struct HeartbeatAck: Codable, Equatable, Sendable {
 }
 
 protocol CoreClient: Sendable {
-    /// `http://127.0.0.1:<port>` — the loopback origin the PWA is served on, learned from the pairing
-    /// grant (ipc-contract §1.1). "Open full brief" and "Open PWA" build their URLs on it.
+    /// `http://127.0.0.1:<port>` — the **IPC** origin, learned from the pairing grant
+    /// (ipc-contract §1.1), which requires the literal IP so no resolver can redirect it.
+    /// Never handed to a browser: that is `browserOrigin`.
     var origin: URL { get }
 
     /// §6.1 — the health contract's `ready` document, enveloped. Branch on `ready`, not status code.
@@ -91,6 +92,15 @@ protocol CoreClient: Sendable {
 
     /// §6.5 — every 30 s while the GUI runs; the only signal `menubar_integration` reads.
     func heartbeat(panelOpen: Bool) async throws -> HeartbeatAck
+}
+
+extension CoreClient {
+    /// `http://localhost:<port>` — the same core, same port, on the one host a browser can hold a
+    /// passkey for (ADR-006 D3). "Open PWA", "Open full brief", diagnostics and the approval deep
+    /// links all build on this; `origin` stays the IPC address and is never opened.
+    var browserOrigin: URL {
+        PwaOrigin.canonical(origin)
+    }
 }
 
 /// The core is not answering. The live build runs with this until S1-08 part 2 lands, so every

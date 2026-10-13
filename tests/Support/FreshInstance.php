@@ -32,8 +32,15 @@ use Tests\Support\Ipc\IpcClient;
  */
 final class FreshInstance
 {
-    /** The loopback origin the bundled HTTP server answers on (ipc-contract §1.1, config/ipc.php). */
-    public const string ORIGIN = IpcClient::ORIGIN;
+    /**
+     * The browser origin the product opens (ADR-006 D3): the same loopback
+     * socket as `IpcClient::ORIGIN` under the host name a browser can hold a
+     * passkey for. Browser requests use this; `IpcClient::ORIGIN` keeps the
+     * literal `127.0.0.1` the IPC contract requires (§1.1) and is what
+     * `ipc()` below sends on. The two are deliberately different hosts on the
+     * same port (`config('ipc.port')`, 8787 in the fixtures).
+     */
+    public const string ORIGIN = 'http://localhost:8787';
 
     /** @var array{server: ?string, env: ?string, putenv: string|false} */
     private array $savedDatabase = ['server' => null, 'env' => null, 'putenv' => false];

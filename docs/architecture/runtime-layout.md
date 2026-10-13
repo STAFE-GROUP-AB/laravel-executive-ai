@@ -106,7 +106,7 @@ reference. Every PHP child (HTTP, `queue:work`, `schedule:work`) gets exactly:
 | `LEA_HTTP_PORT` | the port preflight recorded in `install/checkpoint.json` (`preflight.port`) | Caddyfile `http://127.0.0.1:{$LEA_HTTP_PORT}`; `config/ipc.php` (`Host` must be exactly `127.0.0.1:<port>` on `/ipc/*` and `/health/ready`, and `X-Lxai-Origin` echoes it — ipc-contract §5.2, §4.5) |
 | `PHPRC` | `…/runtime/<version>` — the directory holding `php.ini` | PHP |
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` | Laravel |
-| `APP_URL` | `http://127.0.0.1:<port>` | Laravel |
+| `APP_URL` | `http://localhost:<port>` — the canonical **browser** origin (ADR-006 D3), not the IPC one: outside an HTTP request `url()` falls back to it, and a queued brief mail's CTA has to land on the host the session and the passkey live on. The listener still binds `127.0.0.1:$LEA_HTTP_PORT`. | Laravel |
 | `LEA_BACKEND_PROFILE` | `local` | `config/lea.php` |
 | `LEA_SECRETS_SOCKET` | `…/Application Support/<bundle id>/run/secrets.sock` — the Supervisor's secrets broker (ADR-003 D3; added by S1-07, `RuntimeEnvironment.secretsSocketKey`) | `config/secrets.php` selects the `supervisor` driver when it is present; `App\Security\Secrets\SupervisorSecretStore` connects to it |
 
