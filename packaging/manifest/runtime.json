@@ -3,8 +3,8 @@
     "schema_version": 1,
     "runtime_version": "0.1.0",
     "status": "signed",
-    "built_at": "2026-10-13T10:51:46.991Z",
-    "source_commit": "d4ea6cebc73214396e112af61b479b69234a20b4",
+    "built_at": "2026-10-13T22:08:52.855Z",
+    "source_commit": "73a22dad4333e6439655d6ba9ab967ead81aca34",
     "components": {
         "frankenphp": {
             "version": "1.13.0",
@@ -95,8 +95,8 @@
         "files": [
             {
                 "path": "Caddyfile",
-                "sha256": "7d29ab22aede587fb99f4f5271ecaf8e2dba3abf60c530b69eea6c29a9c71b79",
-                "bytes": 1126
+                "sha256": "3615eb9608f6eedf57755708a8e071051da4a54c4eea164a004202f23b732d45",
+                "bytes": 1777
             },
             {
                 "path": "app/.editorconfig",
@@ -164,6 +164,46 @@
                 "bytes": 105
             },
             {
+                "path": "app/app/AI/Compliance/DpaStatus.php",
+                "sha256": "e318fb29f3d1ede8b1f1714e4fad695543e2c22f79512fd2d97f004a86854719",
+                "bytes": 552
+            },
+            {
+                "path": "app/app/AI/Compliance/ProviderRegisterField.php",
+                "sha256": "4135d3a9b976acf1548e44836461c60473952080f3ecd260c1fcd60d7993826a",
+                "bytes": 3534
+            },
+            {
+                "path": "app/app/AI/Compliance/RegionEvidenceField.php",
+                "sha256": "1653e0b7e34d05cc65560e7eac1d16421a8b2cc1ff3c825d5f70799751400262",
+                "bytes": 2733
+            },
+            {
+                "path": "app/app/AI/Compliance/TiaStatus.php",
+                "sha256": "11b8fe309a1a03831978fb69aa98523c5e93b59d3ec1eb7649f4c0608c472efa",
+                "bytes": 529
+            },
+            {
+                "path": "app/app/AI/Memory/MemoryKind.php",
+                "sha256": "e08ae69d81c6814cec24da96be626714208fb6eb991922732fc4c6dd7bf7bc2c",
+                "bytes": 473
+            },
+            {
+                "path": "app/app/AI/Memory/MemoryScope.php",
+                "sha256": "afb30bc9c226d95531770964ed2fdd3864d3bdbfe8d4c1b18a6114977028adfe",
+                "bytes": 862
+            },
+            {
+                "path": "app/app/AI/Memory/MemorySourceType.php",
+                "sha256": "7339328400e4341468487a53c26b2ee76ac4d82d6b33c3049855c2b5c6814b8a",
+                "bytes": 699
+            },
+            {
+                "path": "app/app/AI/Memory/MemoryStatus.php",
+                "sha256": "1c5bcbf6c83d96d43ad7447575f1ac36dce9ac2c57f5806fe9e33b18cfc5a0cb",
+                "bytes": 840
+            },
+            {
                 "path": "app/app/AI/Memory/README.md",
                 "sha256": "2a50c3187f1e16493705856249db0cf2ee988a9605f551df9bea7255106d5836",
                 "bytes": 122
@@ -205,8 +245,8 @@
             },
             {
                 "path": "app/app/AI/Providers/Detection/LoopbackProbe.php",
-                "sha256": "02365ecec0b459c2aa4cea3e0e5cea4b3587f55a4764df4d5a5780405e9484b9",
-                "bytes": 2687
+                "sha256": "4d99f85e5f47d30ed8b19c2c5c786416d1da8e1013e9bd28df98a5ebcf639770",
+                "bytes": 3437
             },
             {
                 "path": "app/app/AI/Providers/Detection/OllamaDetector.php",
@@ -295,8 +335,8 @@
             },
             {
                 "path": "app/app/AI/Providers/Exceptions/EgressBlockedException.php",
-                "sha256": "d4fffbe9c55aa26272cd321a0da0fca9b97fa715153adc7f9d8df19684fa8547",
-                "bytes": 735
+                "sha256": "12457d682406e760dff77db15145a58fdd5198a830e4e937ff0f0bfe8778fe87",
+                "bytes": 1943
             },
             {
                 "path": "app/app/AI/Providers/Exceptions/InvalidStructuredOutputException.php",
@@ -345,8 +385,8 @@
             },
             {
                 "path": "app/app/AI/Providers/LaravelAi/SdkAgentBridge.php",
-                "sha256": "be850ad96e4de32bc909589bfc91fa3a7369719666a4fad05b682342e92ae596",
-                "bytes": 2636
+                "sha256": "eda22896bbf17975c306cb3751f427513efdc968e98b9d098b534e3cb9e8ca59",
+                "bytes": 3356
             },
             {
                 "path": "app/app/AI/Providers/LaravelAi/SdkMessageMapper.php",
@@ -355,8 +395,8 @@
             },
             {
                 "path": "app/app/AI/Providers/LaravelAi/SdkToolBridge.php",
-                "sha256": "42efe4f0a7f9b3f3dc9e9575bb5c98b7d42bdd5c9dd4bec09ff56259b1a46f87",
-                "bytes": 3147
+                "sha256": "a6c802e8d21035d478aed010b25764c21a32b64e7019bd5f6b75deffff674ebe",
+                "bytes": 8566
             },
             {
                 "path": "app/app/AI/Providers/LaravelAi/StructuredSdkAgentBridge.php",
@@ -405,8 +445,8 @@
             },
             {
                 "path": "app/app/AI/Providers/ProviderRegistry.php",
-                "sha256": "d2e8376f1d20506bcf81dac28e4fed1e8728f251eb7f60aa0e12dea957f412af",
-                "bytes": 4027
+                "sha256": "83a64428e7df5ab8e8cc4384512c6c050fc51f4abcb9215ed3ae87aff6d099c1",
+                "bytes": 4862
             },
             {
                 "path": "app/app/AI/Providers/README.md",
@@ -450,13 +490,13 @@
             },
             {
                 "path": "app/app/AI/Routing/ModelRouter.php",
-                "sha256": "eb227260f4df0765de59ae55b03df8fdd67d1af9161f32f502143c7b126a7e6a",
-                "bytes": 8109
+                "sha256": "a4ac71895eceeb7d14876ae1862f2d4d5af61b06579f59ad5599f22f11441665",
+                "bytes": 8225
             },
             {
                 "path": "app/app/AI/Routing/PrivacyMode.php",
-                "sha256": "b163a8fe4dd177a2742ed563674b77dabe526a77637987d86d3f9868e722ef3b",
-                "bytes": 1190
+                "sha256": "f07aa9077d88841dc6346929426643cdd616362f41b26ea13a371233d5463de7",
+                "bytes": 2235
             },
             {
                 "path": "app/app/AI/Routing/ProbedCapabilities.php",
@@ -470,8 +510,23 @@
             },
             {
                 "path": "app/app/AI/Routing/RoutingDecision.php",
-                "sha256": "e2a7c856f260fe96f3829ce517a0f02b84414bc88917863fde73bf4a3a368e80",
-                "bytes": 1299
+                "sha256": "b519944257d0e76d594c2e808d259c478cbcb87c2f1aa2190b5543e45ce2197e",
+                "bytes": 1935
+            },
+            {
+                "path": "app/app/AI/Runs/RunOutcome.php",
+                "sha256": "f42f52c4f5de0a33dd2eada6edc021ebacf98504eb29e2108c7008b9d3c02b4f",
+                "bytes": 1309
+            },
+            {
+                "path": "app/app/AI/Runs/RunProvenanceField.php",
+                "sha256": "a43cf60c3a7409e604b1536be863b8b5711b67a82b1b1510bb40065d2aedf414",
+                "bytes": 2511
+            },
+            {
+                "path": "app/app/AI/Tools/PolicyDecision.php",
+                "sha256": "bde177b42c20d4f85af38246c713299a03dadec293ef2a0c73c5c213fddeeca7",
+                "bytes": 509
             },
             {
                 "path": "app/app/AI/Tools/README.md",
@@ -479,9 +534,64 @@
                 "bytes": 119
             },
             {
+                "path": "app/app/AI/Tools/ToolKind.php",
+                "sha256": "780833d6a0ab14151b1df5f20e22d10991a23bd45db95f8590a0ddf3c9042166",
+                "bytes": 436
+            },
+            {
+                "path": "app/app/AI/Tools/ToolRunOutcome.php",
+                "sha256": "3983987e31f62a1f9e8b6ff576fc9ae61685ec13c8514afb4727a3f24cda6c72",
+                "bytes": 706
+            },
+            {
                 "path": "app/app/Approvals/Actions/README.md",
                 "sha256": "c6cd14a7ebeeeaa018f83a0acdccad1c9a74becc32a81e64d76706a54d7295e8",
                 "bytes": 115
+            },
+            {
+                "path": "app/app/Approvals/FrozenProposalException.php",
+                "sha256": "47d2f2f67989339fd9e95dd425906806164f77ea0ca4a8b6ee6d5f8810317ee7",
+                "bytes": 1102
+            },
+            {
+                "path": "app/app/Approvals/Policies/ApprovalLedger.php",
+                "sha256": "504ec965417bd6c97de1344fd97ee0915071e7691348c08d2d516daa18d632db",
+                "bytes": 3508
+            },
+            {
+                "path": "app/app/Approvals/Policies/ApprovalRequiredException.php",
+                "sha256": "c47f480477ccf115ef8f7e480aba54054c7e7d5bc454cdb2fd82e2c51f33a725",
+                "bytes": 1144
+            },
+            {
+                "path": "app/app/Approvals/Policies/BudgetViolationException.php",
+                "sha256": "0294c8f88e1e4a66ceb805970943c8536ad9ecd6e73c9ea901d075cf08c750b2",
+                "bytes": 662
+            },
+            {
+                "path": "app/app/Approvals/Policies/DataClassViolationException.php",
+                "sha256": "5113c5bc6b06795b5dda2ee7e38a4d2356458a85c48a1a6ca6907208f2398ce7",
+                "bytes": 582
+            },
+            {
+                "path": "app/app/Approvals/Policies/DestinationNotAllowedException.php",
+                "sha256": "baa5b0ec7096c866da77b71b73b4d1c5564be470cc5932eedc242824525149eb",
+                "bytes": 721
+            },
+            {
+                "path": "app/app/Approvals/Policies/InvalidToolInputException.php",
+                "sha256": "018fde949c31d44816f055460627767a92114bfcdfaf41a1703d34aa1fec22ee",
+                "bytes": 789
+            },
+            {
+                "path": "app/app/Approvals/Policies/NoRuleMatchedException.php",
+                "sha256": "756199ac21c9b1060f07b6e7d927a47e45f38a6859268ec015be682036b9e6a4",
+                "bytes": 648
+            },
+            {
+                "path": "app/app/Approvals/Policies/PayloadNotFrozenException.php",
+                "sha256": "878dee527051b552067b9298545714b94d707b5f95de860db84e549c0a329718",
+                "bytes": 723
             },
             {
                 "path": "app/app/Approvals/Policies/PolicyDeniedException.php",
@@ -489,9 +599,114 @@
                 "bytes": 790
             },
             {
+                "path": "app/app/Approvals/Policies/PolicyGate.php",
+                "sha256": "b0f3374966c13d5dab4c48bc73f72b67db17a75e252fbc942f8d784445564135",
+                "bytes": 13643
+            },
+            {
+                "path": "app/app/Approvals/Policies/PolicyJournal.php",
+                "sha256": "ddc313e647d56c2c06f27ca7dbe3199e553a8522c306cd24bcf884f957c93a25",
+                "bytes": 5170
+            },
+            {
+                "path": "app/app/Approvals/Policies/PolicyReason.php",
+                "sha256": "f3e4cf5c3cdffffa858657f911d3a4c689a1c85394be0d1d4b8a66ceea30f684",
+                "bytes": 3425
+            },
+            {
+                "path": "app/app/Approvals/Policies/PolicyRefusal.php",
+                "sha256": "6380f248eba4eaa85804e02958540078ae416d30ff8152605076453f58189d3c",
+                "bytes": 2105
+            },
+            {
+                "path": "app/app/Approvals/Policies/PolicyVerdict.php",
+                "sha256": "b3f42bd779277f3db1a94313dc119beb1360151c4fd3d47d8e5788facbee756d",
+                "bytes": 6211
+            },
+            {
+                "path": "app/app/Approvals/Policies/ProposedAction.php",
+                "sha256": "e28cb4be0aa1f7726c4156772af2b2f1d4c0dccd15eff3a8c69807a928db3faa",
+                "bytes": 6174
+            },
+            {
                 "path": "app/app/Approvals/Policies/README.md",
-                "sha256": "4417c477719a230dbe1ac731ce8ea1d97cdc097911d7773794d60ebd067c35ec",
-                "bytes": 105
+                "sha256": "155b07911af0f27f0c1d49dbf63f0469352069589a5e7ca39addf7ce13bc04ff",
+                "bytes": 439
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/ActionBudget.php",
+                "sha256": "4a82b09322a3627692150dde0c37a9f1e099eac573c2ce5841b9a8030e07582b",
+                "bytes": 2078
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/ActionRule.php",
+                "sha256": "3dbfac90d94c7d95a77ca31c291cb180f5f007aa055eef0db8f893ba010c03e0",
+                "bytes": 3852
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/ArgumentSchema.php",
+                "sha256": "cbc9ff838ccfb836a2bee6739e473f74b241a598c9a93407e2414a46081cd84a",
+                "bytes": 2766
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/ArgumentType.php",
+                "sha256": "53f14ff047d81a044d5412cb19ff3d53a307772462fdbe4022e9b43852ae5906",
+                "bytes": 1319
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/CrmDeletionRule.php",
+                "sha256": "8b177e9ea2598475dd2a7481b47706e351fe2618bfd3aa8f8ac6e3a45b4ce010",
+                "bytes": 2302
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/DestinationKind.php",
+                "sha256": "82d61b070a12d13be1ebcad8e1ce74bb72eb702caa2d96d907c9ecce7d7df6aa",
+                "bytes": 1187
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/DestinationRule.php",
+                "sha256": "664a68c92721943bc856d037d0ba4e96227138d7243d469cb148819d2960a624",
+                "bytes": 5904
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/OutgoingEmailRule.php",
+                "sha256": "06f7575a2ce8d4dc6aebababe7d444fb2a6507b4c407cf089c35fc5580dc9ec3",
+                "bytes": 3389
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/ReadOnlyQueryRule.php",
+                "sha256": "272facd38fa94e68910eaef3eb860ac691e153307c2d1e60bee020f2473ad735",
+                "bytes": 3602
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/RuleBook.php",
+                "sha256": "ec9d434561c2474ccd5bce998cd15ce54d93a07003c2f7842fc82ee1db0ebd3d",
+                "bytes": 3896
+            },
+            {
+                "path": "app/app/Approvals/Policies/Rules/UiActionRule.php",
+                "sha256": "29f26632f0c328bb1f8829ca9937565b4970d947fbc6205e57d073aa97eb93bc",
+                "bytes": 3244
+            },
+            {
+                "path": "app/app/Approvals/Policies/ScopeViolationException.php",
+                "sha256": "d5d76451a8637039811bbb66a2713c60a1f17b1aec3a509ccb88f420b01c5b6b",
+                "bytes": 744
+            },
+            {
+                "path": "app/app/Approvals/Policies/ToolCallContext.php",
+                "sha256": "8cc91369662494f1d1f0cd20b23a08e2873e304f1d95dfaf5ae447fc7592f8ea",
+                "bytes": 2124
+            },
+            {
+                "path": "app/app/Approvals/ProposalKind.php",
+                "sha256": "3ad271e9ff2082d39b9565ac642f9ac727f51d09c57464adfb68a5e1487d84c2",
+                "bytes": 962
+            },
+            {
+                "path": "app/app/Approvals/ProposalStatus.php",
+                "sha256": "efc0fde2a5d2a2a77b22c622d4beabb939810c5bc6dd41f342fc0eb4f8019895",
+                "bytes": 1031
             },
             {
                 "path": "app/app/Briefs/BriefContentHash.php",
@@ -965,8 +1180,8 @@
             },
             {
                 "path": "app/app/Http/Controllers/Briefs/BriefPreviewController.php",
-                "sha256": "4b7e21091b253959361f4d34cd096c5dd12e88a5aab20ec2449df301c5451026",
-                "bytes": 2044
+                "sha256": "3719c16cbfd97e721680d7a5bbbc11ed50f71c81125e39684c51c9dcd4203fc2",
+                "bytes": 2110
             },
             {
                 "path": "app/app/Http/Controllers/Controller.php",
@@ -1019,6 +1234,11 @@
                 "bytes": 2894
             },
             {
+                "path": "app/app/Http/Controllers/Ipc/OwnerController.php",
+                "sha256": "4aaae966addf4125676e765818dbe7ca4f8407dfa99363624f23955d7c779f02",
+                "bytes": 3769
+            },
+            {
                 "path": "app/app/Http/Controllers/Ipc/PendingApprovalsController.php",
                 "sha256": "aa8e5e3e20a684da4208b6c0d57c420da16547080edf783f16d722ab266e8fff",
                 "bytes": 2260
@@ -1050,23 +1270,23 @@
             },
             {
                 "path": "app/app/Http/Controllers/Pwa/AiSettingsController.php",
-                "sha256": "6b5e0ebfd62724a8ea955decdf74cb56c31e029e2c4d17d34775e27743bed323",
-                "bytes": 855
+                "sha256": "23bc2fc0aac835954aea397face3848cad5b6ba2e00f3581e1f53aea96b22ec7",
+                "bytes": 995
             },
             {
                 "path": "app/app/Http/Controllers/Pwa/BriefsController.php",
-                "sha256": "eba1310497b789928607f424a7d0427e8f4d30d034d02924dfdc0fc8c8e8bb9c",
-                "bytes": 2240
+                "sha256": "88c00a07fd38ca33cc39fb0d8cd62f2199f29d3edb0ff9906a1614919beedabb",
+                "bytes": 2347
             },
             {
                 "path": "app/app/Http/Controllers/Pwa/HomeController.php",
-                "sha256": "4c6c0fa1e1eca02e6121ee939e7d99721922466c608116633d115579fdc7246d",
-                "bytes": 1110
+                "sha256": "58b85a4a507f09847b4d88091c93f37b20f8a70a32056a9b342d8b763c8436f9",
+                "bytes": 1451
             },
             {
                 "path": "app/app/Http/Controllers/Pwa/SecuritySettingsController.php",
-                "sha256": "bfbc564faccd123a1eb432633e9be2461aed206cee50034037c5b9842da60ed0",
-                "bytes": 503
+                "sha256": "88493953bd8759ecd6044da88f2aea30b2a5409947bac2a8e7b0b27450fec6ca",
+                "bytes": 792
             },
             {
                 "path": "app/app/Http/Middleware/EnsureNoOwnerExists.php",
@@ -1077,6 +1297,11 @@
                 "path": "app/app/Http/Middleware/LoopbackOnly.php",
                 "sha256": "2fa5a06276cb771c4126ae4300611202a98b94e54f5084ca8b2bee548def26f3",
                 "bytes": 766
+            },
+            {
+                "path": "app/app/Http/Middleware/RedirectToCanonicalHost.php",
+                "sha256": "c250b7c6f0cc7237ef947caac5b7731859e1076d61395533f1c369d01b1dca5a",
+                "bytes": 3757
             },
             {
                 "path": "app/app/Http/Middleware/ResolveRequestOrigin.php",
@@ -1100,8 +1325,8 @@
             },
             {
                 "path": "app/app/Http/View/Composers/ShellStateComposer.php",
-                "sha256": "74f9550850c867fe80c8b9afe4023846212daaec5847f1a1483548244e0aa963",
-                "bytes": 1454
+                "sha256": "4dbb7219fce84bc384ea8c0e7865e788067482d8111da59ea37b9f77f763d522",
+                "bytes": 1568
             },
             {
                 "path": "app/app/Http/View/ShellState.php",
@@ -1280,8 +1505,8 @@
             },
             {
                 "path": "app/app/Livewire/Auth/Devices.php",
-                "sha256": "a69f1b7ecc311f93f7d21984e9c7b716f13b7b481b9e88f50d3ce335199e0c6e",
-                "bytes": 1995
+                "sha256": "1e43eaa10deee0d44139c88345d4816323a4abaaa2aebd46dd8f4251d5bbcea7",
+                "bytes": 2245
             },
             {
                 "path": "app/app/Livewire/Auth/Login.php",
@@ -1290,13 +1515,13 @@
             },
             {
                 "path": "app/app/Livewire/Auth/Passkeys.php",
-                "sha256": "fbc20291aadff648ca39dc913ec52f6b096c79898d1f49ff6f07cd4b05402f28",
-                "bytes": 3686
+                "sha256": "6e239e4578175b014acc52e43ebf703d2c25278aae3b4f55bdd6fee864bd352f",
+                "bytes": 4050
             },
             {
                 "path": "app/app/Livewire/Auth/Reauthenticate.php",
-                "sha256": "c57680292a3db597e8fe856d7acfbe1bf9b85b27ee9157128a776343ba73a6d7",
-                "bytes": 4262
+                "sha256": "6892829c706ebac5130ce9bf28c91688f08cc3040d74a0b2f3c69665bfc43568",
+                "bytes": 4771
             },
             {
                 "path": "app/app/Livewire/Install/CreateOwnerForm.php",
@@ -1322,6 +1547,51 @@
                 "path": "app/app/MCP/Runtime/README.md",
                 "sha256": "04b1b899da3f55d66e711810253b23d5639d760e243a5a358d0ea6f0b996e1c2",
                 "bytes": 112
+            },
+            {
+                "path": "app/app/Models/AI/AiModel.php",
+                "sha256": "4e237e303a8668a9d39931b4f79dcc6dad4faa280a1cfac20436502923dc4493",
+                "bytes": 4639
+            },
+            {
+                "path": "app/app/Models/AI/AiProvider.php",
+                "sha256": "98846c67404326af3575c4652ea8b0985442e701fe9b4a2779f7e3516b344d33",
+                "bytes": 8824
+            },
+            {
+                "path": "app/app/Models/AI/AiRun.php",
+                "sha256": "3697fdd907db5664851273a4f09aa6baccde83bf42e23b729ccc70445891309d",
+                "bytes": 6934
+            },
+            {
+                "path": "app/app/Models/AI/Memory.php",
+                "sha256": "e2ce5defc3856542497705f9ff086abb228f0191416f00732f9ec2ab3be8733b",
+                "bytes": 5076
+            },
+            {
+                "path": "app/app/Models/AI/MemorySource.php",
+                "sha256": "058e2317eb5ef14586eb53703f570ce1d90c02e546118e2c39debd5df45cf1db",
+                "bytes": 2258
+            },
+            {
+                "path": "app/app/Models/AI/ToolRun.php",
+                "sha256": "0a59dd9100d6e70a269e3f7b600e81d14828a333e7b00aa782d54234bfb16a6c",
+                "bytes": 3928
+            },
+            {
+                "path": "app/app/Models/Approvals/ActionApproval.php",
+                "sha256": "80b4d55079d9e96c8147d0c65e61010f671a84d462c624f79dddc48ac53b7309",
+                "bytes": 3547
+            },
+            {
+                "path": "app/app/Models/Approvals/ActionProposal.php",
+                "sha256": "c51144ba2311e15f2edf1b3898f85703b3508b42834c5036e4bb7ff47ed191d9",
+                "bytes": 6401
+            },
+            {
+                "path": "app/app/Models/Approvals/BrowserSession.php",
+                "sha256": "fd34027354464cd0c7d441e2ef76b8499f8a2dff2c0528a583eea113d1c6c712",
+                "bytes": 4670
             },
             {
                 "path": "app/app/Models/AuditEvent.php",
@@ -1350,23 +1620,23 @@
             },
             {
                 "path": "app/app/Models/CRM/Commitment.php",
-                "sha256": "e4bb34ca77b16e66e6f46ab182be927dc18e17cebb7fd5bbd7bbc4d738a2733f",
-                "bytes": 2005
+                "sha256": "0dc602ebf42180aefa5e5d505535ac33e1d94fcc1212e7c8a72d6f411a4966f7",
+                "bytes": 2394
             },
             {
                 "path": "app/app/Models/CRM/Communication.php",
-                "sha256": "be59f254a1b666ab2ef7d043ef993eb04e1f773052532182336c6671ffd86746",
-                "bytes": 2437
+                "sha256": "d2f831d068145896b6843dacafcbf9fd4a433798e415ec5539a0a8f4e8b9ca85",
+                "bytes": 3239
             },
             {
                 "path": "app/app/Models/CRM/Contact.php",
-                "sha256": "6cb7de3c97440beebe8686a3d15f33d64856cf134257a65abc27b5e3ddaea590",
-                "bytes": 2126
+                "sha256": "e5c31d0a58a651bd4e02a0b1c84a065cff4fe0715b49ff738c35002a280307a3",
+                "bytes": 2668
             },
             {
                 "path": "app/app/Models/CRM/ContactEmail.php",
-                "sha256": "fdda55452615d6e429d405bf0a3c0f8c99efae366214dde245f2cdfa9d269c22",
-                "bytes": 862
+                "sha256": "f851664691808da4fc43b38ca1737bae5c20737de887c2b7c64983ce3ac902ad",
+                "bytes": 5492
             },
             {
                 "path": "app/app/Models/CRM/CrmModel.php",
@@ -1400,8 +1670,8 @@
             },
             {
                 "path": "app/app/Models/CRM/SourceRecord.php",
-                "sha256": "c4d67282e92cb2639a1db3358d648de170d218a42357953bf15afc92c479adfd",
-                "bytes": 916
+                "sha256": "0ab4b69d6845def3044e2199657400b5fae5ef92c589445e96b950746d122a42",
+                "bytes": 1341
             },
             {
                 "path": "app/app/Models/CRM/Task.php",
@@ -1417,6 +1687,11 @@
                 "path": "app/app/Models/Concerns/BusinessObject.php",
                 "sha256": "0f6a1a1fb712556869a8f562d8ee57d33af9a42902e360fdd4ff439892de647c",
                 "bytes": 644
+            },
+            {
+                "path": "app/app/Models/Concerns/EncryptsSensitiveAttributes.php",
+                "sha256": "33c111d33bb487968b708a48ba808a77c1ac15846e38c3a06dfd9fd59a6b8f6a",
+                "bytes": 3641
             },
             {
                 "path": "app/app/Models/InstallStateTransition.php",
@@ -1440,8 +1715,13 @@
             },
             {
                 "path": "app/app/Models/PasskeyCredential.php",
-                "sha256": "c1c0d67472ae18060e34d81efcf5539b311bcb52e0afba12725b18e97cae9b00",
-                "bytes": 2073
+                "sha256": "da03c91f938010945f99dbeabd4d271646e4e4ff807fe38a70e0963d52866fad",
+                "bytes": 5173
+            },
+            {
+                "path": "app/app/Models/PushSubscription.php",
+                "sha256": "d4d9d60c157a4995fdfcbbce42e3a0b07992d98c81461f738e163e22fd3e6e62",
+                "bytes": 4130
             },
             {
                 "path": "app/app/Models/User.php",
@@ -1449,14 +1729,154 @@
                 "bytes": 1769
             },
             {
+                "path": "app/app/Policies/AI/AiModelPolicy.php",
+                "sha256": "972c218ca68a0321c6249b424f60ae63173b679b55276a6671c683c88bb51dcb",
+                "bytes": 697
+            },
+            {
+                "path": "app/app/Policies/AI/AiProviderPolicy.php",
+                "sha256": "d90f915613b4ad57b81eca5c83c66f9bc1ea0a6c0d2df133338635e0b2e07504",
+                "bytes": 661
+            },
+            {
+                "path": "app/app/Policies/AI/AiRunPolicy.php",
+                "sha256": "3345857b07d676c3509864b07030a2cc24d9a279844bc3851d7fa071ec608847",
+                "bytes": 650
+            },
+            {
+                "path": "app/app/Policies/AI/MemoryPolicy.php",
+                "sha256": "0b9af0a8140fcab1ab283a5ee9a964a9af103d04c7a72380db91eede70e67524",
+                "bytes": 663
+            },
+            {
+                "path": "app/app/Policies/AI/MemorySourcePolicy.php",
+                "sha256": "9e85c37caba48aa2cf26329c6ad42e2270f7f0776f5b6517b78e446cd2aabf54",
+                "bytes": 682
+            },
+            {
+                "path": "app/app/Policies/AI/ToolRunPolicy.php",
+                "sha256": "4c58275b851a4926810433d47fa43148cc480be9720620176eacd828a147bb09",
+                "bytes": 736
+            },
+            {
+                "path": "app/app/Policies/Approvals/ActionApprovalPolicy.php",
+                "sha256": "09970591b4b81a60c61469de94132456f8f4309f12b840059168cb8deb22a502",
+                "bytes": 765
+            },
+            {
+                "path": "app/app/Policies/Approvals/ActionProposalPolicy.php",
+                "sha256": "f975e59a6b8955651e0dcc6c6ec7d8e05aa9e9799949d9152613716371a1428b",
+                "bytes": 920
+            },
+            {
+                "path": "app/app/Policies/Approvals/BrowserSessionPolicy.php",
+                "sha256": "93c0581bbc3aa0301e48104df08c647f75f6c1746d270d4962cc748b0418e00f",
+                "bytes": 650
+            },
+            {
+                "path": "app/app/Policies/AuditEventPolicy.php",
+                "sha256": "31443dd4dba36ac8099d9eb2c013434f2b335c550313d23a3b3d7fae520fddad",
+                "bytes": 691
+            },
+            {
+                "path": "app/app/Policies/BriefDeliveryPolicy.php",
+                "sha256": "73ee6cae32c27079cbd3af4abb50fded9a4991ea419b7b08d6efa75ae808cea5",
+                "bytes": 671
+            },
+            {
+                "path": "app/app/Policies/BriefItemPolicy.php",
+                "sha256": "24dfbb99bd46c0ea24f92cfe52272cbf7c32fd1d0643973dee18e0b1863bf1c7",
+                "bytes": 638
+            },
+            {
                 "path": "app/app/Policies/BriefPolicy.php",
-                "sha256": "04e09679003a62be77292442b326a1c17261db644356630838f57b43c3ac4dca",
-                "bytes": 690
+                "sha256": "c627cdd1c79653b8b38938929d3d13e68cd1b3a0b702a743a21e8b65de450b09",
+                "bytes": 1273
+            },
+            {
+                "path": "app/app/Policies/BusinessObjectPolicy.php",
+                "sha256": "838e9b81c4a4e1fbc134eb595d9215653c010593aedbbd6d41675ee6a323ddb5",
+                "bytes": 4980
+            },
+            {
+                "path": "app/app/Policies/CRM/CommitmentPolicy.php",
+                "sha256": "2d0c7b182b80929cfa9a198bd791ad7053f16c9ac700cf59c5849ad856c3b103",
+                "bytes": 595
+            },
+            {
+                "path": "app/app/Policies/CRM/CommunicationPolicy.php",
+                "sha256": "ebb3ecef1304b7f99d8209d7c19ef1e180e90081470f4222477e889caad358f7",
+                "bytes": 698
+            },
+            {
+                "path": "app/app/Policies/CRM/ContactEmailPolicy.php",
+                "sha256": "08d7b1cb0efd7b6beeefb20baab5cd429aed953934c99ce88499363c5e79b430",
+                "bytes": 680
+            },
+            {
+                "path": "app/app/Policies/CRM/ContactPolicy.php",
+                "sha256": "456eab0cb751f0d7ce91569f069da4370b75598437fa36be32ea7a839cf4e2ab",
+                "bytes": 611
+            },
+            {
+                "path": "app/app/Policies/CRM/CustomerContactPolicy.php",
+                "sha256": "17cebaa8999fdcc47fa78449825b9aee8e54ba2d92ed84f6c78049a7c18a357b",
+                "bytes": 700
+            },
+            {
+                "path": "app/app/Policies/CRM/CustomerPolicy.php",
+                "sha256": "884893617fbe324b2acb5328d0bd2d44a3a74f51bbe5dad8cf80b442a5f48eec",
+                "bytes": 647
+            },
+            {
+                "path": "app/app/Policies/CRM/ProjectContactPolicy.php",
+                "sha256": "483b1ef0324307b6da1ae30add36690506bcd38baa314a4d35bfb0cbb61d4674",
+                "bytes": 521
+            },
+            {
+                "path": "app/app/Policies/CRM/ProjectLinkPolicy.php",
+                "sha256": "1669c89da81caac019b8ca7459b4ce0217b64301cda81ab369ec5ba80d3c31ec",
+                "bytes": 565
+            },
+            {
+                "path": "app/app/Policies/CRM/ProjectPolicy.php",
+                "sha256": "2c04d6e8a24084c44027db998fe0428d4937ee35b926f5c4fbfe8f94f331a915",
+                "bytes": 663
+            },
+            {
+                "path": "app/app/Policies/CRM/SourceRecordPolicy.php",
+                "sha256": "a80748191961eb6e5e9b155154d0e240cc09433de10dc1af1b9a6e11586c6775",
+                "bytes": 724
+            },
+            {
+                "path": "app/app/Policies/CRM/TaskAssigneePolicy.php",
+                "sha256": "4d93d68d372ceb3805240bab61e876e12e2672e195a21e3cd04b1e02fa977ee6",
+                "bytes": 548
+            },
+            {
+                "path": "app/app/Policies/CRM/TaskPolicy.php",
+                "sha256": "e0417799550eedb4c15747d31d3eac90724ff40cb29d1c2926ad7b75f2a50a28",
+                "bytes": 645
+            },
+            {
+                "path": "app/app/Policies/MembershipPolicy.php",
+                "sha256": "385cf61d426327294cd2cf088ddcb44cc706cf661e563cc51055f24eb17b0837",
+                "bytes": 628
+            },
+            {
+                "path": "app/app/Policies/OrganizationPolicy.php",
+                "sha256": "763af28ec4d319e9aa15c31ea73c7dc07f25a00166ddf0a25612006008d871c5",
+                "bytes": 934
+            },
+            {
+                "path": "app/app/Policies/PushSubscriptionPolicy.php",
+                "sha256": "048c0cac178ca04f736abe8cdce2b07232061090e16ee7a0e1d525d89286aa23",
+                "bytes": 1702
             },
             {
                 "path": "app/app/Providers/AiServiceProvider.php",
-                "sha256": "a07977f158d19eee43fb1c3d349ee4b64356581f7d065d0751ba6d2579c1d387",
-                "bytes": 4270
+                "sha256": "e821f38b2acd12fc2eca3d2f663408a965a2051ae1225bc26c84febd16eed289",
+                "bytes": 4610
             },
             {
                 "path": "app/app/Providers/AppServiceProvider.php",
@@ -1464,19 +1884,24 @@
                 "bytes": 5520
             },
             {
+                "path": "app/app/Providers/AuthorizationServiceProvider.php",
+                "sha256": "2b0d03bf2464ac6932c09e16f7a6856b3d950e795ae6b8e1401805030438a0ac",
+                "bytes": 3395
+            },
+            {
                 "path": "app/app/Security/Audit/AuditLog.php",
-                "sha256": "6a670c56030818b59cabe0f032c4ab57545c7e05735edcf32073c3f39b50dcae",
-                "bytes": 2252
+                "sha256": "f7704d0fb68c9493684347884f35d040f19293d2bdc236b4de721145577c6cf1",
+                "bytes": 5517
             },
             {
                 "path": "app/app/Security/Audit/README.md",
-                "sha256": "460a8697c98575280328776f1575758f5e6b4df5f528bdb94b3dee4869d65379",
-                "bytes": 368
+                "sha256": "7b7de344c9bfe9c4e989a60d2c4141e2dc1de6bae5c4a84e6af33ab70419a265",
+                "bytes": 652
             },
             {
                 "path": "app/app/Security/Authorization/CreateOwner.php",
-                "sha256": "70f0c079b0795109e806054af4122f46c6edf3243886bc8484cf5cd4795022f1",
-                "bytes": 4609
+                "sha256": "d7614a25c377e8516a71ba1a4c53e28d139bd861dac71f88cf6108c3a6704495",
+                "bytes": 5189
             },
             {
                 "path": "app/app/Security/Authorization/Devices/DeviceLabel.php",
@@ -1497,6 +1922,61 @@
                 "path": "app/app/Security/Authorization/Devices/LoginMethod.php",
                 "sha256": "74a3e9e1e5b2a253bfa76619dc34bb8eae50a641ed79951d8f537657354c7f5c",
                 "bytes": 290
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/Abilities.php",
+                "sha256": "747fc52624cff9aab3bd2b2a311bf5814f3bf832953f8f2a938d0ae428576a41",
+                "bytes": 3587
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/AuthorizationAuditor.php",
+                "sha256": "e411d54094c4e299dad20a3884b503d393ea40de7e4d059290c67180c4967ae8",
+                "bytes": 8257
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/AuthorizesQueuedWork.php",
+                "sha256": "27cef345b9b3eb54327ae1c3cba0ba91a913519f44728fde46aeccba3ccd292d",
+                "bytes": 2250
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/GatedTool.php",
+                "sha256": "74eb2ccea0e905da06994da0bb92484d24b76360fd87b17ff14bf2ea6c01360d",
+                "bytes": 1603
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/Surface.php",
+                "sha256": "271389af37b8ca4dd8c08b17aebe4846fab1646fbb7ac99849e4e7b0c0c65439",
+                "bytes": 682
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/SurfaceContext.php",
+                "sha256": "173d443fd4e6504f7b1bf14ca3354bdd11ecab028db76c9b34be717d759824f6",
+                "bytes": 2669
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/SurfaceGates.php",
+                "sha256": "6cfe176b8ff657cc0e4064ffce8b04cf9a5127f8413bfd9717f80b670bd04ee2",
+                "bytes": 2704
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/TenantRowGuard.php",
+                "sha256": "6735c6f2e2711299608c4b1cf2cefdec2ef6e04e781783503acb34c9d2df1093",
+                "bytes": 3336
+            },
+            {
+                "path": "app/app/Security/Authorization/Gates/ToolAuthorizer.php",
+                "sha256": "323fa53708478bee6fea40d5efe51e411682177da75bfe28e3146df59e476941",
+                "bytes": 2649
+            },
+            {
+                "path": "app/app/Security/Authorization/Maintenance/MaintenanceActor.php",
+                "sha256": "ca2a0c02c3633dc824335b6ef3710682df0c8f2f09c76d86bf11374c6ac63285",
+                "bytes": 3614
+            },
+            {
+                "path": "app/app/Security/Authorization/Maintenance/TenantWideMaintenance.php",
+                "sha256": "49d31338723d611dd090288b71e624811a363c2edb09f8ea18cd0aec498c31be",
+                "bytes": 4772
             },
             {
                 "path": "app/app/Security/Authorization/Otp/IssuedOtp.php",
@@ -1590,23 +2070,23 @@
             },
             {
                 "path": "app/app/Security/Authorization/Passkeys/RelyingParty.php",
-                "sha256": "e886efecaf74ef157fb69e5392cab5d3696f2eb638f752afbef1a8abf7373f85",
-                "bytes": 1849
+                "sha256": "11b9d50d1be79291566551cdca153ad122297961ba247b7448e225d0fb616498",
+                "bytes": 2155
             },
             {
                 "path": "app/app/Security/Authorization/Passkeys/WebAuthnAuthenticator.php",
-                "sha256": "69d40e3da5f1e01caa51455cd8d15ac8d088175260f15dbfa784cedcfc529945",
-                "bytes": 17005
+                "sha256": "af7916ad46f3cee20143d71c6825c4ad49bf97aa378d024ce2f35924784ffdd9",
+                "bytes": 17476
             },
             {
                 "path": "app/app/Security/Authorization/README.md",
-                "sha256": "7ccf1ad4479539063bc3ff5b604761a17753b2cfb3e7e20444516371e74b6f6d",
-                "bytes": 1330
+                "sha256": "9921f69b11ce7308cffaf37c3059430fcef63a420d24aeb22ca39bd800342372",
+                "bytes": 2065
             },
             {
                 "path": "app/app/Security/Authorization/Reauthentication/CriticalAction.php",
-                "sha256": "808b5a61099ef591c8ecf5ca04faa1b214f565eb81972080c191471b2851a879",
-                "bytes": 759
+                "sha256": "edc5e8b9c9936f5349b08071223ec96284409b10c4bb32c0be1a7d6ff496c2ae",
+                "bytes": 1089
             },
             {
                 "path": "app/app/Security/Authorization/Reauthentication/ReauthChallenge.php",
@@ -1632,6 +2112,76 @@
                 "path": "app/app/Security/Authorization/SessionRevoker.php",
                 "sha256": "624b2c09c8f20be2ef441930b9d102809f07bea3b1200214430ca341d994f0f8",
                 "bytes": 2548
+            },
+            {
+                "path": "app/app/Security/Authorization/Tenancy.php",
+                "sha256": "dd7e099319ca15414c91f43d579f9ed03746a9eb959a9561c757aba1e978bbc2",
+                "bytes": 2779
+            },
+            {
+                "path": "app/app/Security/Egress/AddressNormalizer.php",
+                "sha256": "c12d4a5b9d4db15e336da0524894828208d6d8433095f2ae77a2664cc5ae1b98",
+                "bytes": 10572
+            },
+            {
+                "path": "app/app/Security/Egress/AuditEgressDenialRecorder.php",
+                "sha256": "9d57b40f2efa44a6a42ad57e026d3c4ef112ea4a56996a7912bb3486f4fd84e0",
+                "bytes": 1624
+            },
+            {
+                "path": "app/app/Security/Egress/EgressDecision.php",
+                "sha256": "fb53bc760e0e069aa702b04ea93d5a7034e681c5660f121d3a9d15d053e33c59",
+                "bytes": 1321
+            },
+            {
+                "path": "app/app/Security/Egress/EgressDenialRecorder.php",
+                "sha256": "8da0f7aca61a827c8c24eab6f28a855ae45e57839a6a11383996d00596cd25f0",
+                "bytes": 539
+            },
+            {
+                "path": "app/app/Security/Egress/EgressGuard.php",
+                "sha256": "fe86dce46fb69a998e14198ed69c03846104eda93b06069a1e24c82e7e020786",
+                "bytes": 19831
+            },
+            {
+                "path": "app/app/Security/Egress/EgressPurpose.php",
+                "sha256": "edfa3967446bb9aa7424bb46afc3e53588d434ef6b577ff57270f486248b9bfb",
+                "bytes": 5392
+            },
+            {
+                "path": "app/app/Security/Egress/EgressRule.php",
+                "sha256": "e48822ea8ba94b010aef17d96356ebd29ef58d24b9c927592e41f5770da8d57e",
+                "bytes": 4664
+            },
+            {
+                "path": "app/app/Security/Egress/EgressServiceProvider.php",
+                "sha256": "5c3ec5419233f0cecbb1668b1c4a64571328515d01d6d034b8c587846c7e533f",
+                "bytes": 5527
+            },
+            {
+                "path": "app/app/Security/Egress/HostResolver.php",
+                "sha256": "182f5527be64228365d9ec16def238740c7d881f69395ab6de4b53486d52d987",
+                "bytes": 823
+            },
+            {
+                "path": "app/app/Security/Egress/LoopbackHostResolver.php",
+                "sha256": "b5cfdffd6ca26a039bd94f0f765965cd9643ea5edc1cff1aa9e15040db7cbf14",
+                "bytes": 1852
+            },
+            {
+                "path": "app/app/Security/Egress/NullEgressDenialRecorder.php",
+                "sha256": "07f78d1d6d7a97cba6ad3f057017ba0a0702b7660c594a1f6376c8307a297137",
+                "bytes": 589
+            },
+            {
+                "path": "app/app/Security/Egress/PinnedTarget.php",
+                "sha256": "999d05b0f0c8adeab6e5169082e68115a36724e92711c365f364327112308eec",
+                "bytes": 2710
+            },
+            {
+                "path": "app/app/Security/Egress/SystemHostResolver.php",
+                "sha256": "3b1175f5ccbe720203df75e8e1978c15d3c0618c7e63daf1e9e174d4682fb9d8",
+                "bytes": 3201
             },
             {
                 "path": "app/app/Security/Ipc/BrokerKeySource.php",
@@ -1660,13 +2210,13 @@
             },
             {
                 "path": "app/app/Security/Ipc/IpcErrorCode.php",
-                "sha256": "960073bb82823f358587230d03b7bbd9f450e2bc7dc84cde52e5e970499a2be2",
-                "bytes": 5334
+                "sha256": "24cf8ced78445112ac1308971d64b38dfedd6fb0f421a011ff551cad5691a5b3",
+                "bytes": 5595
             },
             {
                 "path": "app/app/Security/Ipc/IpcException.php",
-                "sha256": "1597d9c91684ffc57414c9d4f0eac624df511372fe9dd28c2aafd1a978500879",
-                "bytes": 4491
+                "sha256": "6494aeb93495a7201d995086eee281889288df7099f0a936b8b4ec97f10d6815",
+                "bytes": 4907
             },
             {
                 "path": "app/app/Security/Ipc/IpcKey.php",
@@ -1690,8 +2240,8 @@
             },
             {
                 "path": "app/app/Security/Ipc/IpcPrincipal.php",
-                "sha256": "75aa15f836a1015d5ead9236eb21bbe7cc256a5e6380ebbc326fbc23e185f3e9",
-                "bytes": 2570
+                "sha256": "000c7ed2e12f237cdbac57f9e1c9121aa1405258e709cbd4463cc3366a92446f",
+                "bytes": 3320
             },
             {
                 "path": "app/app/Security/Ipc/IpcRequest.php",
@@ -1732,6 +2282,11 @@
                 "path": "app/app/Security/Ipc/Middleware/IpcRequireElevation.php",
                 "sha256": "a1db8095a0a31f8d7613556429a855e4ec589e142bcb0d400d71b423eb42e3d8",
                 "bytes": 1398
+            },
+            {
+                "path": "app/app/Security/Ipc/Middleware/IpcRequireNoOwner.php",
+                "sha256": "6f9a027b944a7dc21946c00e1d58adab66ba24f529f99b266d1ebf1d4bca63e2",
+                "bytes": 2626
             },
             {
                 "path": "app/app/Security/Ipc/Middleware/IpcThrottle.php",
@@ -1779,19 +2334,84 @@
                 "bytes": 728
             },
             {
+                "path": "app/app/Security/Privacy/PrivacyModeChangeRefused.php",
+                "sha256": "a006d2773b6799d39ba9a3712533ca18d7f75ecaea502c259a3ff14da8fee4ce",
+                "bytes": 1133
+            },
+            {
+                "path": "app/app/Security/Privacy/PrivacyModeStore.php",
+                "sha256": "4ac6df447bbc45eac564e48585f8ff7a77243d231956064dd557796997de8510",
+                "bytes": 12069
+            },
+            {
+                "path": "app/app/Security/Privacy/PrivacyPolicyState.php",
+                "sha256": "499dc1d6987a50c27dd8d20badf14792b16a405a83a63e8d2a22b2469badfd7f",
+                "bytes": 2012
+            },
+            {
+                "path": "app/app/Security/Privacy/ProviderEligibility.php",
+                "sha256": "c6ce8cae1217c217e3e5f2109e42bdad319dd94c58593cbb00f904a560d89915",
+                "bytes": 3896
+            },
+            {
                 "path": "app/app/Security/Queue/RedactingFailedJobProvider.php",
                 "sha256": "4a0a50baaa5c3c4bc0952faa4e794578e8843e0d6f58414db02feb4ef4c38bd3",
                 "bytes": 1555
             },
             {
+                "path": "app/app/Security/Retention/PurgeAction.php",
+                "sha256": "cef6dbeb0fedc3594e91b0c71bcfede278448d7be27f2fc2a4cfe11b9dec6b43",
+                "bytes": 687
+            },
+            {
                 "path": "app/app/Security/Retention/README.md",
-                "sha256": "70230556e4627b5852197d52736935e0e3d74a55a01ddd1f742aa24d709d107e",
-                "bytes": 58
+                "sha256": "c14e5c5b7cf2fb86d3a4d3b0901fdd68f8e8697077b18c593e1f292f715953bf",
+                "bytes": 1636
+            },
+            {
+                "path": "app/app/Security/Retention/RetentionBasis.php",
+                "sha256": "55fbb7c4513a76a73a3d054534dde06fc293891d01e0c4c8763892dc9ff59611",
+                "bytes": 1121
+            },
+            {
+                "path": "app/app/Security/Retention/RetentionClock.php",
+                "sha256": "b1430a11aae97815bc917d02507d38c69d15c67bf11950d60dacc95e296d8df6",
+                "bytes": 1345
+            },
+            {
+                "path": "app/app/Security/Retention/RetentionRule.php",
+                "sha256": "89f1d92b1776a23ee73208cef6e3a73d86e8812e2eb47ab470d637338c5af997",
+                "bytes": 7651
+            },
+            {
+                "path": "app/app/Security/Retention/RetentionRules.php",
+                "sha256": "cfb02ff551817c8d72a0b4dba4166788ccaa1b7dfd26899d8d80b23b4fc58d49",
+                "bytes": 24695
+            },
+            {
+                "path": "app/app/Security/Retention/UnknownRetentionRuleException.php",
+                "sha256": "0de2fad312a77399b92ea6c2d29b60e121c6397d40ccb7fbcc6f9b66b19f21af",
+                "bytes": 1277
+            },
+            {
+                "path": "app/app/Security/Secrets/AppKeyRotation.php",
+                "sha256": "1bc4890868aa424fa40966de157ab08c3901b2ccf9a71ae605ddc2dd13a02350",
+                "bytes": 7900
             },
             {
                 "path": "app/app/Security/Secrets/ArraySecretStore.php",
                 "sha256": "9e863716a336388799bbf5adbe5aa16384e5ad89402685cd3ce3c223df72483d",
                 "bytes": 1389
+            },
+            {
+                "path": "app/app/Security/Secrets/BlindIndex.php",
+                "sha256": "f89f7f79b9fff40574e1f0454026f8b094683573f6b031ea08d91f3a766cf372",
+                "bytes": 4972
+            },
+            {
+                "path": "app/app/Security/Secrets/EncryptedAttributeInventory.php",
+                "sha256": "f8aaca07849aa0b3048be1c02222fc758d1528ee9de5b5bcfed80aa907b75e35",
+                "bytes": 8251
             },
             {
                 "path": "app/app/Security/Secrets/README.md",
@@ -1834,6 +2454,11 @@
                 "bytes": 3711
             },
             {
+                "path": "app/app/Security/Secrets/SensitiveAttributeRewriter.php",
+                "sha256": "ac3672236d8b6974ea0d7bdf39efea7d7d239ef6e362d236eaf20ecc6e25d801",
+                "bytes": 11316
+            },
+            {
                 "path": "app/app/Security/Secrets/SupervisorSecretStore.php",
                 "sha256": "c1b209bfc3dfc10e5212227c7b79c941c13d0353dbde0da35897dcac555d2575",
                 "bytes": 6001
@@ -1842,6 +2467,11 @@
                 "path": "app/app/Security/Secrets/UnavailableSecretStore.php",
                 "sha256": "55c29fa2f824b123905716848fbc7a6bf54b99256bfd9676d8fad8394f142635",
                 "bytes": 989
+            },
+            {
+                "path": "app/app/Security/Secrets/UnreadableEncryptedAttributeException.php",
+                "sha256": "6102b4b522fc11efa970b5b0cde0a44a1e5ad0e0b4f17a6088fd58e4515dfe42",
+                "bytes": 2109
             },
             {
                 "path": "app/app/Support/Cancellation/AiPauseStatus.php",
@@ -1895,8 +2525,8 @@
             },
             {
                 "path": "app/app/Support/Database/BusinessObjectColumns.php",
-                "sha256": "5fbf105d4fde37fc5024d139f3a66c9e67ec1f723742f07c31eff387352f87ad",
-                "bytes": 2162
+                "sha256": "c928da9068f5b5e2221987448e049ed196642133dd319996acb203b6a485c667",
+                "bytes": 2613
             },
             {
                 "path": "app/app/Support/Database/MysqlFullTextGrammar.php",
@@ -2015,8 +2645,8 @@
             },
             {
                 "path": "app/app/Support/Health/HealthService.php",
-                "sha256": "86664d5a0333e094b4f2148b5f7a248235af102f9cfe8f147190bd7df197e1a2",
-                "bytes": 6215
+                "sha256": "78e98bd5d7c238e4c1488ecc0b3cdb3c68ffa11d4c6fc7d8b49475c26a8aae16",
+                "bytes": 6596
             },
             {
                 "path": "app/app/Support/Health/Heartbeats.php",
@@ -2165,8 +2795,8 @@
             },
             {
                 "path": "app/bootstrap/app.php",
-                "sha256": "2e96cd331aaae72573b08846e0c00c279e6970f1aaffed8cf4a00e319708b12c",
-                "bytes": 2309
+                "sha256": "5d5d832fe2fc6bfd1a639bf0bed25930aa48d8f207030b77678e44a3a1feae42",
+                "bytes": 2841
             },
             {
                 "path": "app/bootstrap/cache/.gitignore",
@@ -2180,13 +2810,13 @@
             },
             {
                 "path": "app/bootstrap/cache/services.php",
-                "sha256": "fe9732eea5580d7d191bd54554ef1683a071abbae8f1455ebe50b28164d11c29",
-                "bytes": 22607
+                "sha256": "4daf35f73b25c8f6d0ecd12c280d8dd680fec200688ac2afcb142265a81ecf4c",
+                "bytes": 22839
             },
             {
                 "path": "app/bootstrap/providers.php",
-                "sha256": "3e9add600b35ca6dff0c1f2a80fa08c0ac38acb18c071f5151cb36a1c6704bcc",
-                "bytes": 419
+                "sha256": "cc578b34f8a2f9015859b567b069e9ab6ca5a295a9b149204fbbcf6830e96e63",
+                "bytes": 1055
             },
             {
                 "path": "app/composer.json",
@@ -2235,8 +2865,8 @@
             },
             {
                 "path": "app/config/ipc.php",
-                "sha256": "62e95c23febb54d96f4af7003987b595ae176030042e77e96b548872c2fb2c63",
-                "bytes": 3454
+                "sha256": "1aed0a68b7401963186cbd132a2f44b14c5834383e1da4a9a14d574247c728bb",
+                "bytes": 3476
             },
             {
                 "path": "app/config/lea.php",
@@ -2365,8 +2995,8 @@
             },
             {
                 "path": "app/database/migrations/2026_10_11_000001_create_passkey_credentials_table.php",
-                "sha256": "d00860b5445dfced50ef0d9bcf342d6ec5a6019752c0df7518681f8a94b81df4",
-                "bytes": 2087
+                "sha256": "d0cebb506cd5be3be577d79fe64aa7c950de182eae07e27b744efd8e6b583e80",
+                "bytes": 3667
             },
             {
                 "path": "app/database/migrations/2026_10_11_000002_create_auth_devices_table.php",
@@ -2434,9 +3064,124 @@
                 "bytes": 1260
             },
             {
+                "path": "app/database/migrations/2026_10_12_000001_create_ai_providers_table.php",
+                "sha256": "31b568ad14c653931e447f593c43c8493c19560c5c588b5ae81e152755dbcca1",
+                "bytes": 6375
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000002_create_ai_models_table.php",
+                "sha256": "903e366d2cf41055fbae9b2364e470475195cc8e30b40b59a12444f861172fb6",
+                "bytes": 4453
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000003_create_ai_runs_table.php",
+                "sha256": "5abfa283ddf9769816f9cdb1047ce38a26f771904c1e0adb1e9814a79714c7ec",
+                "bytes": 7429
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000004_create_browser_sessions_table.php",
+                "sha256": "1867e1a6f8e659535081f08282653f117d9132af98d477c56a552d37dd0208fb",
+                "bytes": 3762
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000005_create_action_proposals_table.php",
+                "sha256": "0ea72d1f75f702ca290cea735d0194d91e6e4e308933281fb20e177f0e344cc4",
+                "bytes": 5883
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000006_create_action_approvals_table.php",
+                "sha256": "023b38c8be48cd96602d51c21aa952b289f121b1b5bf3a276c27eceab1be52b1",
+                "bytes": 3913
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000007_create_tool_runs_table.php",
+                "sha256": "edc209ea76dfd864a1eab3e248959fe8f98edd9c2d699400bde3b70d84a9630d",
+                "bytes": 4368
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000008_create_memories_table.php",
+                "sha256": "0f99d89fa3bcd0981a8f9995230b840e74e9ec81cd234a529d5a77ebd54bba3e",
+                "bytes": 4670
+            },
+            {
+                "path": "app/database/migrations/2026_10_12_000009_create_memory_sources_table.php",
+                "sha256": "8c2e09cad5fcce9649a2e7e1d39c4d41a58c378c6e1ece4d5939fbbebe5a748b",
+                "bytes": 2639
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000001_create_external_accounts_table.php",
+                "sha256": "89a1a25928abf3af03fa13eaf173d7c6630954e35a6c22834867a34054107ed8",
+                "bytes": 2838
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000001_index_passkey_credential_id_by_hash.php",
+                "sha256": "c55f8cb1a3fc5f444dbf75a3c2ab852b820145dbd28071faaaf42aa4f55f52aa",
+                "bytes": 8893
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000002_create_sync_cursors_table.php",
+                "sha256": "7dac193751f6edb71267068d134fb85ae6ca0ca2a74f268746f397f42f8f96d0",
+                "bytes": 2472
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000003_create_email_connections_table.php",
+                "sha256": "3aab278437df01062051071407b71429856f554eb25bc6eefa36cbcff86a6457",
+                "bytes": 4472
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000004_create_email_sync_cursors_table.php",
+                "sha256": "66b58f96ffe16444e714a8814e4d4a7801d987d2fffce1378a352e5f96c1e537",
+                "bytes": 2954
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000005_create_privacy_policies_table.php",
+                "sha256": "d4ade3e548d13eaa26bf235a5ee3627a0c8cd660c36aa8b108fc2581ed778426",
+                "bytes": 4142
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000006_create_data_retention_rules_table.php",
+                "sha256": "205c4e4bd7e27106664301e3d210cee625975d59f83f0647047d60eae4718e74",
+                "bytes": 4013
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000007_create_backup_runs_table.php",
+                "sha256": "d013e0a889ecb81a45b511ccbaef8a0e8da0e2571057b23538b00204d5d91d9d",
+                "bytes": 3015
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000008_create_health_events_table.php",
+                "sha256": "9947f8c670155e2a7282460c1d316159f59e72f8545f34aad15c321479f0d041",
+                "bytes": 2477
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000009_create_push_subscriptions_table.php",
+                "sha256": "69d260d85c88a67640532e23534ee34e62ff20a2672cf5f90caf55a67ccbd73e",
+                "bytes": 3670
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000010_create_mcp_servers_table.php",
+                "sha256": "3ae5e414036d06570de9c1eb6dfe061c3d6003fc3e5d04be0c58a581da73dcb0",
+                "bytes": 4521
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000011_create_mcp_tools_table.php",
+                "sha256": "90d246164085068dd64d03934cc16f29b3ddd6e11b148d2cd52fb7bc7a275b34",
+                "bytes": 3207
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000012_create_mcp_grants_table.php",
+                "sha256": "c0635bd548212f24d5f68c058580b0dd9799a04038c5881e0f33aecea80b1763",
+                "bytes": 3909
+            },
+            {
+                "path": "app/database/migrations/2026_10_13_000013_encrypt_sensitive_attributes_at_rest.php",
+                "sha256": "7a7d46449ac41614f45995d946ef137280863ad21d5bf471f96b7179ecef4a2e",
+                "bytes": 16579
+            },
+            {
                 "path": "app/database/migrations/README.md",
-                "sha256": "890142eaf9ab38d5f9f5769df74a39b540b8d57cf706c5e8f665ae2902225413",
-                "bytes": 695
+                "sha256": "39a158353e57fd872a290c93f59267be8f6e1fb98a6dafa216b8509c3e510eb6",
+                "bytes": 1917
             },
             {
                 "path": "app/database/seeders/DatabaseSeeder.php",
@@ -2465,8 +3210,8 @@
             },
             {
                 "path": "app/lang/en/security.php",
-                "sha256": "11c0c3809d572b0479b3d796b051ff5d8dd3e5a1e977bb26794c9d6e00b9b5e9",
-                "bytes": 5318
+                "sha256": "01501ea7844621cfd0a960ab358585827e36f9d44acb335be79896a97d15a0be",
+                "bytes": 5436
             },
             {
                 "path": "app/lang/it/brief.php",
@@ -2485,8 +3230,8 @@
             },
             {
                 "path": "app/lang/sv/security.php",
-                "sha256": "3c5b20996aefc857749a991603517be134c8fa743c216ddf937c2493775d91f5",
-                "bytes": 5599
+                "sha256": "de8546ad658bbf6e1a1b3e8d78014dd472ec0b622a21b993dbbb7bf5bb766bec",
+                "bytes": 5725
             },
             {
                 "path": "app/package-lock.json",
@@ -2590,7 +3335,7 @@
             },
             {
                 "path": "app/public/sw.js",
-                "sha256": "35b76cbf305598fedda5c79e767c394a62ecf892e7bfd0be5389a9f07a5654fa",
+                "sha256": "2a1ad0429bf119d293b9bd3c3f89040a2f405dca725bcaa068376a2994aa9171",
                 "bytes": 3645
             },
             {
@@ -2625,8 +3370,8 @@
             },
             {
                 "path": "app/resources/js/app.js",
-                "sha256": "c497d62e12267b09b0463c8b1e8ec2368e73419349991589dbac7f5b171de04f",
-                "bytes": 925
+                "sha256": "a521200314a79efd0940697e828c6df6c4b3920f67c52e1082f9ccb29ab70251",
+                "bytes": 1003
             },
             {
                 "path": "app/resources/js/passkeys.js",
@@ -2785,8 +3530,8 @@
             },
             {
                 "path": "app/routes/api.php",
-                "sha256": "6e25d4aa26e07a0ed480a413956f407650905b424e3951f2a004c33658f5c395",
-                "bytes": 4670
+                "sha256": "d21b82556ba5623fbb787e094e495bf527f7387e84256be55480d667be689f4b",
+                "bytes": 5332
             },
             {
                 "path": "app/routes/auth.php",
@@ -2800,8 +3545,8 @@
             },
             {
                 "path": "app/routes/console.php",
-                "sha256": "edd814dd4bea2b9629a537d1a1b24d487f5ba645b169a6a8cae38cce8c8e444d",
-                "bytes": 1227
+                "sha256": "8cc263df8bad048374466a187de1b31677641c1f007d88184417c946e5149ae2",
+                "bytes": 2687
             },
             {
                 "path": "app/routes/pwa.php",
@@ -3055,8 +3800,8 @@
             },
             {
                 "path": "app/vendor/composer/autoload_classmap.php",
-                "sha256": "2f7830a407d429d9c7f6002612a14b1155f3e0c0a069b4cdc34b5c791e60b1e5",
-                "bytes": 923418
+                "sha256": "4d6fb9bfae39d48e407a8580ac96a2e386c9633606d5c1efe727eb54e60ae187",
+                "bytes": 936894
             },
             {
                 "path": "app/vendor/composer/autoload_files.php",
@@ -3080,8 +3825,8 @@
             },
             {
                 "path": "app/vendor/composer/autoload_static.php",
-                "sha256": "00e43e7b7d220b678fc65b85904eb8ef588a587dabcd49b0b73d1e8e40604a7b",
-                "bytes": 1009665
+                "sha256": "7b27761fa4665178c2663fc0c3c81febd2b53fe3c86536832c2e5b686ef42ed5",
+                "bytes": 1024905
             },
             {
                 "path": "app/vendor/composer/installed.json",
@@ -45370,7 +46115,7 @@
             },
             {
                 "path": "frankenphp",
-                "sha256": "b4fec7303d9bffb4817da2d710fbb3093ea74ba1fac5b2a13a6d89a60fd82dd7",
+                "sha256": "b94f10cd8d2f6b89e75ea49f46e37f47acc00e976b23f212a8cdb3689081cbeb",
                 "bytes": 144390080
             },
             {
@@ -45381,10 +46126,10 @@
         ]
     },
     "artifact": {
-        "tag": "runtime-8.5.11-1.13.0-1",
-        "asset": "laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-1.tar.gz",
-        "url": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/releases/download/runtime-8.5.11-1.13.0-1/laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-1.tar.gz",
-        "sha256": "947a6e3af7d0a97bd0a7eecf89924b8a80ef7990c312f8cf6ae1df542c075ecd",
-        "bytes": 68958206
+        "tag": "runtime-8.5.11-1.13.0-2",
+        "asset": "laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-2.tar.gz",
+        "url": "https://github.com/STAFE-GROUP-AB/laravel-executive-ai/releases/download/runtime-8.5.11-1.13.0-2/laravel-executive-ai-runtime-0.1.0-8.5.11-1.13.0-2.tar.gz",
+        "sha256": "d914e6204139bd2e4351ac03c54df806144b8dcee65b9405f457a2fb1e5801c3",
+        "bytes": 69120344
     }
 }
