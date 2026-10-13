@@ -161,6 +161,7 @@ final class SupervisorMigrationsTests: XCTestCase {
         // The artisan output is still readable where an owner (or a support bundle) looks for it.
         // Waited for, for the reason in `testBootRunsMigrationsOnceBeforeAnyChild`: the exit is
         // reported before an in-flight stderr read has necessarily appended.
+        let migrateLog = self.migrateLog
         let logged = await ServicesTestSupport.waitUntil { Self.text(at: migrateLog).contains("SQLSTATE[HY000]") }
         XCTAssertTrue(logged, "the failure's stderr reaches migrate.log: \(Self.text(at: migrateLog))")
 

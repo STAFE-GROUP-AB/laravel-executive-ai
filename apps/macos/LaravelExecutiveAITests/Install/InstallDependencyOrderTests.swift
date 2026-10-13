@@ -222,7 +222,7 @@ struct WiredSupervisorControl: SupervisorControlling {
         try requireRunning()
     }
 
-    func removeAllSecrets() async throws -> [KeychainItemRef] {
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef] {
         try requireRunning()
 
         return []
