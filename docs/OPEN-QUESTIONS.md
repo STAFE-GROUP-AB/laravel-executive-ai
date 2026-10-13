@@ -454,6 +454,15 @@ answer: a downgrade requires the S2-05 (#69) re-authentication plus a UI re-conf
 named audit event, proven by `PrivacyModeDowngradeTest`. **S2-19 (#101)** is where the change is made
 (the `/admin` security-rules pane), under ADR-004 D5 and ADR-007 D6's evidence-driven admission rules.
 `ENG` throughout — no owner decision is waiting.
+**Status (S2-03, 2026-10-13):** the storage half is landed. `privacy_policies` holds `mode`
+(`LOCAL_ONLY` · `EU_RESTRICTED` · `CUSTOM`, `App\AI\Routing\PrivacyMode::configValue()`), `allow_lan`,
+`source`, `reason`, `changed_by_user_id`, `audit_event_id`, `reauthenticated_at`, `effective_from`
+and `superseded_at`; it is append-only and
+`privacy_policies_organization_active_unique (organization_id, active_marker)` makes two live
+policies for one workspace impossible to record (`docs/architecture/data-model.md` §2,
+`tests/Integration/BackendContract/GovernanceSchemaContractTest.php`). Still open for S2-14: which
+transitions require re-auth, what the UI re-confirms, the named audit event, and the ADR-004
+amendment.
 
 ### A19 — Contradiction: which processes may call Keychain APIs
 ADR-003 D2 says "exactly **one** process holds the shared access group: the Supervisor", its D5

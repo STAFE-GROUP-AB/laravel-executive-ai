@@ -1,16 +1,17 @@
-# Data model — Sprint 1 minimum (S1-01) and the §3.1 CRM tables (S2-01)
+# Data model — the Sprint 1 minimum (S1-01) and the §3.1 CRM (S2-01), AI (S2-02) and governance (S2-03) tables
 
-**Status:** Living document · **Owner:** Workstream B (Laravel platform) · **Issues:** #29, #84, #85
+**Status:** Living document · **Owner:** Workstream B (Laravel platform) · **Issues:** #29, #84, #85, #86
 **Source of truth:** `database/migrations/` (the migrations are `up()`-only; the schema is built once
 per CI job with `migrate`, tests run inside `DatabaseTransactions`, ADR-002 D10)
 
 This page describes the tables §16 step 4 asks for — `users`, `organizations`, `memberships`,
 `briefs`, `brief_items`, `brief_deliveries`, `audit_events` and the install-state marker — plus the
 framework tables the `local` profile needs (`jobs`, `job_batches`, `failed_jobs`, `cache`,
-`cache_locks`, `sessions`, `password_reset_tokens`), and since S2-01 the §3.1 CRM and source tables
-(§3 below), and since S2-02 the §3.1 AI, approvals, tool-run and memory tables. Everything lives in
-one SQLite file in WAL mode (ADR-002 D2). The remaining §3.1 tables (email, retention, governance and
-the MCP registry) are added by their own backlog items on the same conventions.
+`cache_locks`, `sessions`, `password_reset_tokens`), since S2-01 the §3.1 CRM and source tables,
+since S2-02 the §3.1 AI, approvals, tool-run and memory tables, and since S2-03 the governance,
+retention and operations tables (all in §2 below). Everything lives in one SQLite file in WAL mode
+(ADR-002 D2). The remaining §3.1 tables — the mail store (`email_messages`, `email_threads` and the
+rest of the `email_*` family, E3-2) — are added by their own backlog items on the same conventions.
 
 ## 1. Conventions (ADR-002 D10, blueprint §3.1)
 
@@ -35,7 +36,7 @@ Every business object carries these; `App\Models\Concerns\BusinessObject` provid
 | `source_uri` | `string(2000)` nullable | Locator of the original (`lxai://…`, `https://github.com/…`); for records that are themselves the original, the row's own `lxai://` URI. Never carries credentials. |
 | `sensitivity_class` | `string(20)`, default `internal` | `public` · `internal` · `confidential` · `personal` (`App\Support\Data\SensitivityClass`, vocabulary from `packaging/fixtures/crm/crm.schema.json`). |
 | `provenance` | `json` | `{origin, actor, recorded_at, trace_id}` — `origin` ∈ `manual` · `import` · `sync` · `ai_extraction` · `user_correction`; `actor` is `user:<ulid>`, `job:<JobName>` or `ai:<provider>/<model>`. Built by `App\Support\Data\Provenance`. Never prompt text or a credential. |
-| `retention_policy` | `string(64)` nullable | Name of the `data_retention_rules` rule that governs the row (rules table lands with the retention module). |
+| `retention_policy` | `string(64)` nullable | Name of the `data_retention_rules` rule that governs the row. Resolved by `App\Security\Retention\RetentionRules`, which throws on a name that resolves to nothing — see [retention.md](retention.md) (S2-03). |
 | `retain_until` | `dateTime` nullable | Earliest instant the retention job may purge the row. |
 | `created_at`, `updated_at`, `deleted_at` | `dateTime` nullable | Timestamps and soft delete where applicable. |
 
@@ -693,6 +694,182 @@ The two statements live in `app/Support/Database/SqliteFullTextGrammar.php` and
 `MysqlFullTextGrammar.php`, the only places raw full-text SQL is allowed (ADR-002 D10); diacritic
 folding, the ß difference between the profiles and InnoDB's commit-time index visibility are
 recorded in ADR-002 D4 and Evidence E6.
+
+### The governance, retention and operations tables (S2-03, #86)
+
+The rest of §3.1 plus the tables the §3.1 list does not carry: `push_subscriptions` from ADR-006
+through **ADR-002 D9.5**, and the MCP registry trio's extra columns from **ADR-005 D4.4/D4.6**. They
+land empty, on the §1 conventions, so E3-1's eight mail adapters and E3-5's MCP review write into a
+schema that already exists — ROADMAP's Sprint 2 gate is explicit that churn after Sprint 3 starts is
+expensive across eight adapters. Three rules run through all of it:
+
+1. **A connection row holds a Keychain *reference*, never a credential** (ADR-003 D1):
+   `secret_service`, `secret_account`, `secret_version` and nothing else. The contract test asserts
+   the absence of any column whose name looks like `token`, `password`, `api_key`, `client_secret`,
+   `refresh`, `verifier`, `credential` or `private_key` on `email_connections`, `external_accounts`
+   and `mcp_servers`.
+2. **No `encrypted:` cast is added here.** S2-04 (#87) owns encryption at rest. These tables
+   classify their rows instead — `BusinessObjectColumns::lineage()` now takes the column default, so
+   `email_connections` and `external_accounts` default to `personal` and `push_subscriptions` to
+   `confidential` — and leave the values plaintext rather than half-applying two items' work.
+3. **At most one live row, enforced by an index**, wherever "exactly one active X" is a safety
+   property: the `active_marker` generated column plus a unique index, the same portable device
+   `brief_deliveries` uses for "exactly one `sent`" (both engines treat NULLs in a unique index as
+   distinct). It guards the active privacy policy and the live MCP grant per tool.
+
+`retention_policy` is no longer a dangling name: `app/Security/Retention/` resolves it or throws,
+and [retention.md](retention.md) is the rule set. The contract test asserts the schema-wide
+property — every table carrying a `retention_policy` column is governed by a rule that resolves
+(S2-02's nine AI, approval and memory tables included), and every rule's clock column exists on the
+tables it names. `expires_at` is deliberately not one of the five clocks: on
+`action_proposals`/`action_approvals`, `browser_sessions`, `ai_providers` and `memories` it is a
+business deadline, and an approval that lapsed an hour ago is exactly the row that proves who
+consented to what.
+
+#### `external_accounts` and `sync_cursors`
+
+One connected **non-mail** provider account (GitHub today) and the resumable position of one sync
+scope on it. `email_connections`/`email_sync_cursors` are the mail equivalents and deliberately
+separate tables, because the `EmailConnector` contract (§5.6) is much wider than "an account we read
+items from".
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users.id` (`external_accounts_user_fk`) |
+| `provider`, `provider_account_id` (200), `login` (200), `display_label` (200) | `external_accounts_provider_account_unique (organization_id, provider, provider_account_id)` is the §3.1 provider/account key |
+| `authorization_method`, `scopes` (json), `capabilities` (json) | what the provider actually granted, so the UI can show it and the PolicyGate can refuse what is absent |
+| `status`, `health_state`, `health_detail` (500) | |
+| `secret_service`, `secret_account`, `secret_version` | the Keychain item `se.stafe.executive-ai.github` / this row's ULID (ADR-003 D1) |
+| `connected_at`, `last_verified_at`, `last_synced_at`, `reauthorization_required_at`, `revoked_at`, `rate_limit` (json) | |
+| indexes | `external_accounts_organization_status_index`, `external_accounts_user_provider_index` |
+
+`sync_cursors`: `external_account_id` (FK `sync_cursors_external_account_fk`), `source_type`,
+`scope` (200), `kind` (60), `value` (text), `value_bytes`, `cursor_version`, `synced_through_at`,
+`last_batch_at`, `last_batch_rows`, `full_resync_required`, `invalidated_at`, `invalid_reason`.
+`sync_cursors_account_scope_unique (external_account_id, source_type, scope)` is the key; an
+invalidated cursor is **kept with its reason** rather than deleted, so the UI can say why a full
+pass is running.
+
+#### `email_connections` and `email_sync_cursors` — ADR-002 D8, A4 resolved
+
+**These names, never `connected_email_accounts`** — §5.6's security paragraph refers to the same
+table, which is what D8 resolved. The columns are the persisted form of
+`App\Integrations\Mail\Dto\EmailConnection` (module-contracts §2), and `email_connections` is the
+policy boundary of §5.6 criterion 4: every connector call takes exactly one connection, so
+cross-account access is a policy check on one id rather than a query-by-query audit.
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users.id` (`email_connections_user_fk`) |
+| `provider`, `authorization_method` | `MailProviderKind` and `AuthorizationMethod`; the DTO refuses a pair §5.6 does not allow, so no adapter can fall back to a password prompt for Google |
+| `email_address` (320), `display_name`, `account_label` (200) | the label is the fixtures' `andreas@example.se (Google Workspace)` |
+| `granted_scopes`, `capabilities`, `send_as_addresses`, `synced_folder_ids` | json; an outgoing mail whose From is not in `send_as_addresses` is refused ("en agent får aldrig byta From-identitet") |
+| `server_settings` | json — IMAP/SMTP host, port and TLS mode only, **never** a password |
+| `read_only` (default true), `send_enabled` (default false) | §5.6's ground state and its separately granted exception; neither is inferred from the scope list |
+| `status`, `health_state`, `health_detail` (500), `sync_interval_minutes`, `rate_limit` | `ConnectionHealthState` is what `verify()` reports |
+| `secret_service`, `secret_account`, `secret_version` | `se.stafe.executive-ai.email` / this row's ULID |
+| `connected_at`, `last_verified_at`, `last_synced_at`, `reauthorization_required_at`, `disconnected_at`, `revoked_at` | |
+| indexes | `email_connections_provider_address_unique (organization_id, provider, email_address)`, `email_connections_organization_status_index`, `email_connections_user_health_index` |
+
+`email_sync_cursors` is **one row per `(connection_id, scope)`** —
+`email_sync_cursors_connection_scope_unique` — because Gmail history ids are per mailbox and Graph
+delta state is per folder, so the pair is the key and not the connection alone (`scope` defaults to
+`SyncCursor::ACCOUNT_SCOPE`, `*`). `value` holds `SyncCursor::encode()` verbatim: sorted JSON
+bounded by `SyncCursor::MAX_VALUE_LENGTH` (16 KiB) plus the envelope's keys (module-contracts §6).
+`text` is the portable column for that — 64 KiB on MySQL `TEXT` — so a Graph `@odata.deltaLink` near
+the cap still fits with room for `kind`, `scope`, `parts` and `issued_at`; the contract test stores
+an encoded cursor at exactly the cap and reads it back byte-identical. `value_bytes` is recorded so
+a provider that starts returning longer links is a health signal rather than a truncated cursor.
+ADR-002 D3.4: the row is updated **in the same transaction as the batch it covers**, never before.
+
+**The two foreign keys ADR-002 D9 anticipated here are deliberately not added.**
+`communications.account_id` must not reference `email_connections` — S2-01's frozen contract test
+asserts that `communications` references no email table, which is what lets the CRM projection
+survive a disconnected account — and `source_records.external_account_id` cannot, because the S0-18
+fixture pack carries provider account ids with no connection row (accounts are created by E3-1's
+connect flow, never by an import), so the constraint would make the pack unimportable. Both stay
+plain ULID columns; the cross-account boundary is enforced by the connection-scoped policies §5.6
+criterion 4 asks for, not by referential integrity. Recorded as an amendment in ADR-002 D9.
+
+#### `privacy_policies` — the storage half of A18
+
+Where §10.1's three modes actually live, with the `LOCAL_ONLY_ALLOW_LAN` toggle, the user who
+changed them and the `audit_events` row that recorded it. S2-14 (#96) lands the rule and amends
+ADR-004 with the rest of the answer. Threat **T-68** is "the mode is turned down without the owner
+noticing", and ADR-001 D4 has already removed the `.env` that would be the place to do it.
+
+| Column | Notes |
+|---|---|
+| `mode` | `LOCAL_ONLY` · `EU_RESTRICTED` · `CUSTOM` — `App\AI\Routing\PrivacyMode::configValue()`, the §10.1 spelling `config('lea.privacy_mode')` and `/health/ready` already use, so the stored policy and the surfaces share one vocabulary. `fromConfigValue()` reads it back and falls closed to `LOCAL_ONLY` for anything unrecognised |
+| `allow_lan` | the ADR-004 D4.2 toggle, off by default; meaningful in `LOCAL_ONLY` only (`PrivacyMode::supportsLanToggle()`, added with this item alongside `wouldWiden()` — the widening test S2-14 gates on) |
+| `source` | `install_default` · `owner` · `admin_pane` — the install-time row has no user and says so |
+| `reason` (200), `changed_by_user_id`, `audit_event_id`, `reauthenticated_at` | attribution is a column, not a convention: both ids are foreign keys, and `reauthenticated_at` is where S2-14 records the S2-05 proof taken before a widening change |
+| `effective_from`, `superseded_at` | append-only: one row per change, the previous row stamped and kept, no soft delete |
+| `active_marker` | generated: `1` while `superseded_at` is null, else NULL |
+| indexes | **`privacy_policies_organization_active_unique (organization_id, active_marker)`** — at most one live policy per workspace, rejected by the index rather than by a check somebody has to remember — plus `privacy_policies_organization_effective_from_index` and `privacy_policies_organization_mode_index` |
+
+#### `data_retention_rules`
+
+The rule set behind every `retention_policy` value: `name` (64), `description`, `legal_basis`,
+`clock_column`, `purge_action`, `retain_days` (nullable), `grace_days`, `minimum_retain_days`,
+`user_adjustable`, `applies_to` (json), `is_active`, `is_default`, `effective_from`,
+`changed_by_user_id`, `audit_event_id`. `data_retention_rules_organization_name_unique` makes a rule
+one per workspace; `retain_days` is null **if and only if** `purge_action` is `keep_until_erased`, an
+equivalence the value object enforces so no rule is clockless by omission. The full rule set, the
+reasoning behind each period and what this does *not* decide are in [retention.md](retention.md).
+
+#### `backup_runs` and `health_events`
+
+Both are install-wide, so `organization_id` is nullable for the same reason `audit_events` allows it;
+both are append-only with no soft delete.
+
+`backup_runs` (ADR-002 **D5**) records the steps D5 prescribes, so a half-finished backup is visibly
+half-finished: `kind`, `status`, `trigger`, `started_at`, `finished_at`, `duration_ms`,
+`snapshot_path` (2000 — a path, never the data), `bytes`, `integrity_check` (the
+`PRAGMA integrity_check` verdict **on the copy**), `renamed_at` (the atomic rename), `encrypted_at`
+(the handover to ADR-003's encryption step), `checksum` (71), `row_counts` (json — the per-table
+counts D10's `lea:backend:migrate` verifies on both sides), `wal_pages_checkpointed`,
+`retained_until`, `pruned_at`, `error` (500). Indexes
+`backup_runs_kind_started_at_index`, `backup_runs_status_started_at_index`,
+`backup_runs_retained_until_index`.
+
+`health_events` is the durable half of the health model: the §12.2 checks answer "is it healthy
+now" from cache heartbeats, this table answers "has it been", which is what the ADR-002 reopen
+conditions need — **D3.6** (a job that still gets `database is locked` after the 5 s `busy_timeout`,
+counted against `> 0.1 % of jobs over any 7-day window`) and **D6** (nightly
+`wal_checkpoint(TRUNCATE)`, where "two consecutive nights" is only answerable from a log). Columns
+`name` (60), `category`, `status`, `detail` (500), `context` (json, redacted by
+`App\Security\Secrets\Redactor` like `audit_events`, and never customer content), `duration_ms`,
+`occurred_at`; indexes `health_events_name_occurred_at_index`,
+`health_events_status_occurred_at_index`, `health_events_category_occurred_at_index`.
+
+#### `push_subscriptions` — ADR-002 D9.5
+
+One row per browser that opted in to Web Push (RFC 8030/8291/8292), with the columns D9.5 names:
+`user_id` (FK), `endpoint`, `p256dh`, `auth`, `created_at`, `last_seen`, `revoked_at`, plus
+`content_encoding`, `device_label`, `rp_id`, `expires_at`, `last_delivery_at`, `failure_count` and
+`revoked_reason`. The endpoint is the natural key — re-subscribing the same browser must update the
+row, not add a second one — so **`push_subscriptions_endpoint_unique`** covers it;
+`string(500)` holds the real endpoints and stays inside MySQL's 3072-byte unique-key limit at
+`utf8mb4`, which a `text` column could not. Plus `push_subscriptions_user_active_index (user_id,
+revoked_at)` and `push_subscriptions_last_seen_index`.
+
+`p256dh` and `auth` are the subscription's own key material, handed to us by the browser; the
+**VAPID** private key is the Keychain item (`se.stafe.executive-ai.webpush`), which is why ADR-003
+D1's "never a credential in a table" does not apply to them. They are classified `confidential` and
+ADR-006 asks for them encrypted at rest — the `encrypted:` cast is **S2-04's** (#87). `last_seen` is
+both the liveness signal and the retention clock.
+
+#### `mcp_servers`, `mcp_tools` and `mcp_grants`
+
+The §3.1 trio, with the ADR-005 columns E3-5's rug-pull protection compares against. They land now
+because a comparison has nothing to compare against otherwise.
+
+| Table | Notes |
+|---|---|
+| `mcp_servers` | **`trust_tier`** (D4.4: `T0` our own tools, `T1` an allowlisted local stdio server, `T2` a remote Streamable HTTP server on an approved host, `T3` blocked — decided in code, never by the model) and **`version`** (D4.6, pinned at Connect), plus `transport`, `status`, `protocol_version`, `endpoint_url`, `command`/`args` (an absolute path and an argument **array**, never a shell string — §11), `executable_sha256` (verified before every spawn), `registry_source`, `namespace_verification`, `declared_egress`, `declared_fs_paths`, `server_capabilities`, `tools_list_hash` (the sha256 over the canonical `tools/list` response as a whole), `tools_listed_at`, the Keychain reference triple, and the approval/review/suspension/revocation stamps. `mcp_servers_organization_name_unique`, `mcp_servers_organization_status_index`, `mcp_servers_organization_trust_tier_index` |
+| `mcp_tools` | **`mcp_tools_server_tool_unique (server_id, tool_name)`** — the key that distinguishes "the same tool, changed" from "a new tool" — with **`schema_hash`** = `sha256(canonical tool JSON)` pinned at Connect. `title`, `description`, `input_schema`, `output_schema` and `annotations` are **external content**: stored and rendered as data, never inserted into a system prompt (D4.8), and the annotations (`readOnlyHint`, `destructiveHint`, …) are recorded but **never** used for policy — the spec requires a client to treat them as untrusted unless the server is trusted, and only T0 is. `is_mutating` and `sends_crm_data` are our own verdicts, set by review, and they are what the PolicyGate reads. A tool that disappears is stamped `removed_at`, never deleted. Plus `mcp_tools_organization_review_state_index`, `mcp_tools_server_schema_hash_index` |
+| `mcp_grants` | Permission to call **one tool**. `granted_schema_hash` is copied from the tool at the moment of the grant, so D4.6's suspension is a comparison and not a recollection: a later `tools/list` that changes a tool stamps `suspended_at` with a reason on every grant whose hash no longer matches. Revocation is a stamp too (`revoked_at`, `revoked_reason`), kept under the `mcp_grant_record` rule, because "was this tool ever allowed to see customer data" is the first question an incident asks. `requires_action_approval`, `argument_constraints`, `call_budget`, `calls_made`, `reauthenticated_at`, `audit_event_id`, `expires_at`, `last_used_at`. **`mcp_grants_tool_active_unique (tool_id, active_marker)`** allows any number of historical grants and at most one live one; plus `mcp_grants_organization_server_index`, `mcp_grants_server_revoked_index` |
 
 ## 3. Round trip with the brief and CRM fixtures
 
