@@ -62,8 +62,16 @@ export const TEMPLATES_DIR = join(here, 'templates');
 export const DEFAULT_MANIFEST = join(REPO_ROOT, 'packaging', 'manifest', 'runtime.json');
 export const EXECUTABLE_NAME = 'frankenphp';
 
-/** Top-level entries of the Laravel tree that never belong in a runtime. */
+/**
+ * Top-level entries of the Laravel tree that never belong in a runtime.
+ *
+ * `.env.example` is dropped here rather than refused by FORBIDDEN_APP_FILES below: it is a
+ * committed template with no values in it, it is useless inside a runtime that has no `.env`
+ * (ADR-001 D4), and aborting on the repository's own file would make the release build
+ * unrunnable. A real `.env`, or an `.env.example` deeper in the tree, is still refused.
+ */
 export const EXCLUDED_APP_ENTRIES = new Set([
+    '.env.example',
     '.git',
     '.github',
     '.claude',

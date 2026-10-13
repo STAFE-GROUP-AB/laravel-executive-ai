@@ -89,9 +89,10 @@ node packaging/runtime/assemble-runtime.mjs \
 ```
 
 What goes into `app/`: everything except `.git`, `.github`, `.claude`, `node_modules`, `tests`,
-`storage`, `apps`, `packaging`, `docs`, `Mission` and editor directories. What aborts the build:
-any `.env*`, `bootstrap/cache/{config,routes-v7,events}.php`, `*.sqlite*`, key/certificate/model
-files, `auth.json`, a symlink anywhere, a dev dependency under `vendor/`, or a tree without
+`storage`, `apps`, `packaging`, `docs`, `Mission`, the root `.env.example` and editor directories.
+What aborts the build: any other `.env*`, `bootstrap/cache/{config,routes-v7,events}.php`,
+`*.sqlite*`, key/certificate/model files, `auth.json`, a symlink anywhere (so never run
+`php artisan storage:link` on a release tree), a dev dependency under `vendor/`, or a tree without
 `artisan`, `bootstrap/app.php`, `public/index.php` and `vendor/autoload.php`. After writing, the
 assembler re-reads the directory with the verifier's rules so a bug in it is caught by it.
 

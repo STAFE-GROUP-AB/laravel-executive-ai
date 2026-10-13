@@ -228,6 +228,24 @@ test('excludes tests, storage and node_modules from the app tree but keeps boots
     rmSync(root, { recursive: true, force: true });
 });
 
+test('drops the committed .env.example from the top level but keeps refusing every other .env', () => {
+    const root = tempDir();
+    const app = writeStubApp(root);
+    write(app, '.env.example', "APP_NAME=Laravel Executive AI\nAPP_KEY=\n");
+
+    const files = listAppFiles(app);
+
+    assert.ok(! files.includes('.env.example'), 'the template is dropped, not shipped');
+    assert.ok(files.includes('artisan'), 'the rest of the tree is unaffected');
+
+    // Deeper in the tree it is still an abort: only the repository's own root template is known
+    // to be value-free, and the whole point of the rule is that nothing env-shaped slips in.
+    write(app, 'config/.env.example', 'APP_KEY=');
+    expectRefusal(() => listAppFiles(app), /environment file/);
+
+    rmSync(root, { recursive: true, force: true });
+});
+
 test('refuses .env files, environment-derived caches, databases, keys, symlinks and dev dependencies', () => {
     const cases = [
         ['.env', 'secret', /environment file/],
