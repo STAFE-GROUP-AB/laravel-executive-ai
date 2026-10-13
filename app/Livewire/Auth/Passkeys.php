@@ -6,12 +6,14 @@ namespace App\Livewire\Auth;
 
 use App\Models\PasskeyCredential;
 use App\Models\User;
+use App\Security\Authorization\Gates\Abilities;
 use App\Security\Authorization\Passkeys\PasskeyAuthenticator;
 use App\Security\Authorization\Passkeys\PasskeyCeremonyFailed;
 use App\Security\Authorization\Passkeys\PasskeysUnavailableException;
 use App\Security\Authorization\Passkeys\WebAuthnAuthenticator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
 
 /**
@@ -29,6 +31,8 @@ final class Passkeys extends Component
 
     public function startRegistration(PasskeyAuthenticator $passkeys): void
     {
+        Gate::authorize(Abilities::REGISTER_PASSKEY);
+
         $this->validate(['name' => ['nullable', 'string', 'max:100']]);
         $this->notice = null;
 
@@ -42,6 +46,8 @@ final class Passkeys extends Component
     /** @param array<string, mixed> $credential */
     public function completeRegistration(PasskeyAuthenticator $passkeys, array $credential): void
     {
+        Gate::authorize(Abilities::REGISTER_PASSKEY);
+
         try {
             $passkeys instanceof WebAuthnAuthenticator
                 ? $passkeys->completeRegistration($this->user(), $credential, $this->name)
@@ -63,11 +69,15 @@ final class Passkeys extends Component
 
     public function passkeyFailed(string $reason): void
     {
+        Gate::authorize(Abilities::REGISTER_PASSKEY);
+
         $this->addError('passkey', __('security.passkeys.errors.browser', ['reason' => preg_replace('/[^A-Za-z]/', '', $reason) ?? '']));
     }
 
     public function remove(PasskeyAuthenticator $passkeys, string $credentialId): void
     {
+        Gate::authorize(Abilities::REMOVE_PASSKEY);
+
         $user = $this->user();
         $credential = PasskeyCredential::query()->where('user_id', $user->id)->where('id', $credentialId)->first();
 
@@ -85,6 +95,8 @@ final class Passkeys extends Component
 
     public function render(PasskeyAuthenticator $passkeys): View
     {
+        Gate::authorize(Abilities::VIEW_SECURITY_SETTINGS);
+
         return view('livewire.auth.passkeys', [
             'status' => $passkeys->status(),
             'credentials' => PasskeyCredential::query()

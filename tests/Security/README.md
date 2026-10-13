@@ -35,7 +35,11 @@ are checkable. Read `packaging/fixtures/README.md` → "Security corpora" for th
 | `tests/Security/PromptInjectionCorpusTest.php` | every case in `prompt-injection/*.json` | S1, once an agent run exists; the S0-21 file is its first rows |
 | `tests/Security/HostileMcpServerTest.php` | every exchange in `hostile-mcp/*.json` | S1/S3, with the MCP client (ADR-005 D4). Threat model T-02, T-52 |
 | `tests/Security/LocalOnlyEgressTest.php` | the `policy_downgrade` cases plus the AI fixture suite | ADR-004 D4 requires it before that ADR can be Accepted |
-| cross-account / IDOR tests | the `cross_account_access` cases and the S0-18 accounts | S1 with the CRM |
+| `tests/Security/IdorTest.php` | the schema itself: every table carrying `organization_id`, with rows built by `Support\TenantRowFactory` | **Live** (S2-06, #88). Threat model T-55, T-73. A member *and* an owner of organization A are refused every row of B on read, write and delete; a brief of B is 403 over HTTP by version id and by document id; a spoofed `organization_id`/`user_id`/`role` in the query string changes nothing; a revoked membership stops being one. Driven from the schema, so a table added later is in the sweep without an edit |
+| `tests/Security/PolicySurfaceArchTest.php` | the routes, the Livewire components, the queued jobs, the tool namespaces and the policy namespace | **Live** (S2-06). The `IpcPolicyArchTest` shape applied application-wide: a surface that reaches tenant data must name an ability, and there is no `before()` hook anywhere. Its detectors are proved against the fixtures in `Support/Surfaces/` |
+| `tests/Security/AuditCompletenessTest.php` | `audit_events` | **Live** (S2-06). Threat model T-46: one row per refusal and per mutating action on each of the five T-73 surfaces, naming actor, ability, subject and surface; context is references only |
+| `tests/Security/TenantRowFactorySelfTest.php` | the schema | **Live** (S2-06). The sweep's engine: a real row can be built for every tenant table, so none drops out of `IdorTest` quietly |
+| the `cross_account_access` corpus cases | the S0-18 accounts | S3 with the live connectors (**E3-1**); the policy half is `IdorTest` above |
 | `tests/Security/RedactorTest.php`, `LogRedactionTest.php`, `LoggingConfigTest.php`, `ExceptionRedactionTest.php`, `QueuePayloadTest.php`, `JobsCarryNoSecretValueTest.php`, `PackagedConfigTest.php` | `secrets-corpus.json` | **Live** (S1-01). ADR-003 D7 rows 1–3, threat model T-10 – T-12, T-75. The `secret_harvesting` cases join once an agent run exists |
 
 Which threat each case answers is recorded in
@@ -75,6 +79,9 @@ asserting nothing:
 | `FakeWorkspaceRepository` | the data-gathering boundary, seeded with the frozen customers so a leak is recognisable |
 | `AuditLogSpy` / `InMemoryAuditLogSpy` | the `audit_event_recorded` seam; swapped for an adapter over `audit_events` once S1-01 lands it. The event type is the case's `user_message_key`, so the forensic record and the UI message cannot drift apart |
 | `ExpectedFailure` | real xfail semantics for a gate written before its defence |
+| `TenantRowFactory` (S2-06) | inserts a real row into **any** table carrying `organization_id`, built from `Schema::getColumns()`, `Schema::getForeignKeys()`, the model's own casts and the `->json()` declarations in the migrations. No per-table knowledge, so the IDOR sweep covers a table added next sprint; a shape it cannot satisfy fails loudly instead of skipping |
+| `PolicySurface` (S2-06) | the reader `PolicySurfaceArchTest` uses: which tables are tenant data, which models and policies exist, which sources reach tenant data, and which Livewire methods are actions |
+| `Surfaces/` (S2-06) | the fixtures the detectors are proved against: a guarded job, an **unguarded** job, a `GatedTool` and an **ungated** tool. The guarded two are also the job and tool `AuditCompletenessTest` runs |
 
 ## The contract
 

@@ -6,8 +6,10 @@ namespace App\Livewire\Auth;
 
 use App\Models\User;
 use App\Security\Authorization\Devices\DeviceRegistry;
+use App\Security\Authorization\Gates\Abilities;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
 
 /**
@@ -23,6 +25,8 @@ final class Devices extends Component
 
     public function revoke(DeviceRegistry $devices, string $deviceId): void
     {
+        Gate::authorize(Abilities::REVOKE_DEVICE);
+
         $user = $this->user();
         $current = $devices->active($user, session()->getId())->first(fn ($device): bool => $device->id === $deviceId);
 
@@ -40,6 +44,8 @@ final class Devices extends Component
 
     public function revokeOthers(DeviceRegistry $devices): void
     {
+        Gate::authorize(Abilities::REVOKE_DEVICE);
+
         $user = $this->user();
         $count = $devices->revokeOthers($user, session()->getId(), "user:{$user->id}");
 
@@ -49,6 +55,8 @@ final class Devices extends Component
 
     public function render(DeviceRegistry $devices): View
     {
+        Gate::authorize(Abilities::VIEW_SECURITY_SETTINGS);
+
         return view('livewire.auth.devices', [
             'devices' => $devices->active($this->user(), session()->getId()),
         ]);

@@ -2,6 +2,7 @@
 
 use App\Providers\AiServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\AuthorizationServiceProvider;
 use App\Security\Ipc\IpcServiceProvider;
 use App\Security\Secrets\SecretsServiceProvider;
 
@@ -10,5 +11,9 @@ return [
     SecretsServiceProvider::class,
     AppServiceProvider::class,
     AiServiceProvider::class,
+    // Before IpcServiceProvider, so the audit hook is on the Gate before OwnerAbilities defines its
+    // abilities: an `after` hook registered later would still fire, but keeping the order explicit
+    // means the §11 surfaces and the §6 IPC operations are audited by construction, not by luck.
+    AuthorizationServiceProvider::class,
     IpcServiceProvider::class,
 ];

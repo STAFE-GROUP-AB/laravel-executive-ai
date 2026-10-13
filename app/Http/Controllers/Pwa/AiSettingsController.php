@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Pwa;
 
 use App\AI\Providers\SupportedProviders;
 use App\Http\Controllers\Controller;
+use App\Security\Authorization\Gates\Abilities;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * /settings/ai — the PWA's view of SELECT_AI (blueprint §12.3 screen 5, §12.2
@@ -21,6 +23,8 @@ final class AiSettingsController extends Controller
 
     public function __invoke(): View
     {
+        Gate::authorize(Abilities::VIEW_AI_SETTINGS);
+
         return view('settings.ai', [
             'providers' => $this->providers->supported(),
         ]);
