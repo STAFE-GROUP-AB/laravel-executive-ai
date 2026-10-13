@@ -1,6 +1,6 @@
 # Data model — Sprint 1 minimum (S1-01) and the §3.1 CRM tables (S2-01)
 
-**Status:** Living document · **Owner:** Workstream B (Laravel platform) · **Issues:** #29, #84
+**Status:** Living document · **Owner:** Workstream B (Laravel platform) · **Issues:** #29, #84, #85
 **Source of truth:** `database/migrations/` (the migrations are `up()`-only; the schema is built once
 per CI job with `migrate`, tests run inside `DatabaseTransactions`, ADR-002 D10)
 
@@ -8,9 +8,9 @@ This page describes the tables §16 step 4 asks for — `users`, `organizations`
 `briefs`, `brief_items`, `brief_deliveries`, `audit_events` and the install-state marker — plus the
 framework tables the `local` profile needs (`jobs`, `job_batches`, `failed_jobs`, `cache`,
 `cache_locks`, `sessions`, `password_reset_tokens`), and since S2-01 the §3.1 CRM and source tables
-(§3 below). Everything lives in one SQLite file in WAL mode (ADR-002 D2). The remaining §3.1 tables
-(email, AI runs, approvals, memories, retention) are added by their own backlog items on the same
-conventions.
+(§3 below), and since S2-02 the §3.1 AI, approvals, tool-run and memory tables. Everything lives in
+one SQLite file in WAL mode (ADR-002 D2). The remaining §3.1 tables (email, retention, governance and
+the MCP registry) are added by their own backlog items on the same conventions.
 
 ## 1. Conventions (ADR-002 D10, blueprint §3.1)
 
@@ -362,6 +362,292 @@ The provider-agnostic snapshot of one external, non-email item — what `email_m
 the §3.1 "provider/account/external_id" key: it is what makes a replayed sync batch a no-op instead
 of a duplicate (ADR-002 D3.3). Plus `source_records_organization_fetched_at_index` and
 `source_records_account_fetched_at_index`. `external_account_id` gets its foreign key with S2-03.
+
+### The §3.1 AI, approvals, tool-run and memory tables (S2-02, #85)
+
+Nine tables: `ai_providers`, `ai_models`, `ai_runs`, `tool_runs`, `action_proposals`,
+`action_approvals`, `memories`, `memory_sources`, `browser_sessions`. Models live in
+`app/Models/AI/` and `app/Models/Approvals/`; the vocabularies are PHP enums in `app/AI/Compliance/`,
+`app/AI/Runs/`, `app/AI/Tools/`, `app/AI/Memory/` and `app/Approvals/`. `ai_runs`, `tool_runs`,
+`action_proposals`, `action_approvals` and `browser_sessions` are append-only and therefore carry no
+`deleted_at`, like `brief_deliveries` and `audit_events`.
+
+Four rules run through all of it:
+
+1. **No credential, anywhere.** `ai_providers` stores `secret_service` / `secret_account` /
+   `secret_version` — the coordinates of a Keychain generic-password item — and nothing else
+   credential-shaped (ADR-003 D1). There is deliberately **no `headers` column**, which is where a
+   bearer token for the `openai-compatible` driver would otherwise land. The contract test scans the
+   table's column names against a forbidden-name pattern, so the next migration cannot add one.
+2. **No binary column and no image path** on `tool_runs`, `audit_events` or `action_proposals`
+   (ADR-003 D7 row 8, ADR-005 D1.7). A redacted frame lives in `Caches/` for the session's lifetime;
+   the database keeps a SHA-256, the dimensions, the app bundle id and the window title.
+   `tests/Security/AuditNoBlobTest.php` asserts the *shape of the schema*, not a clean row.
+3. **The guarantee is an index, not a check** — ADR-009 D1.2's argument, reused four times: the
+   dedupe slot on `ai_runs`, the idempotency key and nonce on `action_proposals`, the proposal and
+   nonce on `action_approvals`, and the single active memory per key. Each uses either a plain unique
+   index or the `brief_deliveries_single_sent_unique` generated-column idiom.
+4. **Prompts, transcripts, tool arguments and results pass `App\Security\Secrets\Redactor` on
+   write** (ADR-003 D7 row 4). They are text and JSON columns; nothing in them is a blob.
+
+#### `ai_providers` — the ADR-007 D6 provider register
+
+One configured provider account. §3.1 has no `ai_provider_register`/`ai_model_register` tables:
+`ai_providers` *is* the provider register and `ai_models` *is* the model register.
+
+| Column | Notes |
+|---|---|
+| `provider_id`, `display_name`, `kind`, `driver` | the `SupportedProviders` catalogue id, the owner's label, `local`/`remote`, the SDK driver |
+| `base_url`, `enabled`, `disabled_reason`, `last_used_at` | `base_url` is a URL, never a credential |
+| `secret_service`, `secret_account`, `secret_version` | ADR-003 D1 Keychain coordinates; hidden from serialisation |
+| indexes | `ai_providers_organization_label_unique (organization_id, provider_id, display_name)`, `ai_providers_secret_unique (secret_service, secret_account)` — one Keychain item per row — `ai_providers_organization_enabled_index`, `ai_providers_organization_region_index`, `ai_providers_organization_evidence_expiry_index` |
+
+**ADR-004 D5's eight evidence fields** decide `EU_RESTRICTED` eligibility. The mapping lives in
+`App\AI\Compliance\RegionEvidenceField`, so the contract test walks the enum instead of trusting this
+table; `AiProvider::missingRegionEvidence()` is what the router shows a user instead of refusing
+silently, and region is never inferred from a hostname.
+
+| D5 field | Column(s) |
+|---|---|
+| `processing_region` | `processing_region` (`App\AI\Providers\ProcessingRegion`: `EU` · `EEA+CH` · `US` · `GLOBAL` · `UNKNOWN`) |
+| `region_mechanism` | `region_mechanism` — a **JSON list** of `App\AI\Providers\RegionMechanism`, because OpenAI binds the region by endpoint *and* by project setting |
+| region evidence | `region_evidence_url`, `region_verified_at` |
+| DPA in force | `dpa_reference`, `dpa_signed_at` |
+| sub-processors | `subprocessors_url` |
+| transfer impact | `transfer_impact_ref` |
+| zero data retention | `zero_data_retention`, `zero_data_retention_evidence_url`, `zero_data_retention_verified_at` |
+| verification | `verified_by_user_id` (FK `ai_providers_verified_by_user_fk`), `evidence_expires_at` |
+
+Two columns carry a name of their own: D5's `verified_by` is `verified_by_user_id`, because it is a
+foreign key to the person who confirmed the evidence, and D5's `expires_at` is
+`evidence_expires_at`, because four other tables here use `expires_at` for a grant or an approval.
+
+**A local runtime is recorded by mechanism, not by a region string.** `AiProvider::regionEvidence()`
+maps the row onto S2-13's `App\AI\Providers\RegionEvidence`, so the *rule* has exactly one
+implementation (`RegionEvidence::missingFor()`, which the `ModelRouter` already decides on) and this
+item only supplies the storage. A local provider therefore carries
+`region_mechanism = ["local_machine"]`, which is what ADR-007 D6 R1's `this-mac` literal means
+(ADR-004 D5: "Local runtimes satisfy `EU_RESTRICTED` for *inference* by construction"), and the
+model's own licence stays a separate question. `AiProvider::isEuRestrictedEligible()` adds the two
+D6 attestations that belong to the row rather than to the DTO — R3 at least `reviewed`, R4 `done` or
+`not_required`.
+
+`AiProvider::toConnection()` is the other half of the S2-13 handoff: `ProviderConnection` was
+written as a DTO "so that this mapping is the only thing that changes when `ai_providers` lands", and
+it is. The key becomes a `SecretRef` from the row's Keychain coordinates, resolved at call time;
+`headers` is empty by construction, because there is no column for it.
+
+**ADR-007 D6's R1–R7** are the admin UI's register rows, mapped by
+`App\AI\Compliance\ProviderRegisterField`. R1–R6 are provider-level; **R7 is per model and per run**,
+which is the one split worth stating plainly: a provenance triple belongs to the model that answered,
+not to the account that paid.
+
+| Row | Column(s) |
+|---|---|
+| R1 processing region | `ai_providers.processing_region`, `region_evidence_url`, `region_verified_at` |
+| R2 sub-processors | `ai_providers.subprocessors_url`, `subprocessors_checked_at` (90-day re-check) |
+| R3 DPA | `ai_providers.dpa_url`, `dpa_status` (`not_reviewed` · `reviewed` · `executed`) |
+| R4 TIA | `ai_providers.tia_status` (`not_required` · `pending` · `done`) |
+| R5 retention | `ai_providers.retention_statement`, `retention_evidence_url`, `retention_verified_at` |
+| R6 licence | `license_name`, `license_url`, `license_text_hash`, `license_accepted_at`, `license_accepted_by_user_id` on **both** `ai_providers` (the provider's terms) and `ai_models` (the model's licence) |
+| R7 provenance | `ai_models.model_id`/`model_version`/`model_digest`/`quantization`, copied to `ai_runs.model_id`/`model_digest`/`quantization` |
+
+Evidence URLs are `string(1000)`, not the §3.1 `source_uri` width: eight `varchar(2000)` columns on
+one `utf8mb4` table approach MySQL's 65 535-byte row-definition limit, and no vendor evidence page
+needs more.
+
+#### `ai_models` — the capability registry, persisted
+
+`ai_provider_id` (FK `ai_models_provider_fk`), `model_id`, `display_name`, `enabled`. The capability
+columns mirror `App\AI\Providers\ModelCapabilities` one-to-one — `text`, `streaming`, `tools`,
+`structured_output`, `vision`, `embeddings`, `embedding_dimensions`, `context_window`,
+`max_output_tokens`, `input_price_per_mtok`, `output_price_per_mtok`, `max_concurrency` — plus
+`capability_source` (ADR-004 D3's `registry` · `probe` · `user_override` · `unknown`),
+`capability_source_url` and `capabilities_verified_at`. `AiModel::toCapabilities()` rebuilds the DTO;
+a model nobody knows gets `ModelCapabilities::unknown()`, and the router refuses rather than
+degrading. Prices are per million tokens in EUR as `decimal(12,6)`, so the €5.00-per-day cap sums
+without float drift; `0` is a local model, which still records tokens. Indexes
+`ai_models_provider_model_unique (ai_provider_id, model_id)`,
+`ai_models_organization_enabled_index`, `ai_models_organization_capability_source_index`,
+`ai_models_provider_enabled_index`.
+
+#### `ai_runs` — ADR-004 D7's thirteen provenance fields and the dedupe key
+
+`App\AI\Runs\RunProvenanceField` maps each of D7's thirteen fields to its columns and the contract
+test walks it:
+
+| D7 field | Column(s) |
+|---|---|
+| `trace_id` | `trace_id` — a ULID per run, propagated to `tool_runs` and MCP calls, **never** sent as a header to an external provider |
+| provider | `provider` (copied string) + `ai_provider_id` (FK) |
+| model id | `model_id` (copied string) + `ai_model_id` (FK) |
+| model digest | `model_digest` |
+| quantization | `quantization` |
+| privacy mode | `privacy_mode` (`App\AI\Routing\PrivacyMode`) |
+| region evidence id | `region_evidence_id` → `ai_providers.id` (`ai_runs_region_evidence_fk`) |
+| prompt hash | `prompt_hash` (`sha256:`, 71) |
+| capabilities snapshot | `capabilities_snapshot` (json) |
+| usage | `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_write_input_tokens`, `reasoning_tokens`, `total_tokens` |
+| cost | `cost_eur` `decimal(12,6)` |
+| wall time | `wall_time_ms` |
+| outcome | `outcome` |
+
+`provider` and `model_id` are copied as strings next to their foreign keys on purpose: a run must
+stay readable after the owner deletes the provider row. The rest of the control plane is recorded as
+it was actually applied (`max_steps`, `steps_used`, `max_time_seconds`, `max_output_tokens`,
+`max_cost_eur`), plus `started_at`, `finished_at`, `cancelled_at`, `cancellation_source`,
+`finish_reason`, `error_kind`, `error_message`, and `prompt_redacted` / `response_redacted` (text,
+`Redactor` on write — the stored response is what a dedupe hit returns).
+
+`outcome` is `App\AI\Runs\RunOutcome`: `running` · `succeeded` · `failed` · `refused` · `cancelled`.
+`cancelled` is required by ADR-004 D2 row 6 and is a first-class outcome, not a flavour of failure;
+`refused` is the fail-closed path (missing capability, exhausted budget, open circuit, policy denial)
+where nothing ran and nothing was degraded.
+
+**The dedupe key** is D7's `sha256(job_class, normalized_input, model_id)`, built by
+`AiRun::dedupeKey()`: the three parts are length-prefixed before hashing so no boundary can be
+shifted, and the normalized input is canonicalised with RFC 8785 (`App\Support\Json\Jcs`, the brief's
+rule) so two logically identical requests with differently ordered keys produce one key. Two columns
+carry the window:
+
+1. `dedupe_window_start` — the UTC start of the `dedupe_window_minutes` bucket (default 60,
+   `AiRun::dedupeWindowStart()`). Without it the key would be unique forever and the same job could
+   never run twice; with it a request repeated after the window inserts normally.
+2. `dedupe_marker` — a **generated column**, `case when outcome in ('running', 'succeeded') then 1
+   else null end`.
+
+**`ai_runs_dedupe_window_unique (organization_id, dedupe_key, dedupe_window_start, dedupe_marker)`**
+therefore admits any number of `failed` / `refused` / `cancelled` rows alongside **at most one** live
+run per key and window — a replay inside the window is unrecordable, while a retry after a failure is
+not blocked. Same idiom as `brief_deliveries_single_sent_unique`, same reason (MySQL has no partial
+indexes). Other indexes: `ai_runs_trace_id_index`, `ai_runs_organization_started_at_index`,
+`ai_runs_organization_provider_started_at_index` (what the €5.00-per-day cap sums over),
+`ai_runs_organization_job_started_at_index`, `ai_runs_organization_outcome_index`.
+
+#### `tool_runs` — the §1.2 tool-activity surface
+
+ADR-004 names this table only in prose (D7); S2-02 specifies it, because `/assistant` has nowhere
+else to read from.
+
+| Column | Notes |
+|---|---|
+| `ai_run_id` (FK `tool_runs_ai_run_fk`), `trace_id` | the run and the trace the call belongs to |
+| `tool_name`, `tool_kind` | `builtin` · `mcp` · `computer_use` (`App\AI\Tools\ToolKind`) |
+| `mcp_server_id` | a plain ULID column — the MCP registry lands with S2-03, as `communications.account_id` waits for `email_connections` (ADR-002 D9.2) |
+| `step` | the run step the call was made at |
+| `arguments_redacted`, `result_redacted` | json, `Redactor` on write; tools take a `connection_id`, never a credential |
+| `policy_decision` | **not nullable**: `allowed` · `denied`. §4 says the LLM proposes and a server-side `PolicyGate` decides, so a call that was never put to the gate has no representable row |
+| `policy_reason`, `action_proposal_id` | why, and the approval-driven proposal this call executed |
+| `outcome` | `running` · `succeeded` · `failed` · `denied` · `timed_out` · `cancelled` |
+| `app_bundle_id`, `window_title`, `screenshot_sha256`, `screenshot_width`, `screenshot_height` | **the whole of what a computer-use row keeps about a frame** (ADR-003 D7 row 8) |
+| indexes | `tool_runs_trace_id_index`, `tool_runs_ai_run_step_index`, `tool_runs_organization_started_at_index` (the `/assistant` list), `tool_runs_organization_tool_started_at_index`, `tool_runs_organization_decision_index` |
+
+#### `action_proposals` — frozen and immutable
+
+§11's "frozen immutable proposal, input/recipient/hash, approver identity, expiry, nonce,
+idempotency, fail closed", with ADR-005 D1.6's columns. The model only ever writes rows here;
+nothing in the table carries authority on its own.
+
+| Column | Notes |
+|---|---|
+| `kind` | `ui_action` · `outgoing_email` · `crm_deletion` · `github_write` · `external_form` — §11's approval-driven list (`App\Approvals\ProposalKind`) |
+| `status` | `pending` · `approved` · `rejected` · `expired` · `executed` · `superseded` |
+| `ai_run_id`, `trace_id`, `browser_session_id`, `proposed_by`, `requested_by_user_id` | where it came from; `proposed_by` uses the provenance actor grammar |
+| `app_bundle_id`, `window_title`, `element_role`, `element_label`, `action_type` | ADR-005 D1.6's frozen target |
+| `redacted_value`, `value_hash` | what the approver sees, and the hash of the text that will be typed — **the text itself is never stored** (D1.3, D1.10) |
+| `screenshot_sha256` | correlation hash only |
+| `payload`, `proposal_hash` | the frozen content and `sha256:` over its RFC 8785 canonical form (`ActionProposal::hashPayload()`, the brief's `content_hash` rule) |
+| `nonce`, `idempotency_key`, `frozen_at`, `expires_at` | §11 |
+| `executed_at`, `rejected_at`, `rejected_by_user_id`, `rejection_reason` | what happened to it |
+
+Immutability has two halves, because one is not enough:
+
+- **Detection.** `proposal_hash` is recomputed by the executing side —
+  `App\Browser\ComputerUse\AuthorizedUiAction` and
+  `App\Integrations\Mail\Dto\ApprovedOutgoingEmail` both refuse on mismatch — so an approval can
+  never be replayed against different content. `ActionProposal::hashMatchesPayload()` is the check.
+- **Prevention.** `App\Models\Approvals\ActionProposal` refuses to persist a change to any column
+  outside `MUTABLE_AFTER_FREEZE` (`status` and the four timestamps that record what happened *to* the
+  proposal) once `frozen_at` is set, throwing `App\Approvals\FrozenProposalException`. A unique index
+  cannot express a per-row rule, which is why this one lives in the model and has its own test
+  (`tests/Feature/Approvals/FrozenProposalTest.php`).
+
+Three keys with three different jobs: **`action_proposals_idempotency_key_unique`** (a retried job
+cannot create a second approvable proposal), **`action_proposals_nonce_unique`** (the single-use token
+an approval must quote), and `action_proposals_proposal_hash_index` — indexed and *not* unique,
+because two proposals of identical content are legitimate and differ by nonce. Plus
+`action_proposals_organization_status_index`, `action_proposals_organization_kind_status_index`,
+`action_proposals_session_frozen_at_index`, `action_proposals_trace_id_index`.
+
+#### `action_approvals` — a replay that cannot be recorded
+
+`action_proposal_id` (FK), `nonce`, `proposal_hash` (copied at approval), `approver_user_id` (FK),
+`approved_at`, `expires_at`, the §11 re-auth evidence (`reauth_at`, `auth_device_id`, `ip_address`,
+`user_agent` — the last three hidden from serialisation) and `consumed_at`, stamped when the nonce is
+spent so an unused expired approval and a used one stay distinguishable.
+
+Two unique indexes, and the pair is the point:
+
+1. **`action_approvals_proposal_unique (action_proposal_id)`** — a proposal can be approved exactly
+   once. A second approval from a double-click, a retried request or a stolen screen cannot be
+   inserted, even with a fresh nonce.
+2. **`action_approvals_nonce_unique (nonce)`** — the proposal's single-use token can be spent exactly
+   once across all proposals. An approval replayed with a captured nonce cannot be inserted either,
+   even if the attacker also supplies a fresh proposal id.
+
+Together they make a replayed approval **unrecordable** rather than merely detectable, which is the
+same argument ADR-009 D1.2 makes for the brief's single-send index. `ActionApproval::authorises()`
+adds the fail-closed run-time half: unexpired, unspent, and the hash the approver saw still matching
+the proposal's frozen payload. Plus `action_approvals_organization_approved_at_index` and
+`action_approvals_approver_approved_at_index`.
+
+#### `browser_sessions` — the ADR-005 session grant
+
+Mirrors `App\Browser\ComputerUse\AutomationSession` field for field, so
+`BrowserSession::toSession()` rehydrates the DTO without a second read. `user_id` (FK), `grant_id`
+(`browser_sessions_grant_id_unique`), `state` (`App\Browser\ComputerUse\AutomationSessionState`),
+`allowlist` (json, D1.5's `{bundle_id, window_title_pattern}` list), `started_at`, `expires_at`
+(60 min hard), `idle_timeout_seconds` + `last_activity_at` (15 min idle, `isIdleTimedOut()`),
+`max_actions` + `actions_taken` (25), the grant's own re-auth evidence (`reauth_at`,
+`auth_device_id`), `ended_at`, `end_reason`, `panic_stopped_at`, and `helper_version` /
+`peekaboo_version` for the D1.1 pin. The hard denylist — login window, System Settings, password
+managers, terminals, `AXSecureTextField` — is enforced in code and **cannot** be put in `allowlist`.
+No screenshot and no path to one is ever stored (D1.7). Indexes
+`browser_sessions_organization_state_index`, `browser_sessions_organization_expires_at_index`,
+`browser_sessions_user_started_at_index`.
+
+#### `memories` and `memory_sources` — app-owned, and reviewed
+
+§4: "Konversation, minne och användarprofil är appägda. LLM kan inte uppdatera permanent minne utan
+annoterad, granskad operation." The review is what the schema is built around.
+
+| Column | Notes |
+|---|---|
+| `scope`, `scope_key` | `organization` · `user` · `customer` · `project`, and the canonical **non-null** scope identity (`organization`, `user:<ulid>`, …) |
+| `subject_type`, `subject_id`, `user_id` | what queries and the foreign key use |
+| `kind` | `profile` · `preference` · `fact` · `instruction` · `summary` |
+| `memory_key`, `content`, `confidence` | `content` is text and passes the `Redactor`; a memory about a natural person is `sensitivity_class = personal`, so GDPR export and erasure have one place to look |
+| `status` | `proposed` · `active` · `superseded` · `rejected`. A row the model writes starts `proposed`; only `active` is readable by the agent (`Memory::scopeActive()`) |
+| `written_by`, `reviewed_at`, `reviewed_by_user_id`, `review_note` | the annotated, reviewed operation §4 demands |
+| `version`, `supersedes_id`, `expires_at`, `last_used_at`, `use_count` | |
+| `active_marker` | **generated column** `case when status = 'active' then 1 else null end` |
+
+**`memories_single_active_unique (organization_id, scope_key, memory_key, active_marker)`** admits any
+number of proposed, superseded or rejected rows and at most one active row per key — so a
+contradictory memory cannot be *recorded*, not merely detected after the fact. `scope_key` exists
+precisely because the index needs a non-null scope identity: an index over the nullable
+`subject_type`/`subject_id` pair would constrain nothing for organization- and user-scoped rows,
+since both engines treat `NULL` as distinct. Plus `memories_organization_status_kind_index`,
+`memories_organization_scope_index`, `memories_subject_index`, `memories_user_status_index`,
+`memories_organization_expires_at_index`.
+
+`memory_sources` is the evidence a memory rests on, so §4.2's "every material claim carries a source
+reference or an explicit uncertainty marker" holds for memory too: `memory_id` (FK),
+`source_type` (`App\AI\Memory\MemorySourceType`), `position`, `communication_id` and `ai_run_id` (real
+FKs, because those tables exist), `excerpt` (external content: data, never instruction) and
+`occurred_at`. Indexes `memory_sources_memory_position_unique`,
+`memory_sources_organization_source_index`, `memory_sources_communication_index`,
+`memory_sources_ai_run_index`.
 
 ### Full-text indexes (ADR-002 D4)
 

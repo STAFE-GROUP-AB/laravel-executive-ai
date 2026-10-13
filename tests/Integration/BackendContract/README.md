@@ -29,6 +29,7 @@ pass on a MySQL connection.
 | `migrations` | `MigrationsContractTest.php` | S1-01 |
 | `migrations` (CRM) | `CrmSchemaContractTest.php` | S2-01 |
 | `search` | `CrmSearchContractTest.php` | S2-01 |
+| `migrations` (AI, approvals, memory) | `AiAndApprovalsSchemaContractTest.php` | S2-02 |
 
 `queue`, `repository`, `sync-idempotency`, `cross-account`, `backup-restore` and
 `profile-migration` land with their own backlog items.
