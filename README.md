@@ -1,4 +1,7 @@
-# Laravel Executive AI
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+  <img src="docs/assets/logo-light.png" alt="Laravel Executive AI" width="420">
+</picture>
 
 **An open source, self-hosted, macOS-native AI executive assistant for developers, consultants and small teams.**
 
