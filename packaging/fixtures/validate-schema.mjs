@@ -363,13 +363,34 @@ function checkRuntimeManifest(subject, document) {
         }
     }
 
+    // S1-12: `artifact` is what build-macos.yml downloads. It may only be filled for a signed
+    // package, and the digest it carries is the one the workflow checks before anything is
+    // unpacked into the app bundle — so an artifact without a signed package is a hole.
+    if (document.artifact !== null) {
+        if (document.status !== 'signed') {
+            problems.push(`artifact is set but status is ${document.status}; only a signed package may be published`);
+        }
+
+        if (document.package === null) {
+            problems.push('artifact is set but package is null');
+        }
+
+        if (! document.artifact.url.endsWith(`/releases/download/${document.artifact.tag}/${document.artifact.asset}`)) {
+            problems.push('artifact.url must point at artifact.tag and artifact.asset');
+        }
+
+        if (! document.artifact.tag.startsWith(`runtime-${document.components.php.version}-${document.components.frankenphp.version}-`)) {
+            problems.push(`artifact.tag ${document.artifact.tag} does not name the pinned PHP and FrankenPHP versions`);
+        }
+    }
+
     if (problems.length > 0) {
         fail(subject, problems.join('\n      '));
 
         return false;
     }
 
-    const state = document.package === null ? 'unbuilt, no package yet' : `${document.package.files.length} files pinned`;
+    const state = document.package === null ? 'unbuilt, no package yet' : `${document.package.files.length} files pinned, ${document.artifact === null ? 'not published' : `published as ${document.artifact.tag}`}`;
     console.log(`      runtime ${document.runtime_version}: FrankenPHP ${document.components.frankenphp.version}, PHP ${document.components.php.version}, Caddy ${document.components.caddy.version}, ${extensions.length} extensions, ${state}`);
 
     return true;

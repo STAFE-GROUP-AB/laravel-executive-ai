@@ -59,6 +59,32 @@ A binary may ship inside the signed `.app`/`.dmg` or the app-owned runtime in Ap
    PHP build **must** be configured without `gettext` and without GNU libiconv (use the macOS system
    iconv or drop the `iconv` extension). GNU readline is excluded; static-php-cli's `readline`
    extension links `libedit` (BSD-3-Clause), which is admitted.
+
+   **Implemented 2026-10-11/13 (OPEN-QUESTIONS A23, decided by Andreas — the system-iconv route of
+   this clause, not the L-1 opinion route).** static-php-cli 2.8.5 does the opposite by default on
+   macOS: `libxml2` is a dependency of `php` itself for Darwin targets, it hard-depends on the GNU
+   `libiconv` library, and the `iconv` extension is pointed at that same static library
+   (`arg-type: with-path` → `--with-iconv=<buildroot>`). Dropping libxml2 is not an option —
+   `dom`, `xml`, `simplexml`, `xmlreader` and `xmlwriter` all need it. So
+   `packaging/runtime/build-runtime.sh` patches the pinned recipe (three guarded edits, re-checked
+   after the build) to resolve iconv from **macOS's own `/usr/lib/libiconv.2.dylib`**: the
+   dependency becomes Linux-only, PHP configures `--with-iconv` without a path, and libxml2's CMake
+   is handed `Iconv_INCLUDE_DIR`/`Iconv_LIBRARY` from the SDK (spc's toolchain file otherwise
+   restricts `find_package()` to its own buildroot and the configure step fails outright).
+
+   What the shipped artefact therefore contains, measured on the build of 2026-10-13
+   (`docs/architecture/runtime-layout.md` §5): **no `libiconv.a`, no libiconv entry in the
+   `spc dump-license` notice set, and no GPL/LGPL/AGPL text anywhere in it** — the build gate in
+   §D2.3's tooling passes with no override. iconv is reached through the dynamic system library the
+   operating system provides and that we neither copy nor redistribute, which is what this clause
+   asked for; the static-linking question L-1 raised does not arise for it. Two consequences worth
+   writing down: the notice set has **12** files (curl, ICU, libpng, libsodium, libxml2, libzip,
+   oniguruma, OpenSSL, SQLite, zlib, zip, php-src) and no iconv notice is shipped because no iconv
+   code is shipped; and macOS's implementation reports `ICONV_IMPL=libiconv, ICONV_VERSION=1.11`
+   with different `//TRANSLIT` output from GNU libiconv 1.17 (`Räksmörgås` → `R"aksm"oagas`, not
+   `Raksmorgas`), so no feature may depend on `//TRANSLIT` — transliteration belongs in PHP code.
+   Encoding conversion itself is verified: UTF-8 ↔ ISO-8859-1 and Windows-1252 round-trip, and
+   libxml2 decodes `encoding="ISO-8859-1"` and `encoding="SHIFT_JIS"` documents correctly.
 3. Every third-party license text and required notice is shipped in
    `Resources/THIRD-PARTY-NOTICES.txt` inside the `.app` and surfaced in the Mac app's About window
    and the PWA's `/about/licenses` page. The file is **generated, not hand-written**, in CI from
@@ -334,7 +360,7 @@ the review (`OPEN-QUESTIONS.md` §15.10 `ANDREAS`). Until signed, the risk sits 
 
 | # | Item | Why an engineer cannot close it |
 |---|---|---|
-| L-1 | Statically linked C libraries in the PHP binary: confirm the final `spc dump-license` output contains no LGPL/GPL; confirm the macOS system iconv route; confirm FreeType is taken under FTL and ImageMagick is omitted or credited | Static-linking analysis under LGPL §6 and dual-license election are legal judgements |
+| L-1 | Statically linked C libraries in the PHP binary: ~~confirm the final `spc dump-license` output contains no LGPL/GPL~~ — **done by construction 2026-10-13**: the gate fails the build on any GPL/LGPL/AGPL notice and the shipped binary's notice set has none, with GNU libiconv replaced by the macOS system library (D2.2, A23). FreeType and ImageMagick are not in the build at all. What is left for a reviewer: confirm that dynamically linking the OS-provided `/usr/lib/libiconv.2.dylib` needs no notice from us, and that no notice obligation of the 12 shipped notices is unmet | Static-linking analysis under LGPL §6 and dual-license election are legal judgements; the narrowed question is whether an OS-provided shared library carries any obligation for the distributor of the program that uses it |
 | L-2 | PHP-3.01 clauses 3, 4 and 6 as applied to "Laravel Executive AI" and to a bundled interpreter renamed/relocated inside `.app/Contents/` | Naming/endorsement clauses need interpretation |
 | L-3 | Llama 3.x Community License and Gemma Terms of Use: confirm that *recommending and downloading at runtime with user acceptance* keeps STAFE outside "distribute or make available"; confirm the AUP/Prohibited Use pass-through wording the app shows | Licensor-vs-conduit distinction |
 | L-4 | Apache-2.0 and MIT model weights (Qwen2.5 7B+, Qwen3, Mistral 7B, Phi-4): whether redistribution inside the DMG is acceptable given §10.9 training-data provenance and any trademark use ("Qwen", "Mistral", "Phi") | Copyrightability of weights and trademark use |

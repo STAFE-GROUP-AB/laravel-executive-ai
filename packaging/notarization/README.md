@@ -16,7 +16,10 @@ What lands here when the gate is built:
 3. The clean-machine Gatekeeper test and the stapled image as the release asset (release policy
    §3.3 step 3–4, §5 *Build and signing*).
 
-Preconditions, in order: A12 (identity), A23 (the runtime package is in the bundle and signed — a
-notarized image without it would be a notarized shell), the A24 verdict (a helper bundle with a
-provisioning profile, if required, must be in place before the first submission, or the
-notarization is repeated).
+Preconditions, in order: A12 (identity — **decided**), A23 (the runtime package is in the bundle and
+signed — **decided 2026-10-11 and implemented**: `build-runtime.yml` signs and publishes it and
+`build-macos` unpacks it before signing, so a notarized image is no longer a notarized shell), the
+A24 verdict (**decided**: a helper bundle with an embedded provisioning profile, in place before the
+first submission). Note for the submission itself: the notarization service scans every Mach-O in
+the bundle, so the ~145 MB `Contents/Resources/runtime/frankenphp` is part of the upload and the
+staple must be validated on the image that contains it.

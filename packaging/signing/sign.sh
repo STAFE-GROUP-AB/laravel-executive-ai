@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # packaging/signing/sign.sh — Developer ID signing of the Mac app bundle (S1-12, blueprint §14).
 #
-#   sign.sh app    <LaravelExecutiveAI.app>                      sign inside-out, hardened runtime
-#   sign.sh dmg    <image.dmg>                                   sign the disk image
-#   sign.sh report <LaravelExecutiveAI.app> <report.txt> [dmg]   codesign/spctl record, always written
-#   sign.sh cleanup                                              delete the temporary keychain
+#   sign.sh app     <LaravelExecutiveAI.app>                      sign inside-out, hardened runtime
+#   sign.sh runtime <frankenphp>                                  sign the runtime binary (ADR-001 D2)
+#   sign.sh dmg     <image.dmg>                                   sign the disk image
+#   sign.sh report  <LaravelExecutiveAI.app> <report.txt> [dmg]   codesign/spctl record, always written
+#   sign.sh cleanup                                               delete the temporary keychain
 #
 # Identity (CI secrets — the values are never printed, `set -x` is never enabled):
 #   APPLE_CERTIFICATE_P12        base64 of the "Developer ID Application" certificate + key (.p12)
@@ -41,6 +42,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 APP_ENTITLEMENTS="$REPO_ROOT/apps/macos/LaravelExecutiveAI.entitlements"
 SUPERVISOR_ENTITLEMENTS="$REPO_ROOT/apps/macos/LaravelExecutiveAISupervisor.entitlements"
+RUNTIME_ENTITLEMENTS="$SCRIPT_DIR/frankenphp.entitlements"
+RUNTIME_MANIFEST="$REPO_ROOT/packaging/manifest/runtime.json"
 SHARED_XCCONFIG="$REPO_ROOT/apps/macos/Config/Shared.xcconfig"
 SUPERVISOR_NAME="LaravelExecutiveAISupervisor"
 # A24: the Supervisor is a helper application bundle, not a bare tool in Contents/MacOS.
@@ -286,6 +289,57 @@ sign_app() {
     log "signed $(basename "$app") with the Developer ID Application identity of team $APPLE_TEAM_ID."
 }
 
+# The bundled FrankenPHP binary (ADR-001 D2): Developer ID, hardened runtime, secure timestamp
+# and exactly one entitlement. It is signed *before* `packaging/runtime/assemble-runtime.mjs
+# --status signed` runs, so `manifest.json` and `SHA256SUMS` hash the signed bytes, and before
+# the app bundle is signed, so the app's resource envelope seals an already-signed binary —
+# `sign.sh app` never touches anything under `Contents/Resources/runtime/`.
+sign_runtime() {
+    local binary="$1" identity identifier keys entitlements team
+    [ -f "$binary" ] || die "$binary is not a file (expected the frankenphp binary)."
+    [ -f "$RUNTIME_ENTITLEMENTS" ] || die "missing $RUNTIME_ENTITLEMENTS."
+
+    # ADR-001 D2 is "exactly com.apple.security.cs.allow-jit, nothing else"; a second key in the
+    # file would silently widen the runtime's privileges, so it is a build failure.
+    keys="$(grep -c '<key>' "$RUNTIME_ENTITLEMENTS" || true)"
+    if [ "$keys" != 1 ] || ! grep -Fq '<key>com.apple.security.cs.allow-jit</key>' "$RUNTIME_ENTITLEMENTS"; then
+        die "$RUNTIME_ENTITLEMENTS must grant exactly com.apple.security.cs.allow-jit (ADR-001 D2); found $keys key(s)."
+    fi
+
+    if ! require_identity_or_skip "runtime binary"; then
+        return 0
+    fi
+
+    validate_team_id
+
+    if [ -n "$APPLE_CERTIFICATE_P12" ]; then
+        prepare_keychain
+    fi
+    identity="$(resolve_identity)"
+
+    # The identifier the release manifest promises; PackageVerifier only checks the Team ID, but
+    # a stable identifier is what `codesign -dvvv` and the notarization log show.
+    identifier="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).signing.identifier)' "$RUNTIME_MANIFEST" 2>/dev/null || true)"
+    [ -n "$identifier" ] || die "could not read signing.identifier from $RUNTIME_MANIFEST."
+
+    sign_one "$identity" "$binary" --identifier "$identifier" --entitlements "$RUNTIME_ENTITLEMENTS"
+
+    codesign --verify --strict --verbose=2 "$binary" >/dev/null 2>&1 || die "the signed runtime binary does not verify."
+
+    entitlements="$(codesign -d --entitlements - --xml "$binary" 2>/dev/null || true)"
+    if ! printf '%s' "$entitlements" | grep -Fq 'com.apple.security.cs.allow-jit'; then
+        die "the signed runtime binary does not carry com.apple.security.cs.allow-jit."
+    fi
+    if printf '%s' "$entitlements" | grep -Fq 'keychain-access-groups'; then
+        die "the signed runtime binary carries a keychain entitlement; ADR-003 D2 forbids it."
+    fi
+
+    team="$(codesign -dvv "$binary" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+    [ "$team" = "$APPLE_TEAM_ID" ] || die "the signed runtime binary reports TeamIdentifier '$team', expected '$APPLE_TEAM_ID'."
+
+    log "signed $(basename "$binary") ($(shasum -a 256 "$binary" | cut -d' ' -f1)) as $identifier for team $APPLE_TEAM_ID."
+}
+
 sign_dmg() {
     local dmg="$1" identity
     [ -f "$dmg" ] || die "$dmg is not a file."
@@ -326,12 +380,19 @@ verdict_for() {
     fi
 }
 
+runtime_version_in() {
+    # The runtime_version of a bundled package, read from its manifest without a JSON parser.
+    sed -n 's/.*"runtime_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$1" | head -n 1
+}
+
 write_report() {
-    local app="$1" report="$2" dmg="${3:-}" supervisor profile verdict verify_status=0
+    local app="$1" report="$2" dmg="${3:-}" supervisor profile verdict verify_status=0 runtime runtime_manifest
     [ -d "$app" ] || die "$app is not a directory (expected LaravelExecutiveAI.app)."
     mkdir -p "$(dirname "$report")"
     supervisor="$app/$SUPERVISOR_BUNDLE_PATH"
     profile="$supervisor/$EMBEDDED_PROFILE_PATH"
+    runtime="$app/Contents/Resources/runtime"
+    runtime_manifest="$runtime/manifest.json"
     verdict="$(verdict_for "$app")"
     codesign --verify --deep --strict "$app" >/dev/null 2>&1 || verify_status=$?
 
@@ -346,6 +407,11 @@ write_report() {
         else
             echo "supervisor: not embedded in this bundle"
             echo "profile:    n/a"
+        fi
+        if [ -f "$runtime_manifest" ]; then
+            echo "runtime:    package $(runtime_version_in "$runtime_manifest") present, frankenphp verdict $(verdict_for "$runtime/frankenphp")"
+        else
+            echo "runtime:    no package in Contents/Resources/runtime (the installer stops at PACKAGE_VERIFY)"
         fi
         echo "expectation: $([ "$LXAI_EXPECT_SIGNED" = 1 ] && echo 'Developer ID signed' || echo 'unsigned debug build; rejections below are expected')"
         echo "notarization: not performed (Sprint 4 gate E4-6, blueprint §14); spctl is expected to reject until then"
@@ -368,6 +434,22 @@ write_report() {
             record profile_summary "$profile"
             echo "## helper bundle contents"
             record find "$supervisor" -maxdepth 3
+        fi
+        # The runtime package (ADR-001 D2/D4): signed elsewhere (build-runtime.yml) and only
+        # unpacked here, so the report records what arrived rather than what this run signed.
+        if [ -f "$runtime_manifest" ]; then
+            echo "## runtime package (Contents/Resources/runtime)"
+            record runtime_version_in "$runtime_manifest"
+            echo "## codesign --verify --strict --verbose=2 (runtime binary)"
+            record codesign --verify --strict --verbose=2 "$runtime/frankenphp"
+            echo "## codesign -dvvv (runtime binary)"
+            record codesign -dvvv "$runtime/frankenphp"
+            echo "## entitlements (runtime binary) — ADR-001 D2: exactly allow-jit"
+            record codesign -d --entitlements - --xml "$runtime/frankenphp"
+            # pipefail so a mismatch shows up as a non-zero exit in the report, not only in the
+            # lines `tail` happens to keep.
+            echo "## SHA256SUMS of the bundled package (every file, last lines shown)"
+            record bash -c "set -o pipefail; cd '$runtime' && shasum -a 256 --check --strict SHA256SUMS | tail -n 2"
         fi
         echo "## spctl --assess --type execute --verbose (app)"
         record spctl --assess --type execute --verbose "$app"
@@ -396,6 +478,11 @@ write_report() {
                 die "LXAI_EXPECT_SIGNED=1 but the Supervisor helper bundle carries no $EMBEDDED_PROFILE_PATH; macOS would SIGKILL it over keychain-access-groups (OPEN-QUESTIONS A24)."
             fi
         fi
+        # A runtime that is not Developer ID signed would fail PackageVerifier on every install,
+        # so a signed image must not contain one (ADR-001 D2; it was signed by build-runtime.yml).
+        if [ -f "$runtime_manifest" ] && [ "$(verdict_for "$runtime/frankenphp")" != developer-id ]; then
+            die "LXAI_EXPECT_SIGNED=1 but the bundled runtime binary is '$(verdict_for "$runtime/frankenphp")'; the installer would refuse it at PACKAGE_VERIFY."
+        fi
     fi
 }
 
@@ -411,7 +498,7 @@ cleanup() {
 }
 
 usage() {
-    sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+    sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
     exit 64
 }
 
@@ -421,6 +508,10 @@ main() {
         app)
             [ $# -eq 2 ] || usage
             sign_app "$2"
+            ;;
+        runtime)
+            [ $# -eq 2 ] || usage
+            sign_runtime "$2"
             ;;
         dmg)
             [ $# -eq 2 ] || usage

@@ -128,44 +128,89 @@ mechanism for the GUI's brief cache only. A failed `tmutil` fails the install (t
 an unexcluded live copy is exactly what must not accumulate). The real tool is behind
 `BackupExcluding`; tests and the DEBUG simulation use `RecordingBackupExclusion`.
 
-## 5. Manifest, packaging and what S1-12 still owns
+## 5. Manifest, packaging, and the runtime in the disk image (S1-12)
 
 `packaging/manifest/runtime.json` (schema `runtime.schema.json`, validated in CI) pins FrankenPHP
 1.13.0, PHP 8.5.11 ZTS, Caddy 2.11.7, static-php-cli 2.8.5, the ADR-001 D1 extension list, the
-excluded Caddy modules, the signing identity placeholders (A12) and the loopback port plan
+excluded Caddy modules, the signing identity and the loopback port plan
 (8787, fallbacks 8788–8799, which support-matrix §6.6 called "placeholder until `runtime.json`
-fixes it"). Its `package` member is the directory manifest the installer copies and verifies;
-`packaging/runtime/assemble-runtime.mjs` generates it, so it is `null` with `status: unbuilt`
+fixes it"). Its `package` member is the directory manifest the installer copies and verifies and its
+`artifact` member says where that exact directory is published;
+`packaging/runtime/assemble-runtime.mjs` generates both, so they are `null` with `status: unbuilt`
 until a real artefact exists. The build recipe, the assembler and the version-bump procedure are in
 [`packaging/runtime/README.md`](../../packaging/runtime/README.md).
 
-**Measured 2026-10-10** (`build-runtime.sh`, Apple M4 Max, macOS 26.6.2, Xcode 26.2, about
-12 minutes cold): curated binary **146 227 560 bytes** (upstream kitchen-sink release:
-180 861 128), SHA-256 `167e5f6779cf790f400f9652addeb6f8f7ccba3d170291fd435aebecfa88a27c`,
-`FrankenPHP v1.13.0 PHP 8.5.11 Caddy v2.11.7`, links only `libSystem`, `libresolv`, `libc++`,
-`libutil` and the CoreFoundation/CoreServices/SystemConfiguration/Security frameworks, Go build
-tags `nobadger,nomysql,nopgx,nomercure,nowatcher`. Not signed, not shipped: it carries the two
-findings below.
+### The two licence findings, and how A23 closed them
 
-Two findings for the ADR owners, both found by building rather than reading:
+The first real build (2026-10-10) produced a binary that could not be shipped, for two reasons
+found by building rather than by reading. **Both are fixed in the recipe** — OPEN-QUESTIONS
+**A23**, decided by Andreas on 2026-10-11, no legal-opinion route:
 
 1. **Mercure is linked by FrankenPHP's own `caddy/` module, not only by the xcaddy `--with`
-   list.** ADR-001 D1/E4 relies on `SPC_CMD_VAR_FRANKENPHP_XCADDY_MODULES`; with only that, the
-   binary still contained `github.com/dunglas/mercure v1.0.3` (AGPL-3.0). The `nomercure` Go
-   build tag is required, and static-php-cli 2.8.5 hard-codes the tag list with no hook, so
-   `build-runtime.sh` patches the pinned spc source (exact-string guarded) and verifies the tag
-   in `go version -m`. ADR-001 D1 should name the tag.
-2. **GNU libiconv (LGPL-2.1) is statically linked** because spc 2.8.5 builds `libxml2` — a
-   dependency of `php` itself on macOS — against it; the upstream release has the same. ADR-007
-   D2.2 forbids this without a legal opinion (L-1) and ADR-001 L1 did not list it. The build gate
-   fails closed on any GPL/LGPL/AGPL text in the `spc dump-license` output; the measurement above
-   used `LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT=1`. Options for S1-12/ADR-007: patch spc's libxml2
-   recipe to use the macOS system iconv, drop `iconv`+`libxml2` (impossible — `dom`/`xml` need
-   libxml2), or obtain the L-1 opinion on LGPL §6 for a static link. Decided by Andreas, not here.
+   list.** ADR-001 D1/E4 relied on `SPC_CMD_VAR_FRANKENPHP_XCADDY_MODULES`; with only that, the
+   binary still contained `github.com/dunglas/mercure v1.0.3` (AGPL-3.0). The **`nomercure` Go
+   build tag** is required, and static-php-cli 2.8.5 hard-codes the tag list with no hook, so
+   `build-runtime.sh` patches the pinned spc source (exact-string guarded) and verifies the tag in
+   `go version -m`. ADR-001 D1 now names it.
+2. **GNU libiconv (LGPL-2.1) was statically linked** because spc 2.8.5 builds `libxml2` — a
+   dependency of `php` itself on macOS, and unavoidable since `dom`/`xml`/`simplexml` need it —
+   against it; the upstream release artefact has the same. The recipe now builds **libxml2 and the
+   `iconv` extension against the macOS system iconv** (ADR-007 D2.2's own prescription): the GNU
+   dependency becomes Linux-only in `config/lib.json`/`config/ext.json`, PHP configures
+   `--with-iconv` without a buildroot path, and libxml2's CMake gets `Iconv_INCLUDE_DIR` and
+   `Iconv_LIBRARY` from the macOS SDK — which it needs, because spc's generated toolchain file sets
+   `CMAKE_FIND_ROOT_PATH_MODE_{INCLUDE,LIBRARY} ONLY` against its own buildroot, so
+   `find_package(Iconv)` cannot see a system library at all and the configure step fails outright.
 
-**S1-12 status (2026-10-10):** the CI disk image (`.github/workflows/build-macos.yml`,
-[`docs/operations/release-build.md`](../operations/release-build.md)) ships **without** this
-directory until A23 is decided — app + Supervisor only, `runtime.json` unchanged at `unbuilt`. The
-signing order and the `--status signed` re-assembly are written down in
-`packaging/signing/README.md` §4 so the runtime can be added to the bundle without touching the
-pipeline's structure.
+**Measured 2026-10-13** (`build-runtime.sh` with both fixes, Apple M4 Max, macOS 26.6.2, Xcode 26.2,
+about 16 minutes cold):
+
+| | |
+|---|---|
+| Binary | `frankenphp`, **145 073 048 bytes** (upstream kitchen-sink release: 180 861 128; the 2026-10-10 libiconv build: 146 227 560) |
+| SHA-256 | `eaf81d68af7969382a637155bad52db4fa6c2c96f5fe9f61faafc8f72954da40` |
+| Version | `FrankenPHP v1.13.0 PHP 8.5.11 Caddy v2.11.7` |
+| Go build tags | `nobadger,nomysql,nopgx,nomercure,nowatcher`; no `dunglas/mercure` or `dunglas/vulcain` dependency line in `go version -m` |
+| Linked libraries | `libSystem`, `libresolv`, `libc++`, `libutil`, **`/usr/lib/libiconv.2.dylib`** and the CoreFoundation/CoreServices/SystemConfiguration/Security frameworks — nothing from `/opt/homebrew`, `/usr/local` or `@rpath` |
+| Licence gate | **passes with no override** (`LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT` unset): 12 notice files, **0** with GPL/LGPL/AGPL text, **no libiconv notice**, and no `libiconv.a`/`libcharset.a` in the build tree |
+| Runtime facts | 41 extensions, `ZEND_THREAD_SAFE`, SQLite 3.45.2 with FTS5, `pcre.jit=1`, OPcache JIT off |
+
+The iconv entry in that list is the macOS system library: dynamically linked, provided by the OS,
+never redistributed by us. Encoding behaviour was verified on the artefact — UTF-8 ↔ ISO-8859-1 and
+Windows-1252 round-trip, and libxml2 decodes `encoding="ISO-8859-1"` and `encoding="SHIFT_JIS"`
+documents correctly. One behavioural difference from GNU libiconv is recorded in ADR-007 D2.2:
+macOS reports `ICONV_IMPL=libiconv, ICONV_VERSION=1.11` and its `//TRANSLIT` output is weaker, so
+nothing may depend on `//TRANSLIT`.
+
+Assembled into the ADR-001 D4 directory with the real Laravel tree (`composer install --no-dev`,
+`npm run build`, `package:discover`), the same measurement gives the package the installer copies:
+
+| | |
+|---|---|
+| `runtime/0.1.0/` | **7 717 files, 179 995 683 bytes** (201 MB on disk), assembled in 3.7 s |
+| Published tarball | **68 710 552 bytes** gzip; unpacking it and re-running the verifier's rules passes |
+| Contents | `frankenphp`, `Caddyfile`, `php.ini`, `app/` (the Laravel tree with `vendor/` and the built `public/build/` assets), `manifest.json`, `SHA256SUMS` |
+
+Both were produced on a developer Mac and are **proof, not product**: no Developer ID identity
+exists outside CI, so this binary is never signed, never assembled with `--status signed` and never
+published. The signed package differs from these numbers only by the binary's signature.
+
+### How the directory reaches a user's Mac (S1-12)
+
+Three stages, so that the signed binary's digest is always the one `runtime.json` records:
+
+1. **`.github/workflows/build-runtime.yml`** (dispatch only, `macos-15`) runs the recipe above,
+   signs `frankenphp` (Developer ID, hardened runtime, exactly `com.apple.security.cs.allow-jit`),
+   assembles `runtime/<version>/` with `--status signed` so `manifest.json` and `SHA256SUMS` hash
+   the **signed** bytes, packs it as a tarball, verifies the unpacked copy with the installer's own
+   rules, and publishes it on a pre-release tag `runtime-<php>-<frankenphp>-<n>`. CI cannot do this
+   per build — it is tens of minutes — which is why it is a separate, manually triggered workflow.
+2. **`packaging/manifest/runtime.json`** records the result: `status: signed`, `built_at`,
+   `source_commit`, `package` (the directory manifest) and `artifact` (the asset's tag, name, URL,
+   size and sha256). The workflow produces it and attaches it to the release; a human commits it.
+3. **`.github/workflows/build-macos.yml`** downloads that asset, checks the sha256 and the byte
+   count, unpacks it into `Contents/Resources/runtime/`, re-verifies it with the manifest rules and
+   refuses a binary whose Team ID is not the app's — all **before** `sign.sh app` runs, so the app's
+   resource envelope seals an already-signed runtime and nothing in the directory is signed twice.
+   Until an artifact is pinned the step skips with a notice and the image is app + Supervisor only,
+   in which case the installer stops at `PACKAGE_VERIFY` (`installer.md` §3).

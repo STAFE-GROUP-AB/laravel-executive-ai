@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Builds the curated FrankenPHP static binary for macOS arm64 (ADR-001 D1).
 #
-# This mirrors FrankenPHP's own `build-static.sh` step for step, with three deliberate
+# This mirrors FrankenPHP's own `build-static.sh` step for step, with four deliberate
 # differences: every input is pinned from packaging/manifest/runtime.json (FrankenPHP tag,
-# PHP version, static-php-cli tag, extension list) instead of "latest"; the Caddy modules
-# Mercure and Vulcain (AGPL-3.0) are never passed to xcaddy; and the `spc dump-license` output
-# plus the Go module list are saved next to the binary for the ADR-007 D2 licence diff.
+# PHP version, static-php-cli tag, extension list) instead of "latest"; Mercure and Vulcain
+# (AGPL-3.0) are kept out of the binary by the xcaddy module list *and* the `nomercure` Go build
+# tag; libxml2 and the `iconv` extension are built against the **macOS system iconv** instead of
+# GNU libiconv (LGPL-2.1), as ADR-007 D2.2 requires; and the `spc dump-license` output plus the
+# Go module list are saved next to the binary for the ADR-007 D2 licence diff.
+#
+# The last two are OPEN-QUESTIONS A23, decided by the owner on 2026-10-11. Both are patches to
+# the pinned static-php-cli source, each guarded by the exact text of 2.8.5 and re-checked after
+# the build, so a different spc version fails here instead of producing a copyleft-linked binary.
 #
 # Nothing here signs anything (S1-12) and nothing here touches a user's Mac: the build tree
 # lives under packaging/build/ (git-ignored). Build-time Homebrew on the builder is permitted
@@ -110,6 +116,140 @@ if ! grep -qF 'nopgx,nomercure' "$builder"; then
     grep -qF 'nopgx,nomercure' "$builder" || die "patching the xcaddy tag list failed"
 fi
 
+# ADR-007 D2.2 ("the PHP build must be configured without gettext and without GNU libiconv —
+# use the macOS system iconv or drop the `iconv` extension") against static-php-cli 2.8.5, which
+# does the opposite on macOS: `libxml2` — a dependency of `php` itself for Darwin targets in
+# config/lib.json, and unavoidable because `dom`/`xml`/`simplexml` need it — hard-depends on the
+# GNU `libiconv` library, and the `iconv` extension is pointed at that same static library by
+# `arg-type: with-path` (`--with-iconv=<buildroot>`). Measured 2026-10-10: the binary statically
+# linked GNU libiconv (LGPL-2.1) and the notice set carried the LGPL text, which is exactly what
+# the gate further down refuses.
+#
+# macOS ships iconv in /usr/lib/libiconv.2.dylib, with `iconv.h` and `libiconv.tbd` in the SDK,
+# so the fix is to make the GNU dependency Linux-only and point both consumers at the system one:
+#
+#   config/lib.json  libxml2.lib-depends-unix -> lib-depends-linux   (no GNU libiconv on macOS)
+#   config/ext.json  iconv.lib-depends-unix   -> lib-depends-linux
+#                    iconv.arg-type-macos = with  (`--with-iconv`, not `--with-iconv=<buildroot>`,
+#                    so PHP's own configure resolves iconv from the SDK)
+#   src/SPC/builder/unix/library/libxml2.php  three extra CMake cache entries, applied only when
+#                    this script exports the two LXAI_SYSTEM_ICONV_* variables below.
+#
+# `SPC\store\Config::getLib()/getExt()` resolve `<key>-macos`, then `<key>-unix`, then `<key>`,
+# and `lib-depends`/`arg-type` are both on their per-OS key list — so a `-linux` key removes the
+# dependency on macOS and leaves every other target exactly as upstream has it.
+#
+# The CMake entries are needed because spc's generated toolchain file sets
+# CMAKE_FIND_ROOT_PATH to its own buildroot with CMAKE_FIND_ROOT_PATH_MODE_{INCLUDE,LIBRARY} ONLY:
+# `find_package(Iconv)` therefore cannot see the system library at all and libxml2's configure
+# step fails outright (measured 2026-10-13: "Could NOT find Iconv"). Pre-setting `Iconv_LIBRARY`
+# and `Iconv_INCLUDE_DIR` makes FindIconv's cached `find_library`/`find_path` no-ops, which is
+# the documented way to hand CMake a library it may not search for. The extension's own
+# `patchBeforeConfigure()` already adds `-liconv` to macOS extra-libs, and the libxml2 recipe's
+# pkg-config fixup already normalises `libxml-2.0.pc` to `-lxml2 -liconv`, so PHP links the same
+# system library. Nothing statically links libiconv afterwards; the checks after the build prove
+# it from the build tree, the notice set and `otool -L`.
+if [ -z "${LXAI_SYSTEM_ICONV_INCLUDE_DIR:-}" ]; then
+    sdk_path="$(xcrun --show-sdk-path 2>/dev/null || true)"
+    [ -n "$sdk_path" ] || die "xcrun --show-sdk-path found no macOS SDK; the system iconv headers cannot be located (install the Xcode command line tools)"
+    LXAI_SYSTEM_ICONV_INCLUDE_DIR="$sdk_path/usr/include"
+fi
+: "${LXAI_SYSTEM_ICONV_LIBRARY:=iconv}"
+export LXAI_SYSTEM_ICONV_INCLUDE_DIR LXAI_SYSTEM_ICONV_LIBRARY
+[ -f "$LXAI_SYSTEM_ICONV_INCLUDE_DIR/iconv.h" ] || die "$LXAI_SYSTEM_ICONV_INCLUDE_DIR/iconv.h does not exist; refusing to fall back to GNU libiconv (ADR-007 D2.2)"
+patch_spc_system_iconv() {
+    node - "$spc_dir" <<'PATCH_SPC_SYSTEM_ICONV'
+const { readFileSync, writeFileSync } = require('node:fs');
+
+const spcDir = process.argv[2];
+
+const edits = [
+    {
+        file: 'src/SPC/builder/unix/library/libxml2.php',
+        before: '\n        $cmake->build();\n',
+        after: `
+        // LXAI/A23: spc's toolchain file restricts find_package() to its own buildroot, so
+        // FindIconv cannot see the macOS system iconv and configuring libxml2 fails. Handing it
+        // the SDK header directory and a plain -liconv keeps GNU libiconv (LGPL-2.1) out of the
+        // artefact, as ADR-007 D2.2 requires. Only set when build-runtime.sh exports them.
+        if (getenv('LXAI_SYSTEM_ICONV_INCLUDE_DIR') !== false && getenv('LXAI_SYSTEM_ICONV_INCLUDE_DIR') !== '') {
+            $cmake->addConfigureArgs(
+                '-DIconv_IS_BUILT_IN=OFF',
+                '-DIconv_INCLUDE_DIR=' . getenv('LXAI_SYSTEM_ICONV_INCLUDE_DIR'),
+                '-DIconv_LIBRARY=' . (getenv('LXAI_SYSTEM_ICONV_LIBRARY') ?: 'iconv'),
+            );
+        }
+
+        $cmake->build();
+`,
+    },
+    {
+        file: 'config/lib.json',
+        before: '        "headers": [\n            "libxml2"\n        ],\n        "lib-depends-unix": [\n            "libiconv"\n        ],',
+        after: '        "headers": [\n            "libxml2"\n        ],\n        "lib-depends-linux": [\n            "libiconv"\n        ],',
+    },
+    {
+        file: 'config/ext.json',
+        before: '    "iconv": {\n        "support": {\n            "BSD": "wip"\n        },\n        "type": "builtin",\n        "arg-type": "with-path",\n        "arg-type-windows": "with",\n        "lib-depends-unix": [\n            "libiconv"\n        ],',
+        after: '    "iconv": {\n        "support": {\n            "BSD": "wip"\n        },\n        "type": "builtin",\n        "arg-type": "with-path",\n        "arg-type-macos": "with",\n        "arg-type-windows": "with",\n        "lib-depends-linux": [\n            "libiconv"\n        ],',
+    },
+];
+
+for (const { file, before, after } of edits) {
+    const path = `${spcDir}/${file}`;
+    const text = readFileSync(path, 'utf8');
+
+    if (text.includes(after)) {
+        console.log(`    ${file} already carries the system-iconv patch`);
+        continue;
+    }
+
+    const occurrences = text.split(before).length - 1;
+
+    if (occurrences !== 1) {
+        console.error(`build-runtime: ${file} does not contain the expected static-php-cli block exactly once (found ${occurrences}); refusing to build against GNU libiconv (ADR-007 D2.2, OPEN-QUESTIONS A23)`);
+        process.exit(1);
+    }
+
+    writeFileSync(path, text.replace(before, after));
+    console.log(`    ${file} patched to use the macOS system iconv`);
+}
+
+// Re-read and assert the outcome, so a future spc layout change cannot pass silently.
+const lib = JSON.parse(readFileSync(`${spcDir}/config/lib.json`, 'utf8'));
+const ext = JSON.parse(readFileSync(`${spcDir}/config/ext.json`, 'utf8'));
+const problems = [];
+
+if (lib.libxml2['lib-depends-unix'] !== undefined || lib.libxml2['lib-depends-macos'] !== undefined || lib.libxml2['lib-depends'] !== undefined) {
+    problems.push('libxml2 still has a macOS-resolvable lib-depends key');
+}
+
+if (JSON.stringify(lib.libxml2['lib-depends-linux']) !== '["libiconv"]') {
+    problems.push('libxml2 lost its Linux libiconv dependency');
+}
+
+if (ext.iconv['lib-depends-unix'] !== undefined || ext.iconv['lib-depends-macos'] !== undefined || ext.iconv['lib-depends'] !== undefined) {
+    problems.push('the iconv extension still has a macOS-resolvable lib-depends key');
+}
+
+if (ext.iconv['arg-type-macos'] !== 'with') {
+    problems.push('the iconv extension does not get --with-iconv on macOS');
+}
+
+if (! readFileSync(`${spcDir}/src/SPC/builder/unix/library/libxml2.php`, 'utf8').includes("'-DIconv_INCLUDE_DIR=' . getenv('LXAI_SYSTEM_ICONV_INCLUDE_DIR')")) {
+    problems.push('the libxml2 recipe does not pass the system iconv to CMake');
+}
+
+if (problems.length > 0) {
+    console.error(`build-runtime: patching static-php-cli for the system iconv failed: ${problems.join('; ')}`);
+    process.exit(1);
+}
+PATCH_SPC_SYSTEM_ICONV
+}
+
+log "Patching static-php-cli to build libxml2 and iconv against the macOS system iconv (A23)"
+patch_spc_system_iconv || die "could not patch static-php-cli for the macOS system iconv"
+
 # 2. Builder prerequisites. Without LXAI_BUILD_AUTOFIX the script only reports what is missing,
 #    so running it never installs anything on a machine by surprise.
 log "spc doctor"
@@ -172,13 +312,13 @@ if grep -E "^[[:space:]]*dep[[:space:]]+github\.com/dunglas/(mercure|vulcain)" "
 fi
 grep -qE "^[[:space:]]*build[[:space:]]+-tags=.*nomercure" "$out_dir/go-modules.txt" || die "the binary was not built with the nomercure tag"
 
-# ADR-007 D2.2: no GPL/LGPL/AGPL text may be in the notice set of a shipped binary. Measured
-# 2026-10-10 with static-php-cli 2.8.5 on macOS: `libxml2` (which `php` itself depends on for
-# macOS targets in lib.json) is built against GNU libiconv, LGPL-2.1 — the same is true of the
-# upstream release artefact. There is no system-iconv option in this spc version, so the gate
-# below fails closed. LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT=1 produces the binary anyway for
-# size/latency measurements only; such a binary must never be signed or shipped (OPEN-QUESTIONS
-# L-1, ADR-007 residual risks).
+# ADR-007 D2.2: no GPL/LGPL/AGPL text may be in the notice set of a shipped binary. Until the
+# system-iconv patch above (A23, decided 2026-10-11) this gate fired on GNU libiconv, LGPL-2.1,
+# which static-php-cli 2.8.5 builds libxml2 against on macOS — the upstream release artefact has
+# the same. It must now pass with nothing set: LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT=1 is kept only
+# to measure a deliberately non-shippable binary, and such a binary must never be signed, never
+# be assembled with `--status signed` and never reach a release asset (OPEN-QUESTIONS L-1,
+# ADR-007 residual risks). CI never sets it.
 if grep -rlEq "GNU (LESSER |AFFERO )?GENERAL PUBLIC LICENSE" "$out_dir/licenses"; then
     offenders=$(grep -rlE "GNU (LESSER |AFFERO )?GENERAL PUBLIC LICENSE" "$out_dir/licenses" | xargs -n1 basename | tr '\n' ' ')
     if [ "${LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT:-0}" = "1" ]; then
@@ -194,20 +334,47 @@ if grep -Eq "/opt/homebrew|/usr/local|@rpath" "$out_dir/otool-L.txt"; then
     die "the binary links a non-system library; it would not be relocatable"
 fi
 
+# A23's second half, proven from three independent places rather than from the patch having run:
+#   1. no GNU libiconv static library was produced in the build tree,
+#   2. the notice set the product ships has no libiconv entry at all,
+#   3. iconv is resolved dynamically from /usr/lib — the copy macOS itself provides, which we
+#      neither link statically nor redistribute (ADR-007 D2.2; the LGPL question L-1 asked about
+#      a *static* link does not arise for it).
+log "No GNU libiconv anywhere in the artefact (ADR-007 D2.2, A23)"
+for static_lib in "$spc_dir/buildroot/lib/libiconv.a" "$spc_dir/buildroot/lib/libcharset.a"; do
+    if [ -f "$static_lib" ]; then
+        die "$(basename "$static_lib") was built; the system-iconv patch did not take effect and this binary must not ship (ADR-007 D2.2)"
+    fi
+done
+
+if [ -n "$(find "$out_dir/licenses" -iname '*libiconv*' -print -quit)" ]; then
+    die "the notice set contains a libiconv entry; the build still depends on GNU libiconv (ADR-007 D2.2)"
+fi
+
+if ! grep -q "/usr/lib/libiconv" "$out_dir/otool-L.txt"; then
+    log "note: the binary does not link /usr/lib/libiconv.*.dylib — iconv may be resolved from libSystem; recorded, not an error"
+fi
+
 bytes=$(stat -f %z "$out_dir/frankenphp")
 sha=$(shasum -a 256 "$out_dir/frankenphp" | cut -d' ' -f1)
 
 node -e '
+const { readFileSync, writeFileSync } = require("fs");
 const [out, version, bytes, sha, frankenphp, php, spc, exts, libs] = process.argv.slice(1);
+const tags = (readFileSync(`${out}/go-modules.txt`, "utf8").match(/^\s*build\s+-tags=(\S+)/m) ?? [])[1] ?? null;
 const report = {
     runtime_version: version,
     binary: { path: "frankenphp", bytes: Number(bytes), sha256: sha },
     frankenphp_tag: frankenphp, php_version: php, static_php_cli_tag: spc,
     php_extensions: exts.split(","), php_extension_libs: libs.split(","),
+    // OPEN-QUESTIONS A23 evidence, recorded with the artefact rather than only in a log.
+    go_build_tags: tags === null ? null : tags.split(","),
+    licence_gate: "clean: no GPL/LGPL/AGPL notice in the dump, no override set",
+    iconv: "macOS system iconv, dynamically linked; GNU libiconv not built and not shipped",
     built_at: new Date().toISOString(),
     builder: { os: require("os").release(), arch: process.arch },
 };
-require("fs").writeFileSync(`${out}/build-report.json`, JSON.stringify(report, null, 4) + "\n");
+writeFileSync(`${out}/build-report.json`, JSON.stringify(report, null, 4) + "\n");
 ' "$out_dir" "$RUNTIME_VERSION" "$bytes" "$sha" "$FRANKENPHP_TAG" "$PHP_VERSION" "$SPC_TAG" "$PHP_EXTENSIONS" "$PHP_EXTENSION_LIBS"
 
 log "Done: $out_dir/frankenphp ($bytes bytes, sha256 $sha)"

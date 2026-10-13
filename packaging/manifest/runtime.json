@@ -88,5 +88,6 @@
             "to": 8799
         }
     },
-    "package": null
+    "package": null,
+    "artifact": null
 }

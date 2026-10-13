@@ -1,0 +1,378 @@
+# build-runtime — the runtime package behind the DMG (ADR-001 D1/D2/D4, backlog S1-12 #40,
+# OPEN-QUESTIONS A23 decided 2026-10-11). It builds the curated FrankenPHP binary, proves the
+# licence gate is clean, signs the binary, assembles `runtime/<version>/` so `manifest.json`
+# hashes the *signed* bytes, and publishes the directory as a tarball on a pre-release tag.
+# `build-macos.yml` then downloads that asset, checks its sha256 and unpacks it into the app
+# bundle before signing — it never builds a runtime itself (this job takes tens of minutes and
+# the signed binary's digest must be the one `runtime.json` records).
+#
+# **Dispatch only, on purpose.** A pull_request run would be pointless: `pull_request` must never
+# use the signing identity (packaging/signing/README.md §2), and an unsigned package cannot be
+# published — `PackageVerifier` checks the binary's signature against the app's own Team ID, so an
+# unsigned runtime would fail closed on every install. A PR therefore proves this workflow's shape
+# through `packaging/runtime/test/build-runtime-workflow.test.mjs` in the `fixtures` lane, not by
+# running it. Run it from the branch you are preparing the release manifest on:
+#
+#   gh workflow run build-runtime.yml --ref <branch> -f revision=1
+#   # then commit the runtime.json the run attaches to the release (see the job summary)
+#
+# Secrets: the same three that sign the app (APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD,
+# APPLE_TEAM_ID, plus optional APPLE_KEYCHAIN_PASSWORD). Without them this workflow fails closed —
+# unlike build-macos.yml, which falls back to an unsigned image, there is nothing useful to
+# produce here without an identity. Values are mapped into `env:` of single steps only; no script
+# enables `set -x`, and LXAI_ALLOW_COPYLEFT_FOR_MEASUREMENT is never set anywhere (the licence
+# gate must pass on its own — ADR-007 D2.2).
+#
+# Every third-party action is pinned to a full commit SHA.
+
+name: build-runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Package revision for this PHP/FrankenPHP pair (the <n> in runtime-<php>-<frankenphp>-<n>). Bump it to rebuild the same component pins.'
+        required: true
+        default: '1'
+        type: string
+      publish:
+        description: 'Attach the package to a pre-release tag. Off = build, gate and sign only (the tarball is still uploaded as a workflow artifact).'
+        required: true
+        default: true
+        type: boolean
+
+# The release is created by this workflow; nothing else here writes to the repository (it never
+# pushes a commit — the runtime.json it produces is attached to the release and committed by a
+# human in the pull request, so a published asset and the manifest that pins it land under review).
+permissions:
+  contents: write
+
+concurrency:
+  group: build-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OUT_DIR: packaging/build/runtime-bin
+  DIST_DIR: packaging/build/runtime-dist
+  RUNTIME_MANIFEST: packaging/manifest/runtime.json
+
+jobs:
+  build-runtime:
+    name: build-runtime
+    runs-on: macos-15
+    # Measured 2026-10-10 on an M4 Max: about 12 minutes for the whole recipe. A cold GitHub
+    # runner compiles PHP, OpenSSL, ICU, libxml2, Caddy and the Go SAPI from source; three hours
+    # is the ceiling, not the expectation.
+    timeout-minutes: 180
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Fail closed before spending an hour on a package that could not be signed afterwards.
+      # Only booleans leave this step.
+      - name: Require a signing identity
+        shell: bash
+        env:
+          HAS_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+          HAS_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_CERTIFICATE" != true ] || [ "$HAS_CERTIFICATE_PASSWORD" != true ] || [ "$HAS_TEAM_ID" != true ]; then
+            echo "::error title=build-runtime::APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD and APPLE_TEAM_ID must all be set. An unsigned runtime package cannot be shipped: PackageVerifier checks the binary against the app's Team ID and fails closed (packaging/signing/README.md §2)."
+            exit 1
+          fi
+          echo "Signing identity configured; the runtime binary will be Developer ID signed."
+
+      - name: Read the pinned versions
+        id: pins
+        shell: bash
+        env:
+          REVISION: ${{ inputs.revision }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$REVISION" | grep -Eq '^[1-9][0-9]*$'; then
+            echo "::error::revision must be a positive integer."
+            exit 1
+          fi
+          pins="$(node -e '
+            const m = JSON.parse(require("fs").readFileSync(process.env.RUNTIME_MANIFEST, "utf8"));
+            process.stdout.write(`${m.runtime_version} ${m.components.php.version} ${m.components.frankenphp.version}`);
+          ')"
+          version="$(printf '%s' "$pins" | cut -d' ' -f1)"
+          php="$(printf '%s' "$pins" | cut -d' ' -f2)"
+          frankenphp="$(printf '%s' "$pins" | cut -d' ' -f3)"
+          tag="runtime-${php}-${frankenphp}-${REVISION}"
+          asset="laravel-executive-ai-runtime-${version}-${php}-${frankenphp}-${REVISION}.tar.gz"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "asset=$asset"
+            echo "url=$SERVER_URL/$GITHUB_REPOSITORY/releases/download/$tag/$asset"
+          } >> "$GITHUB_OUTPUT"
+          echo "Runtime $version -> tag $tag, asset $asset"
+
+      - name: Refuse a tag that already exists
+        if: inputs.publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pins.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists. Bump the revision input instead of overwriting a published package."
+            exit 1
+          fi
+
+      - name: Set up Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, dom, ctype, curl, fileinfo, intl, bcmath, zip, pdo_sqlite, sqlite3, gd
+          coverage: none
+          tools: composer:v2
+
+      # The long step. LXAI_BUILD_AUTOFIX lets `spc doctor` install build tooling on the *runner*
+      # (ADR-001 D1 permits build-time Homebrew on the builder; §12.1 forbids it on a user's Mac).
+      # The recipe applies both A23 fixes — the `nomercure` Go build tag and the macOS system
+      # iconv — and fails closed on any GPL/LGPL/AGPL notice.
+      - name: Build the curated FrankenPHP binary
+        shell: bash
+        env:
+          LXAI_BUILD_AUTOFIX: '1'
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          packaging/runtime/build-runtime.sh
+
+      - name: Summarise the licence gate and the build evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          notices="$(find "$OUT_DIR/licenses" -type f | wc -l | tr -d ' ')"
+          # `|| true`: a clean notice set means grep matches nothing and exits 1, which pipefail
+          # would otherwise turn into a failed step on exactly the builds that are correct.
+          copyleft="$(grep -rlE 'GNU (LESSER |AFFERO )?GENERAL PUBLIC LICENSE' "$OUT_DIR/licenses" | wc -l | tr -d ' ' || true)"
+          gnu_iconv="$(find "$OUT_DIR/licenses" -iname '*libiconv*' | wc -l | tr -d ' ')"
+          {
+            echo '## Runtime build'
+            echo
+            echo '```'
+            cat "$OUT_DIR/frankenphp-version.txt"
+            grep -E '^[[:space:]]*build[[:space:]]+-tags=' "$OUT_DIR/go-modules.txt" || true
+            echo "licence notice files: $notices"
+            echo "GPL/LGPL/AGPL notices: $copyleft (gate requires 0)"
+            echo "GNU libiconv in the notice set: $gnu_iconv (requires 0)"
+            grep 'libiconv' "$OUT_DIR/otool-L.txt" || echo 'no libiconv in otool -L'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ADR-001 D2: Developer ID, hardened runtime, secure timestamp, exactly
+      # com.apple.security.cs.allow-jit. This is the only step that sees the certificate.
+      - name: Sign the runtime binary
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh runtime "$OUT_DIR/frankenphp"
+
+      # The Laravel tree that goes into `app/`: production dependencies, package discovery and the
+      # built front-end assets (public/build is git-ignored, so an unbuilt tree would ship a PWA
+      # without CSS or JS). No config/route/event cache — the assembler refuses those.
+      - name: Install the Laravel tree for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+          npm ci --no-audit --no-fund
+          npm run build
+          php artisan package:discover
+          rm -rf node_modules
+          # Booting artisan creates an empty database/database.sqlite. The runtime's database lives
+          # in LEA_DATA_DIR (ADR-001 D4) and the assembler refuses any database file, so the
+          # tooling's own artefact is removed here rather than weakening that rule.
+          rm -f database/*.sqlite database/*.sqlite-wal database/*.sqlite-shm
+          test -f public/build/manifest.json
+          test ! -f database/database.sqlite
+
+      - name: Assemble the signed runtime directory
+        id: assemble
+        shell: bash
+        env:
+          VERSION: ${{ steps.pins.outputs.version }}
+        run: |
+          set -euo pipefail
+          node packaging/runtime/assemble-runtime.mjs \
+            --binary "$OUT_DIR/frankenphp" \
+            --app . \
+            --version "$VERSION" \
+            --status signed \
+            --source-commit "$GITHUB_SHA"
+          echo "directory=packaging/build/runtime/$VERSION" >> "$GITHUB_OUTPUT"
+
+      # One tarball, one digest, and a proof that what the tarball contains still verifies after a
+      # round trip: build-macos.yml unpacks exactly this and PackageVerifier must accept it.
+      # --no-mac-metadata keeps AppleDouble `._*` files out, which would be unlisted files.
+      - name: Pack and verify the package
+        id: pack
+        shell: bash
+        env:
+          VERSION: ${{ steps.pins.outputs.version }}
+          ASSET: ${{ steps.pins.outputs.asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIST_DIR"
+          tar --no-mac-metadata -czf "$DIST_DIR/$ASSET" -C "packaging/build/runtime" "$VERSION"
+          ( cd "$DIST_DIR" && shasum -a 256 "$ASSET" > SHA256SUMS )
+          sha="$(cut -d' ' -f1 < "$DIST_DIR/SHA256SUMS")"
+          bytes="$(stat -f %z "$DIST_DIR/$ASSET")"
+
+          roundtrip="$(mktemp -d)"
+          tar -xzf "$DIST_DIR/$ASSET" -C "$roundtrip"
+          node packaging/runtime/assemble-runtime.mjs --verify "$roundtrip/$VERSION"
+          codesign --verify --strict --verbose=2 "$roundtrip/$VERSION/frankenphp"
+          codesign -d --entitlements - --xml "$roundtrip/$VERSION/frankenphp" | grep -Fq 'com.apple.security.cs.allow-jit'
+          rm -rf "$roundtrip"
+
+          {
+            echo "sha256=$sha"
+            echo "bytes=$bytes"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo
+            echo "| package | value |"
+            echo "|---|---|"
+            echo "| asset | \`$ASSET\` |"
+            echo "| bytes | $bytes |"
+            echo "| sha256 | \`$sha\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the artifact in runtime.json
+        if: inputs.publish
+        shell: bash
+        env:
+          TAG: ${{ steps.pins.outputs.tag }}
+          ASSET: ${{ steps.pins.outputs.asset }}
+          URL: ${{ steps.pins.outputs.url }}
+          SHA256: ${{ steps.pack.outputs.sha256 }}
+          BYTES: ${{ steps.pack.outputs.bytes }}
+        run: |
+          set -euo pipefail
+          node packaging/runtime/assemble-runtime.mjs --record-artifact \
+            --artifact-tag "$TAG" \
+            --artifact-asset "$ASSET" \
+            --artifact-url "$URL" \
+            --artifact-sha256 "$SHA256" \
+            --artifact-bytes "$BYTES"
+          cp "$RUNTIME_MANIFEST" "$DIST_DIR/runtime.json"
+          npm ci --prefix packaging/fixtures --no-audit --no-fund
+          node packaging/fixtures/validate-schema.mjs
+
+      - name: Publish the pre-release
+        if: inputs.publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pins.outputs.tag }}
+          ASSET: ${{ steps.pins.outputs.asset }}
+          SHA256: ${{ steps.pack.outputs.sha256 }}
+          VERSION: ${{ steps.pins.outputs.version }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          notes="$(mktemp)"
+          {
+            echo "Runtime package for Laravel Executive AI $VERSION — **not a product release**."
+            echo
+            echo "The immutable \`runtime/$VERSION/\` directory of ADR-001 D4: the curated FrankenPHP"
+            echo "binary (Developer ID signed, hardened runtime, \`com.apple.security.cs.allow-jit\` only),"
+            echo "the static Caddyfile and php.ini, the Laravel tree, \`manifest.json\` and \`SHA256SUMS\`."
+            echo "\`.github/workflows/build-macos.yml\` downloads it, checks the digest below and unpacks it"
+            echo "into \`Contents/Resources/runtime/\` before the app bundle is signed."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| asset | \`$ASSET\` |"
+            echo "| sha256 | \`$SHA256\` |"
+            echo "| source commit | \`$GITHUB_SHA\` |"
+            echo "| built by | run [$GITHUB_RUN_ID]($SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) |"
+            echo
+            echo "Licence gate: no GPL/LGPL/AGPL notice in the \`spc dump-license\` set, Mercure and Vulcain"
+            echo "absent (\`nomercure\`), iconv resolved from the macOS system library — OPEN-QUESTIONS A23,"
+            echo "ADR-001 D1, ADR-007 D2.2. \`runtime.json\` attached here is the manifest to commit."
+          } > "$notes"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Runtime $VERSION ($TAG)" \
+            --notes-file "$notes" \
+            --prerelease \
+            "$DIST_DIR/$ASSET" \
+            "$DIST_DIR/SHA256SUMS" \
+            "$DIST_DIR/runtime.json" \
+            "$OUT_DIR/build-report.json" \
+            "$OUT_DIR/frankenphp-version.txt" \
+            "$OUT_DIR/go-modules.txt" \
+            "$OUT_DIR/otool-L.txt"
+          {
+            echo
+            echo "Published **$TAG**. Commit the \`runtime.json\` attached to it so build-macos.yml finds the package:"
+            echo '```sh'
+            echo "gh release download $TAG --repo $GITHUB_REPOSITORY --pattern runtime.json --output packaging/manifest/runtime.json --clobber"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the package and the evidence
+        if: always() && steps.pack.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-package-${{ github.run_id }}
+          path: |
+            ${{ env.DIST_DIR }}
+            ${{ env.OUT_DIR }}/build-report.json
+            ${{ env.OUT_DIR }}/frankenphp-version.txt
+            ${{ env.OUT_DIR }}/frankenphp-build-info.txt
+            ${{ env.OUT_DIR }}/go-modules.txt
+            ${{ env.OUT_DIR }}/otool-L.txt
+            ${{ env.RUNTIME_MANIFEST }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload the licence notice set
+        if: always() && hashFiles('packaging/build/runtime-bin/licenses/**') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-licenses-${{ github.run_id }}
+          path: ${{ env.OUT_DIR }}/licenses
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload the build log on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-build-log-${{ github.run_id }}
+          path: packaging/build/runtime-build/static-php-cli/log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Delete the temporary keychain
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          packaging/signing/sign.sh cleanup
+          security list-keychains -d user

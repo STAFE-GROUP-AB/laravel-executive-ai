@@ -14,7 +14,8 @@
         "components",
         "signing",
         "http",
-        "package"
+        "package",
+        "artifact"
     ],
     "properties": {
         "$schema": {
@@ -271,6 +272,17 @@
                     "$ref": "#/$defs/package"
                 }
             ]
+        },
+        "artifact": {
+            "description": "Where the signed runtime directory is published: the tarball `.github/workflows/build-runtime.yml` attached to its pre-release tag. `.github/workflows/build-macos.yml` downloads this URL, checks `sha256` and unpacks it into `Contents/Resources/runtime/` before the app is signed. null while no package is published for this version (including right after a local build, which cannot be signed).",
+            "oneOf": [
+                {
+                    "type": "null"
+                },
+                {
+                    "$ref": "#/$defs/artifact"
+                }
+            ]
         }
     },
     "allOf": [
@@ -291,6 +303,9 @@
                         "type": "null"
                     },
                     "package": {
+                        "type": "null"
+                    },
+                    "artifact": {
                         "type": "null"
                     }
                 }
@@ -323,6 +338,39 @@
         "sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifact": {
+            "description": "A published runtime package. `url` must be a GitHub release-asset URL of this repository, `sha256` the digest of the tarball at that URL, and `tag` the pre-release tag that carries it (runtime-<php>-<frankenphp>-<n>).",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "tag",
+                "asset",
+                "url",
+                "sha256",
+                "bytes"
+            ],
+            "properties": {
+                "tag": {
+                    "type": "string",
+                    "pattern": "^runtime-(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-[1-9][0-9]*$"
+                },
+                "asset": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*\\.tar\\.gz$"
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\\.tar\\.gz$"
+                },
+                "sha256": {
+                    "$ref": "#/$defs/sha256"
+                },
+                "bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
         },
         "goModule": {
             "type": "string",

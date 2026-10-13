@@ -7,6 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -131,8 +132,11 @@ test('secrets are referenced only as `${{ secrets.APPLE_* }}`, only inside env b
         while (cursor >= 0 && ! /^\s+- name:/.test(lines[cursor])) {
             cursor -= 1;
         }
+        // Every step that sees a secret value is gated on the signing mode. A step may add
+        // further conditions (the runtime Team ID check also needs a bundled runtime), so the
+        // mode condition has to be part of the `if:`, not necessarily all of it.
         const step = lines.slice(cursor, index + 1).join('\n');
-        assert.match(step, /\n\s+if: steps\.mode\.outputs\.signed == 'true'\n/, `step at line ${cursor + 1} is gated on the signing mode`);
+        assert.match(step, /\n\s+if: [^\n]*steps\.mode\.outputs\.signed == 'true'/, `step at line ${cursor + 1} is gated on the signing mode`);
     }
 
     assert.doesNotMatch(workflow, /echo[^\n]*\$APPLE_/, 'no echo of an APPLE_* variable');
@@ -375,8 +379,11 @@ test('make-dmg.sh stages the app, an /Applications link and an honest README, an
     const readmeText = readFileSync(join(staging, 'README.txt'), 'utf8');
     assert.match(readmeText, /LaravelExecutiveAI 0\.0\.0 \(build abcdef1\)/);
     assert.match(readmeText, /UNSIGNED debug build/);
+    // No Contents/Resources/runtime/ in this fake bundle, so the image must say so rather than
+    // claim a runtime it does not carry.
     assert.match(readmeText, /NO PHP runtime package/);
-    assert.match(readmeText, /A23/);
+    assert.match(readmeText, /PACKAGE_VERIFY/);
+    assert.match(readmeText, /build-runtime workflow/);
     assert.match(readmeText, /This is not a release/);
     assert.match(readmeText, /docs\/operations\/release-build\.md/);
 
@@ -394,6 +401,72 @@ test('make-dmg.sh stages the app, an /Applications link and an honest README, an
 
     assert.match(dmg, /hdiutil create -volname "\$VOLNAME" -srcfolder "\$STAGING" -ov -format UDZO/);
     assert.match(dmg, /hdiutil verify "\$DMG_PATH"/);
+    rmSync(base, { recursive: true, force: true });
+});
+
+test('the signing report has a runtime section: the package version, the binary verdict and the SHA256SUMS check', () => {
+    // `report` shells out to codesign; it is macOS-only, like the signing it reports on.
+    if (process.platform !== 'darwin') {
+        return;
+    }
+
+    const base = mkdtempSync(join(tmpdir(), 'lxai-report-runtime-'));
+    const app = fakeApp(base);
+
+    const without = run(signScript, ['report', app, join(base, 'report.txt')]);
+    assert.equal(without.status, 0, without.stderr);
+    assert.match(readFileSync(join(base, 'report.txt'), 'utf8'), /^runtime: +no package in Contents\/Resources\/runtime/m);
+
+    // A minimal, internally consistent package, as build-macos.yml unpacks it.
+    const runtime = join(app, 'Contents', 'Resources', 'runtime');
+    mkdirSync(runtime, { recursive: true });
+    const binary = '#!/bin/sh\necho stub\n';
+    writeFileSync(join(runtime, 'frankenphp'), binary);
+    const digest = createHash('sha256').update(binary).digest('hex');
+    writeFileSync(
+        join(runtime, 'manifest.json'),
+        `${JSON.stringify({ schema_version: 1, runtime_version: '0.1.0', executable: 'frankenphp', files: [{ path: 'frankenphp', sha256: digest, bytes: binary.length }] }, null, 4)}\n`,
+    );
+    writeFileSync(join(runtime, 'SHA256SUMS'), `${digest}  frankenphp\n`);
+
+    const withRuntime = run(signScript, ['report', app, join(base, 'report2.txt')]);
+    assert.equal(withRuntime.status, 0, withRuntime.stderr);
+    const report = readFileSync(join(base, 'report2.txt'), 'utf8');
+
+    assert.match(report, /^runtime: +package 0\.1\.0 present, frankenphp verdict unsigned$/m);
+    assert.match(report, /## runtime package \(Contents\/Resources\/runtime\)/);
+    assert.match(report, /## entitlements \(runtime binary\) — ADR-001 D2: exactly allow-jit/);
+    assert.match(report, /## SHA256SUMS of the bundled package/);
+    assert.match(report, /frankenphp: OK/);
+
+    // An unsigned runtime in a build that claims to be signed must fail the report, not pass it.
+    const expected = run(signScript, ['report', app, join(base, 'report3.txt')], { LXAI_EXPECT_SIGNED: '1' });
+    assert.equal(expected.status, 1, expected.stderr);
+    assert.match(expected.stderr, /the app is 'unsigned'|bundled runtime binary is/);
+
+    rmSync(base, { recursive: true, force: true });
+});
+
+test('with a runtime package in the bundle, the image README names its version instead of the caveat', () => {
+    const base = mkdtempSync(join(tmpdir(), 'lxai-dmg-runtime-'));
+    const app = fakeApp(base);
+    const out = join(base, 'out');
+
+    mkdirSync(join(app, 'Contents', 'Resources', 'runtime'), { recursive: true });
+    writeFileSync(
+        join(app, 'Contents', 'Resources', 'runtime', 'manifest.json'),
+        `${JSON.stringify({ schema_version: 1, runtime_version: '0.1.0', executable: 'frankenphp', files: [] }, null, 4)}\n`,
+    );
+
+    const result = run(dmgScript, ['--app', app, '--out-dir', out, '--stage-only', '--sha', 'abcdef1', '--version', '0.0.0', '--status', 'signed']);
+    assert.equal(result.status, 0, result.stderr);
+
+    const readmeText = readFileSync(join(out, 'dmg-staging', 'README.txt'), 'utf8');
+    assert.match(readmeText, /contains the PHP runtime package 0\.1\.0/);
+    assert.match(readmeText, /verifies every file against that manifest/);
+    assert.doesNotMatch(readmeText, /NO PHP runtime package/);
+    assert.match(readmeText, /No\nHomebrew, Docker or system PHP is used or required\./);
+
     rmSync(base, { recursive: true, force: true });
 });
 

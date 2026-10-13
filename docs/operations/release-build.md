@@ -2,7 +2,8 @@
 
 > Blueprint §16 step 5 (signed internal build produced by CI), §12.1 (signed, notarized DMG), §14
 > (release checklist). Status: **debug stage** — the pipeline, the unsigned image and the signed
-> image are built; notarization is Sprint 4 (E4-6); the runtime package is not bundled (A23).
+> image are built and the runtime package is bundled from its published release asset (A23 decided
+> 2026-10-11, §5); notarization is Sprint 4 (E4-6).
 > Scripts and the signing procedure: [`packaging/signing/README.md`](../../packaging/signing/README.md).
 
 ## 1. What is produced, when
@@ -106,22 +107,47 @@ and walking the installer is S1-14's measurement run, not this check.
   entitlements are honoured: `codesign` does not check entitlements against a provisioning profile.
   Only the lab launch does.
 
-## 5. No runtime in this image (A23)
+## 5. The runtime package in this image (A23 — decided 2026-10-11)
 
-The image is **app + Supervisor only**. `Contents/Resources/runtime/` is absent and
-`packaging/manifest/runtime.json` stays `status: unbuilt, package: null`. The curated FrankenPHP
-binary built by `packaging/runtime/build-runtime.sh` carries two findings the ADRs do not yet cover
-([`docs/architecture/runtime-layout.md`](../architecture/runtime-layout.md) §5, OPEN-QUESTIONS
-**A23**): Mercure (AGPL) is linked unless the `nomercure` Go build tag is applied (ADR-001 D1 must
-name it), and GNU libiconv (LGPL-2.1) is statically linked through libxml2 (ADR-007 D2.2 forbids
-that without the L-1 opinion). Until Andreas decides, no runtime may be signed or shipped. Consequence
-for anyone installing this build: the installer stops at `PACKAGE_VERIFY` with a clear error and
-installs nothing into `~/Library`. The `README.txt` inside the image says the same.
+The image contains the PHP runtime as soon as `packaging/manifest/runtime.json` pins a published
+package: `status: signed` with a `package` manifest and an `artifact` (tag, asset, URL, sha256,
+bytes). `build-macos` then downloads that asset, checks the digest and the byte count, unpacks it
+into `Contents/Resources/runtime/`, re-verifies it with the installer's own rules and — in signed
+mode — refuses a `frankenphp` whose Team ID is not the app's, all **before** signing. With no
+artifact pinned the step prints a `::notice`, the image is app + Supervisor only, and the installer
+stops at `PACKAGE_VERIFY`; the `README.txt` inside the image says which of the two it is.
 
-When A23 is decided, the steps are listed in `packaging/signing/README.md` §4 and
-`packaging/runtime/README.md` §5: sign `frankenphp` (Developer ID, hardened runtime,
-`com.apple.security.cs.allow-jit` only — ADR-001 D2), re-assemble with `--status signed`, copy the
-directory into the bundle, commit `runtime.json`.
+The package itself is **not** built by this workflow. `.github/workflows/build-runtime.yml` (manual
+dispatch, `macos-15`, ~16 min) builds the curated FrankenPHP binary, passes the ADR-007 D2 licence
+gate with no override, signs the binary (Developer ID, hardened runtime,
+`com.apple.security.cs.allow-jit` only — ADR-001 D2), assembles the directory with `--status signed`
+so `manifest.json` hashes the signed bytes, and publishes it on a pre-release tag
+`runtime-<php>-<frankenphp>-<n>`. Procedure and inputs: `packaging/runtime/README.md` §7; the two
+A23 build fixes (the `nomercure` Go tag, and libxml2/`iconv` against the macOS system iconv) and the
+measured artefact: [`docs/architecture/runtime-layout.md`](../architecture/runtime-layout.md) §5.
+
+### What to test on the image that carries a runtime
+
+```sh
+hdiutil attach LaravelExecutiveAI-<version>-<sha>.dmg
+APP="/Volumes/Laravel Executive AI/LaravelExecutiveAI.app"
+RUNTIME="$APP/Contents/Resources/runtime"
+
+ls "$RUNTIME"                                          # frankenphp, Caddyfile, php.ini, app/, manifest.json, SHA256SUMS
+( cd "$RUNTIME" && shasum -a 256 --check --strict SHA256SUMS )   # every file matches the manifest
+codesign -dvvv "$RUNTIME/frankenphp" 2>&1 | grep -E 'Authority|TeamIdentifier|flags'
+#   Authority=Developer ID Application: … TeamIdentifier=<TEAM ID> … flags=0x10000(runtime)
+codesign -d --entitlements - --xml "$RUNTIME/frankenphp"          # exactly com.apple.security.cs.allow-jit
+"$RUNTIME/frankenphp" version                                     # FrankenPHP v1.13.0 PHP 8.5.11 Caddy v2.11.7
+otool -L "$RUNTIME/frankenphp"                                    # system libraries only (libiconv.2.dylib is macOS's)
+codesign --verify --deep --strict --verbose=2 "$APP"              # the app seals the runtime as nested code
+```
+
+Then install: the installer must pass `PACKAGE_VERIFY` (manifest + `SHA256SUMS` + the binary's
+signature against the app's own Team ID) and `INSTALL_CORE` must leave
+`~/Library/Application Support/<bundle id>/runtime/<version>/` read-only with `current` pointing at
+it. A `PACKAGE_VERIFY` failure on a signed image means the runtime and the app came from different
+teams, or the asset was replaced — both are fail-closed by design, never warnings.
 
 ## 6. The notarization gap (§14)
 
@@ -130,7 +156,7 @@ Still missing before the §14 checklist's *Build and signing* rows can be ticked
 | Item | Status | Where |
 |---|---|---|
 | Apple Team ID + Developer ID certificate as CI secrets | **Andreas** — A12 | `packaging/signing/README.md` §2 |
-| Runtime package signed and bundled | blocked on A23 | §5 above |
+| Runtime package signed and bundled | **done** (A23 decided 2026-10-11): built, gated, signed and published by `build-runtime.yml`, unpacked into the bundle by `build-macos` | §5 above |
 | App Store Connect API key (id, issuer, `.p8`) as CI secrets | not created | Sprint 4 |
 | `xcrun notarytool submit --wait` + `xcrun stapler staple` + `spctl … accepted` gate | disabled `notarize` job in the workflow | Sprint 4, backlog row **E4-6 Release engineering and docs completeness** — no GitHub issue exists yet; open one when Sprint 4 is planned |
 | A24 verdict and the ADR amendment | **done** 2026-10-11 (helper bundle + embedded profile; ADR-001 D3 amended, ADR-003 D5 confirmed) | `packaging/signing/README.md` §5 |

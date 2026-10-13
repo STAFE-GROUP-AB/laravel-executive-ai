@@ -17,9 +17,14 @@
 # finished bundle inside-out afterwards, in a temporary keychain deleted in an always() step.
 # Secret values are only ever mapped into `env:`; nothing echoes them and no script enables `set -x`.
 #
-# No runtime package is bundled (OPEN-QUESTIONS A23; packaging/manifest/runtime.json stays
-# `unbuilt`). Notarization and stapling are the Sprint 4 gate — see the disabled `notarize` job.
-# Every third-party action is pinned to a full commit SHA.
+# The runtime package is downloaded, never built here: `.github/workflows/build-runtime.yml`
+# (dispatch only) builds, licence-gates, signs and publishes it as a release asset, and
+# `packaging/manifest/runtime.json` pins that asset's URL and sha256. This job verifies the digest,
+# unpacks the directory into `Contents/Resources/runtime/` before signing, and refuses a runtime
+# from another Apple team. While `runtime.json` has no published artifact the step skips with a
+# notice and the image is app + Supervisor only (OPEN-QUESTIONS A23 is decided; the artifact is
+# what fills the directory). Notarization and stapling are the Sprint 4 gate — see the disabled
+# `notarize` job. Every third-party action is pinned to a full commit SHA.
 
 name: build-macos
 
@@ -150,11 +155,89 @@ jobs:
           echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" >> "$GITHUB_OUTPUT"
           find "$APP_PATH" -maxdepth 5 | sort
 
-      # Developer ID signing, inside-out: the Supervisor helper bundle first — its entitlements with
-      # the Team ID prefix expanded, and APPLE_SUPERVISOR_PROFILE written into its
+      # The runtime package (ADR-001 D4), downloaded rather than built: `build-runtime.yml` built,
+      # gated, signed and published it on a pre-release tag, and `packaging/manifest/runtime.json`
+      # pins the asset URL and its sha256. It is unpacked BEFORE any signing so the app's resource
+      # envelope seals an already-signed `frankenphp` — `sign.sh app` never re-signs anything in
+      # here. With `status` not `signed` or no `artifact` (the state until a package is published)
+      # the step says so and skips: the image is then app + Supervisor only and the installer stops
+      # at PACKAGE_VERIFY, exactly as before.
+      - name: Add the runtime package to the bundle
+        id: runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The trailing newline matters: `read` returns non-zero at EOF without one, which
+          # `set -e` would turn into a failed step.
+          read -r status url sha256 bytes asset tag < <(node -e '
+            const m = JSON.parse(require("fs").readFileSync("packaging/manifest/runtime.json", "utf8"));
+            const a = m.artifact;
+            process.stdout.write([m.status, a?.url ?? "-", a?.sha256 ?? "-", a?.bytes ?? "-", a?.asset ?? "-", a?.tag ?? "-"].join(" ") + "\n");
+          ')
+          if [ "$status" != signed ] || [ "$url" = - ]; then
+            echo "::notice title=build-macos::packaging/manifest/runtime.json is '$status' with no published artifact, so this image carries no runtime package. Run the build-runtime workflow and commit the runtime.json it publishes (packaging/runtime/README.md §5)."
+            echo "bundled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p build/runtime-download
+          curl --fail --silent --show-error --location --retry 3 --output "build/runtime-download/$asset" "$url"
+          printf '%s  %s\n' "$sha256" "build/runtime-download/$asset" | shasum -a 256 --check --strict
+          actual_bytes="$(stat -f %z "build/runtime-download/$asset")"
+          if [ "$actual_bytes" != "$bytes" ]; then
+            echo "::error::$asset is $actual_bytes bytes, runtime.json says $bytes."
+            exit 1
+          fi
+
+          # The tarball holds one `<version>/` directory; --strip-components lands its contents
+          # directly in Contents/Resources/runtime/, which is what Bundle.main expects.
+          target="$APP_PATH/Contents/Resources/runtime"
+          rm -rf "$target"
+          mkdir -p "$target"
+          tar -xzf "build/runtime-download/$asset" --strip-components=1 -C "$target"
+
+          # The same rules PackageVerifier applies, before the bytes are sealed into the bundle.
+          node packaging/runtime/assemble-runtime.mjs --verify "$target"
+          codesign --verify --strict --verbose=2 "$target/frankenphp"
+          codesign -d --entitlements - --xml "$target/frankenphp" | grep -Fq 'com.apple.security.cs.allow-jit'
+          {
+            echo "bundled=true"
+            echo "tag=$tag"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+          echo "Unpacked $asset ($bytes bytes, $tag) into Contents/Resources/runtime."
+
+      # The runtime must come from the same team as the app, or PackageVerifier will refuse it on
+      # every install (it builds its requirement from the running app's own signature). Unsigned
+      # PR runs have no Team ID to compare against, so they only report what they found.
+      - name: Verify the runtime carries the app's Team ID
+        if: steps.runtime.outputs.bundled == 'true' && steps.mode.outputs.signed == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          team="$(codesign -dvv "$APP_PATH/Contents/Resources/runtime/frankenphp" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+          if [ "$team" != "$APPLE_TEAM_ID" ]; then
+            echo "::error::The bundled runtime was signed by team '$team', which is not this build's team. PackageVerifier would reject it (support matrix §6.10)."
+            exit 1
+          fi
+          echo "The runtime binary and the app share the same Apple Team ID."
+
+      - name: Note the runtime Team ID check skipped in unsigned mode
+        if: steps.runtime.outputs.bundled == 'true' && steps.mode.outputs.signed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice title=build-macos::Unsigned run: the runtime package is bundled and verified against its manifest, but its Team ID is not compared with the app's (the app has none). A signed main build makes that check."
+
+      # Developer ID signing, inside-out: the already-signed runtime binary unpacked above needs
+      # nothing further, then the Supervisor helper bundle — its entitlements with the Team ID
+      # prefix expanded, and APPLE_SUPERVISOR_PROFILE written into its
       # Contents/embedded.provisionprofile, without which macOS refuses its restricted
-      # keychain-access-groups entitlement at launch (A24) — then the app (its entitlements).
-      # Hardened runtime + secure timestamp. sign.sh fails closed if the profile secret is missing.
+      # keychain-access-groups entitlement at launch (A24) — then the app (its entitlements), which
+      # seals both as nested code. Hardened runtime + secure timestamp. sign.sh fails closed if the
+      # profile secret is missing.
       - name: Sign the app and the Supervisor
         if: steps.mode.outputs.signed == 'true'
         shell: bash

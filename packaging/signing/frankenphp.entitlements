@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    Entitlements of the bundled FrankenPHP runtime binary, ADR-001 D2: exactly one.
+
+    `allow-jit` is required because PCRE allocates JIT memory on every request start-up; without
+    it PHP under the Hardened Runtime logs "Allocation of JIT memory failed, PCRE JIT will be
+    disabled" (ADR-001 Evidence E3). Nothing else is granted — in particular not
+    `allow-unsigned-executable-memory`, `disable-library-validation` or
+    `allow-dyld-environment-variables` (the static binary loads no plug-ins and OPcache's JIT is
+    off, `opcache.jit=disable`), no App Sandbox, and no `keychain-access-groups`: PHP never reads
+    the Keychain (ADR-003 D2). Adding a key here needs an ADR-001 amendment.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>
