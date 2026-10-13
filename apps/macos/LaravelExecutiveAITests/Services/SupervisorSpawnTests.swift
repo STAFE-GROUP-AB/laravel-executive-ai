@@ -18,8 +18,13 @@ final class SupervisorSpawnTests: XCTestCase {
 
         XCTAssertEqual(specs.map(\.name), [.core, .worker, .scheduler])
         XCTAssertEqual(specs[0].arguments, ["run", "--config", "Caddyfile"])
-        XCTAssertEqual(specs[1].arguments, ["php-cli", "app/artisan", "queue:work", "database", "--queue=briefs,email-sync,default,ai", "--sleep=3", "--tries=3"])
-        XCTAssertEqual(specs[2].arguments, ["php-cli", "app/artisan", "schedule:work"])
+        // `php-cli -r <bootstrap>`, not `php-cli app/artisan …`: FrankenPHP's `php-cli` leaves
+        // its own binary at `$argv[0]`, so Symfony read the script path as the command name.
+        // See `ServiceSpec.artisan`, which is where that is explained and where the shape lives.
+        XCTAssertEqual(specs[1].arguments, ServiceSpec.artisan(["queue:work", "database", "--queue=briefs,email-sync,default,ai", "--sleep=3", "--tries=3"]))
+        XCTAssertEqual(specs[2].arguments, ServiceSpec.artisan(["schedule:work"]))
+        XCTAssertTrue(specs[1].arguments.last?.contains("'queue:work'") ?? false, "the command artisan will run")
+        XCTAssertTrue(specs[2].arguments.last?.contains("'schedule:work'") ?? false, "the command artisan will run")
 
         for spec in specs {
             XCTAssertEqual(spec.executable.lastPathComponent, "frankenphp")

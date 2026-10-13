@@ -43,23 +43,38 @@ final class SupervisorMigrationsTests: XCTestCase {
 
     /// The whole point of the guard: the argument vector is pinned literally, and no command that
     /// drops, resets or rolls back data can appear in it.
-    func testMigrationArgumentsArePinnedAndForwardOnly() {
+    func testMigrationArgumentsArePinnedAndForwardOnly() throws {
         let spec = specs().migrations
 
-        XCTAssertEqual(spec.arguments, ["php-cli", "app/artisan", "migrate", "--force"])
+        XCTAssertEqual(spec.arguments, ServiceSpec.artisan(["migrate", "--force"]))
         XCTAssertEqual(spec.executable.lastPathComponent, "frankenphp")
         XCTAssertEqual(spec.logName, "migrate")
         XCTAssertEqual(spec.workingDirectory, spec.environment["LEA_RUNTIME_DIR"].map { URL(fileURLWithPath: $0) })
-        XCTAssertTrue(spec.arguments.contains("--force"), "there is no tty to confirm the production guard on")
 
-        // Destructive variants are forbidden anywhere in the vector (installer.md §3, T-72).
+        // The vector is `php-cli -r <bootstrap>`, not `php-cli app/artisan …`: FrankenPHP's
+        // `php-cli` leaves its own binary at `$argv[0]` and puts the script at `$argv[1]`, one
+        // further along than a normal CLI, so Symfony read the script path as the command name
+        // (`Command "app/artisan" is not defined`, the owner's migrate.log, 2026-10-13). The
+        // bootstrap states the vector artisan should see instead of compensating for the shift.
+        XCTAssertEqual(spec.arguments.prefix(2), ["php-cli", "-r"])
+        XCTAssertEqual(spec.arguments.count, 3)
+
+        let bootstrap = try XCTUnwrap(spec.arguments.last)
+        XCTAssertTrue(bootstrap.contains("$_SERVER['argv']"), "ArgvInput reads \\$_SERVER['argv']")
+        XCTAssertTrue(bootstrap.contains("require 'app/artisan';"), "and then artisan is loaded")
+        XCTAssertTrue(bootstrap.contains("'migrate'"), "the command artisan will run")
+        XCTAssertTrue(bootstrap.contains("'--force'"), "there is no tty to confirm the production guard on")
+
+        // Destructive variants are forbidden anywhere in the vector (installer.md §3, T-72). The
+        // command words are still literals inside the bootstrap, so this grep still bites.
+        let joined = spec.arguments.joined(separator: " ")
+
         for forbidden in ["migrate:fresh", "migrate:refresh", "migrate:rollback", "migrate:reset", "db:wipe", "db:seed"] {
-            XCTAssertFalse(spec.arguments.contains { $0.contains(forbidden) }, "\(forbidden) must never be spawned")
+            XCTAssertFalse(joined.contains(forbidden), "\(forbidden) must never be spawned")
         }
 
-        // `migrate` is the only artisan command word: nothing is chained after it.
-        XCTAssertEqual(spec.arguments.filter { $0.hasPrefix("migrate") }, ["migrate"])
-        XCTAssertFalse(spec.arguments.contains { $0.lowercased().contains("drop") || $0.lowercased().contains("truncate") })
+        XCTAssertFalse(joined.lowercased().contains("drop"))
+        XCTAssertFalse(joined.lowercased().contains("truncate"))
     }
 
     /// Identical to what the three children get — one dictionary, built once (ADR-003 D7 row 12).
@@ -115,8 +130,10 @@ final class SupervisorMigrationsTests: XCTestCase {
         let migration = try XCTUnwrap(lines.firstIndex(of: Self.migrateCommand))
         XCTAssertLessThan(migration, core, "the migration must finish before the core is spawned: \(lines)")
 
-        XCTAssertTrue(lines.dropFirst().contains { $0.hasPrefix("php-cli app/artisan queue:work database") }, "\(lines)")
-        XCTAssertTrue(lines.dropFirst().contains("php-cli app/artisan schedule:work"), "\(lines)")
+        let worker = ServiceSpec.artisan(["queue:work", "database", "--queue=briefs,email-sync,default,ai", "--sleep=3", "--tries=3"]).joined(separator: " ")
+        let scheduler = ServiceSpec.artisan(["schedule:work"]).joined(separator: " ")
+        XCTAssertTrue(lines.dropFirst().contains(worker), "\(lines)")
+        XCTAssertTrue(lines.dropFirst().contains(scheduler), "\(lines)")
 
         // The one-shot's output lands in the Supervisor's own log directory. Waited for, not read
         // at once: `ChildProcess` reports the exit from the termination handler while a
@@ -125,7 +142,7 @@ final class SupervisorMigrationsTests: XCTestCase {
         // same reason). Nothing in the product waits on a log either.
         let migrateLog = self.migrateLog
         let logged = await ServicesTestSupport.waitUntil {
-            Self.text(at: migrateLog).contains("simulated runtime: php-cli app/artisan migrate --force")
+            Self.text(at: migrateLog).contains("simulated runtime: \(Self.migrateCommand)")
         }
         XCTAssertTrue(logged, "the one-shot's stdout reaches migrate.log: \(Self.text(at: migrateLog))")
 
@@ -337,7 +354,8 @@ final class SupervisorMigrationsTests: XCTestCase {
     #!/bin/sh
     mkdir -p "$LEA_LOG_DIR"
     echo "$@" >> "$LEA_LOG_DIR/spawns.txt"
-    if [ "$3" = "migrate" ]; then
+    case "$3" in *"'migrate'"*) migrating=1 ;; *) migrating=0 ;; esac
+    if [ "$migrating" = 1 ]; then
         echo "SQLSTATE[HY000]: General error: 5 database is locked" >&2
         exit 1
     fi
@@ -351,7 +369,8 @@ final class SupervisorMigrationsTests: XCTestCase {
     #!/bin/sh
     mkdir -p "$LEA_LOG_DIR"
     echo "$@" >> "$LEA_LOG_DIR/spawns.txt"
-    if [ "$3" = "migrate" ]; then
+    case "$3" in *"'migrate'"*) migrating=1 ;; *) migrating=0 ;; esac
+    if [ "$migrating" = 1 ]; then
         echo $$ > "$LEA_LOG_DIR/migrate.pid"
         exec sleep 120
     fi
@@ -365,7 +384,8 @@ final class SupervisorMigrationsTests: XCTestCase {
     #!/bin/sh
     mkdir -p "$LEA_LOG_DIR" "$LEA_DATA_DIR"
     echo "$@" >> "$LEA_LOG_DIR/spawns.txt"
-    if [ "$3" = "migrate" ]; then
+    case "$3" in *"'migrate'"*) migrating=1 ;; *) migrating=0 ;; esac
+    if [ "$migrating" = 1 ]; then
         if [ -f "$LEA_DATA_DIR/database.sqlite" ]; then
             echo "nothing to migrate" >> "$LEA_DATA_DIR/database.sqlite"
         else
@@ -377,7 +397,10 @@ final class SupervisorMigrationsTests: XCTestCase {
     """
 
     /// The argv line the recording `frankenphp` writes for the one-shot.
-    private static let migrateCommand = "php-cli app/artisan migrate --force"
+    /// What the simulated `frankenphp` records for the one-shot: the real vector, joined.
+    /// `php-cli -r <bootstrap>` since the FrankenPHP argv fix — the script is no longer a bare
+    /// argument, so this is derived from `ServiceSpec.artisan` rather than written out twice.
+    private static let migrateCommand = ServiceSpec.artisan(["migrate", "--force"]).joined(separator: " ")
 
     private func spawnLines() -> [String] {
         Self.lines(at: paths.logs.appending(path: "spawns.txt"))
