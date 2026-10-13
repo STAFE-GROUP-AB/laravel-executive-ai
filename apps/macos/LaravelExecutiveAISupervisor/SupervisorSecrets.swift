@@ -172,14 +172,25 @@ struct SupervisorSecrets: Sendable {
         try write(ref, data, label: SecretService.label(SecretService.aiProvider))
     }
 
-    // MARK: Uninstall (ADR-003 D8; S1-13)
+    // MARK: Uninstall (ADR-003 D8; S1-13; A25)
 
     /// Deletes every item of every service in the inventory. Returns what was removed.
+    ///
+    /// `keepApplicationKey` is A25's single exception (decided 2026-10-11), and S2-04 is why it
+    /// exists: from the first `encrypted:` cast, `core.app-key` is the only thing that can read the
+    /// rows under `data/`. A *keep my data* uninstall that deleted it would hand the person back a
+    /// database they chose to keep and can no longer decrypt, so that one service survives — every
+    /// account under it — while every other `se.stafe.executive-ai.*` item still goes, `K`
+    /// included. A delete-everything uninstall keeps nothing, which is why the flag defaults to
+    /// false: a caller that says nothing gets ADR-003 D8's original sweep. The spared item is not
+    /// in the returned list, because that list is what was removed.
     @discardableResult
-    func removeAll() throws -> [KeychainItemRef] {
+    func removeAll(keepApplicationKey: Bool = false) throws -> [KeychainItemRef] {
         var removed: [KeychainItemRef] = []
 
-        for service in SecretService.inventory {
+        // Matched against the inventory's own constant, never a literal: A12 may move the prefix,
+        // and the exception has to move with it.
+        for service in SecretService.inventory where !(keepApplicationKey && service == SecretService.appKey) {
             for account in try map({ try store.accounts(service: service) }) {
                 let ref = KeychainItemRef(service: service, account: account)
                 try map { try store.delete(ref) }

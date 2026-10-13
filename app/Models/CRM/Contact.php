@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace App\Models\CRM;
 
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A natural person at one or more customers (blueprint §3.2). Always
  * `sensitivity_class = personal`: subject to GDPR export and erasure.
+ *
+ * `phones` is **encrypted at rest** (S2-04): personal data that nothing matches on,
+ * so the cast costs no query. The five name and note columns are deliberately *not*
+ * encrypted — they are the `contacts` full-text index (`SearchableEntity::Contacts`)
+ * and ciphertext tokenises to noise; they stay plaintext with the row's
+ * `sensitivity_class` recorded instead (docs/architecture/data-model.md
+ * §"Encryption at rest").
  *
  * @property string $given_name
  * @property string $family_name
@@ -21,12 +29,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Contact extends CrmModel
 {
+    use EncryptsSensitiveAttributes;
+
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             ...parent::casts(),
-            'phones' => 'array',
+            ...$this->encryptedAttributeCasts(),
         ];
     }
 

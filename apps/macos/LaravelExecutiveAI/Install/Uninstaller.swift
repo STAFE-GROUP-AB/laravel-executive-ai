@@ -4,8 +4,10 @@
 //
 //   1. stopAll             the Supervisor stops the three PHP children (XPC, ipc-contract §7.2)
 //   2. removeAllSecrets    the Supervisor deletes every se.stafe.executive-ai.* Keychain item
-//                          (XPC). Only the Supervisor holds the access group (ADR-003 D2), so
-//                          the sweep runs while it is still alive and is reported back by name
+//                          (XPC) — except core.app-key when the person keeps their data (A25),
+//                          which is the only thing that can decrypt what they kept. Only the
+//                          Supervisor holds the access group (ADR-003 D2), so the sweep runs
+//                          while it is still alive and is reported back by name
 //   3. unregister          SMAppService.unregister(): launchd cannot respawn a Supervisor that
 //                          would recreate the items
 //   4. RuntimeUninstaller  runtime/, run/, Caches, Logs; data/ unless the person keeps it
@@ -385,7 +387,7 @@ struct Uninstaller: Uninstalling {
         case .servicesStopped:
             try await stopServices()
         case .secretsRemoved:
-            journal.secretsSweep = try await removeSecrets()
+            journal.secretsSweep = try await removeSecrets(choice: choice)
         case .agentUnregistered:
             try await unregisterAgent()
         case .runtimeRemoved:
@@ -418,7 +420,11 @@ struct Uninstaller: Uninstalling {
         }
     }
 
-    private func removeSecrets() async throws -> SecretsSweep {
+    /// A25: the data choice decides one item. *Keep my data* spares `core.app-key` so the
+    /// preserved database is still readable after a reinstall (S2-04 put the first `encrypted:`
+    /// cast in it); *delete everything* takes the key too, and the count the uninstall sheet shows
+    /// is what the Supervisor actually removed, so a spared key is never counted.
+    private func removeSecrets(choice: UninstallDataChoice) async throws -> SecretsSweep {
         let status = dependencies.registrar.status()
 
         guard status == .enabled else {
@@ -426,7 +432,7 @@ struct Uninstaller: Uninstalling {
         }
 
         do {
-            return .removed(count: try await dependencies.control.removeAllSecrets().count)
+            return .removed(count: try await dependencies.control.removeAllSecrets(keepApplicationKey: choice.preservesData).count)
         } catch let error as SupervisorControlError {
             switch error {
             case .unreachable:
@@ -521,6 +527,17 @@ struct Uninstaller: Uninstalling {
                 // and 6, so those two run again under the new choice; nothing else is repeated.
                 journal.dataChoice = choice
                 journal.completed.removeAll { $0 == .runtimeRemoved || $0 == .installDirectoryFinalized }
+
+                // Step 2 also reads the choice since A25: the earlier keep-data sweep spared
+                // `core.app-key`, and a delete-everything uninstall takes it too. The sweep is
+                // idempotent, so repeating it is safe — but only while the Supervisor is still
+                // registered, because nothing else holds the access group (ADR-003 D2). Once it is
+                // unregistered there is nothing to re-run, and the journal keeps the honest
+                // `removed` record of the run that did sweep rather than overwriting it with a
+                // `skipped`; the spared key then outlives the uninstall and a reinstall adopts it.
+                if choice == .delete, supervisorIsRegistered {
+                    journal.completed.removeAll { $0 == .secretsRemoved }
+                }
             }
 
             return journal

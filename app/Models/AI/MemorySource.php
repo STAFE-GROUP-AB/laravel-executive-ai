@@ -6,6 +6,7 @@ namespace App\Models\AI;
 
 use App\AI\Memory\MemorySourceType;
 use App\Models\Concerns\BusinessObject;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use App\Models\CRM\Communication;
 use App\Models\Organization;
 use Carbon\CarbonImmutable;
@@ -16,6 +17,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * One piece of evidence a memory rests on (§3.1 `memory_sources`, §4.2 source
  * references). `excerpt` is external content: data, never instruction.
+ *
+ * `excerpt` is **encrypted at rest** (S2-04): it is a quoted fragment of someone's
+ * mail or issue, and the evidence ordering is `memory_sources_memory_position_unique`
+ * over ids, not the text.
  *
  * @property string $id
  * @property string $organization_id
@@ -30,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class MemorySource extends Model
 {
     use BusinessObject;
+    use EncryptsSensitiveAttributes;
     use SoftDeletes;
 
     protected $guarded = [];
@@ -39,6 +45,7 @@ class MemorySource extends Model
     {
         return [
             ...$this->businessObjectCasts(),
+            ...$this->encryptedAttributeCasts(),
             'source_type' => MemorySourceType::class,
             'position' => 'integer',
             'occurred_at' => 'immutable_datetime',

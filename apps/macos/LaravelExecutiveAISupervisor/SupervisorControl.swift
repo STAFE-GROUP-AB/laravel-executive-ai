@@ -36,7 +36,20 @@ protocol SupervisorControlling: Sendable {
     /// the one writer (ADR-003 D2, D8) and drops every live session. Returns what was removed —
     /// names, never values. Called before the LaunchAgent is unregistered, because only the
     /// Supervisor holds the access group.
-    func removeAllSecrets() async throws -> [KeychainItemRef]
+    ///
+    /// `keepApplicationKey` is A25's one exception: with `true` — the *keep my data* choice —
+    /// `core.app-key` and only it survives, so the preserved database is still decryptable after a
+    /// reinstall (S2-04). Everything else goes either way.
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef]
+}
+
+extension SupervisorControlling {
+    /// ADR-003 D8's original sweep, which is what a caller that says nothing means: the
+    /// application key goes with the rest. A protocol requirement cannot carry a default argument,
+    /// so the default lives here.
+    func removeAllSecrets() async throws -> [KeychainItemRef] {
+        try await removeAllSecrets(keepApplicationKey: false)
+    }
 }
 
 /// `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` behind a protocol.
@@ -209,17 +222,19 @@ actor SupervisorControlService: SupervisorControlling {
         }
     }
 
-    func removeAllSecrets() async throws -> [KeychainItemRef] {
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef] {
         let removed: [KeychainItemRef]
 
         do {
-            removed = try secrets.removeAll()
+            removed = try secrets.removeAll(keepApplicationKey: keepApplicationKey)
         } catch {
             throw SupervisorControlError.secrets("the Keychain items could not be removed")
         }
 
-        // `K` is gone from the Keychain; nothing paired against it may elevate any more. The
-        // in-memory key stays only so this process can keep answering until it is unregistered.
+        // `K` is gone from the Keychain — A25 spares `core.app-key`, never `K` — so nothing paired
+        // against it may elevate any more. This drops the IPC session table, which has nothing to
+        // do with the Keychain sweep above; the in-memory key stays only so this process can keep
+        // answering until it is unregistered.
         sessions.removeAll()
 
         return removed

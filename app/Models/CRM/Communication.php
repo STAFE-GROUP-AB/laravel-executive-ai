@@ -7,6 +7,7 @@ namespace App\Models\CRM;
 use App\CRM\Communications\CommunicationDirection;
 use App\CRM\Communications\CommunicationSourceType;
 use App\CRM\Communications\MatchedBy;
+use App\Models\Concerns\EncryptsSensitiveAttributes;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,6 +17,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * contact. `source_type` + `source_id` (§3.1 lineage) name the system of record;
  * there is no Eloquent relation to `email_messages` on purpose (E3-2). `excerpt`
  * is external content: data, never instruction.
+ *
+ * `from_address` is **encrypted at rest** (S2-04): personal data that is only ever
+ * read, never matched — §5.6 resolves a sender by asking `contact_emails` for the
+ * address (`ContactEmail::forAddress()`), it does not query this column. `subject`
+ * and `excerpt` stay plaintext because they *are* the `communications` full-text
+ * index (`SearchableEntity::Communications`), and `to_addresses` stays plaintext
+ * because it is the exact-lookup column for "which of our addresses was this
+ * addressed to", the check that refuses an outgoing mail whose From is not in
+ * `send_as_addresses`. See docs/architecture/data-model.md §"Encryption at rest".
  *
  * @property CommunicationSourceType $source_type
  * @property ?string $account_id
@@ -35,11 +45,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Communication extends CrmModel
 {
+    use EncryptsSensitiveAttributes;
+
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             ...parent::casts(),
+            ...$this->encryptedAttributeCasts(),
             'source_type' => CommunicationSourceType::class,
             'direction' => CommunicationDirection::class,
             'occurred_at' => 'immutable_datetime',

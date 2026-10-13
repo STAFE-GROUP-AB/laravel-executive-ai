@@ -132,9 +132,9 @@ final class ScriptedHealthProbing: HealthProbing, @unchecked Sendable {
 }
 
 /// Records every control call; answers `services()` from a script. With `secrets:` set,
-/// `removeAllSecrets()` sweeps that in-memory inventory the way the real service does, so an
-/// uninstall test can assert on the Keychain double; `stopAllError`/`removeSecretsError` script
-/// an unreachable or refusing Supervisor.
+/// `removeAllSecrets` sweeps that in-memory inventory the way the real service does — A25's
+/// keep-data exception included — so an uninstall test can assert on the Keychain double;
+/// `stopAllError`/`removeSecretsError` script an unreachable or refusing Supervisor.
 final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendable {
     enum Call: Equatable, Sendable {
         case pair(IpcClient)
@@ -145,7 +145,9 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
         case startAll
         case elevate(String)
         case storeProviderApiKey(String)
-        case removeAllSecrets
+        /// A25: the flag the uninstaller passed, so a test can see which sweep was asked for and
+        /// not only what the Keychain double looks like afterwards.
+        case removeAllSecrets(keepApplicationKey: Bool)
     }
 
     private let lock = NSLock()
@@ -203,8 +205,8 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
         }
     }
 
-    func removeAllSecrets() async throws -> [KeychainItemRef] {
-        record(.removeAllSecrets)
+    func removeAllSecrets(keepApplicationKey: Bool) async throws -> [KeychainItemRef] {
+        record(.removeAllSecrets(keepApplicationKey: keepApplicationKey))
 
         if let removeSecretsError {
             throw removeSecretsError
@@ -214,7 +216,7 @@ final class ScriptedSupervisorControl: SupervisorControlling, @unchecked Sendabl
             return []
         }
 
-        return try secrets.removeAll()
+        return try secrets.removeAll(keepApplicationKey: keepApplicationKey)
     }
 
     func elevate(sessionId: String, operation: String, nonce: String) async throws -> Elevation {

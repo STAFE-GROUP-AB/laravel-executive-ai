@@ -17,7 +17,9 @@ import Foundation
     func startAll(reply: @escaping @Sendable (String?) -> Void)
     func elevate(sessionId: String, operation: String, nonce: String, reply: @escaping @Sendable (Data?, String?) -> Void)
     func storeProviderApiKey(provider: String, apiKey: String, reply: @escaping @Sendable (String?) -> Void)
-    func removeAllSecrets(reply: @escaping @Sendable (Data?, String?) -> Void)
+    /// `keepApplicationKey` is A25's exception, carried as a plain `BOOL` so the `@objc` protocol
+    /// stays Objective-C-compatible.
+    func removeAllSecrets(keepApplicationKey: Bool, reply: @escaping @Sendable (Data?, String?) -> Void)
 }
 
 enum SupervisorControlWire {
@@ -192,11 +194,11 @@ final class SupervisorControlExporter: NSObject, SupervisorControlXPCProtocol, @
         }
     }
 
-    func removeAllSecrets(reply: @escaping @Sendable (Data?, String?) -> Void) {
+    func removeAllSecrets(keepApplicationKey: Bool, reply: @escaping @Sendable (Data?, String?) -> Void) {
         let service = self.service
         Task {
             do {
-                reply(SupervisorControlWire.encode(try await service.removeAllSecrets()), nil)
+                reply(SupervisorControlWire.encode(try await service.removeAllSecrets(keepApplicationKey: keepApplicationKey)), nil)
             } catch {
                 reply(nil, SupervisorControlWire.code(for: error))
             }

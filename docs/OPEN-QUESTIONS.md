@@ -779,3 +779,27 @@ item except the application key when data is kept"; a delete-everything uninstal
 S2-04 (#87) is unblocked and amends ADR-003 D8 and `uninstall.md` §5 in its PR; S1-13's `Uninstaller`
 gains the one exception in the same PR (the Supervisor's `removeAllSecrets` takes a `keepApplicationKey`
 flag, default false).
+
+**IMPLEMENTED by S2-04 (#87), both halves.** The decision is no longer only recorded:
+
+- *Supervisor.* `SupervisorSecrets.removeAll(keepApplicationKey:)` spares `core.app-key` — and only
+  that service, every account under it — when the flag is set, and the flag comes from the person's
+  own data choice (`Uninstaller.removeSecrets` passes `choice.preservesData` through
+  `removeAllSecrets(keepApplicationKey:)` on the XPC surface, `BOOL` on the wire, ipc-contract §7.2).
+  The default is `false`, so a delete-everything uninstall — and any caller that says nothing — still
+  performs ADR-003 D8's original sweep. The exception is matched against the inventory's
+  `SecretService.appKey` constant, never a literal, so A12 moving the prefix moves it too. A keep-run
+  interrupted and retried as *Delete everything* sweeps again with the flag off, so the spared key is
+  taken after all.
+- *Core.* Thirteen §3.1 attributes now carry `encrypted:` casts
+  (`App\Security\Secrets\EncryptedAttributeInventory`), and `core.app-key` is what reads them.
+  `tests/Feature/Install/ReinstallPreservesDataTest.php` boots twice over one data directory and
+  reads them back; the same test proves that under a *different* key the read fails closed with
+  `UnreadableEncryptedAttributeException` rather than returning an empty field — which is what
+  option (c) would have shipped.
+- *Documentation.* ADR-003 D8 is amended in that PR, and `uninstall.md` §3, §4, §5, §7 and §9 now say
+  plainly that `core.app-key` is the one item a keep-data uninstall keeps, that a delete-everything
+  uninstall takes it with the data, and that **a lost `core.app-key` makes the encrypted columns
+  unrecoverable by any party** — no escrow, no recovery code, no support path.
+
+Nothing about the decision changed in implementation; A25 stays `DECIDED` and is now also *done*.
