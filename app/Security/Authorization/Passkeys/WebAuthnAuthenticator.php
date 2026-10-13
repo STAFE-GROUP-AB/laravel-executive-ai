@@ -165,7 +165,9 @@ final class WebAuthnAuthenticator implements PasskeyAuthenticator
 
         $credentialId = Base64UrlSafe::encodeUnpadded($record->publicKeyCredentialId);
 
-        if (PasskeyCredential::query()->where('credential_id', $credentialId)->exists()) {
+        // Through the hash, because that is where the unique index lives (#117);
+        // the database refuses a duplicate even if this check races with itself.
+        if (PasskeyCredential::query()->forCredentialId($credentialId)->exists()) {
             throw new PasskeyCeremonyFailed(PasskeyCeremonyFailed::ALREADY_REGISTERED);
         }
 
@@ -238,7 +240,7 @@ final class WebAuthnAuthenticator implements PasskeyAuthenticator
         }
 
         $stored = PasskeyCredential::query()
-            ->where('credential_id', Base64UrlSafe::encodeUnpadded($publicKeyCredential->rawId))
+            ->forCredentialId(Base64UrlSafe::encodeUnpadded($publicKeyCredential->rawId))
             ->where('rp_id', $relyingParty->id)
             ->first();
 

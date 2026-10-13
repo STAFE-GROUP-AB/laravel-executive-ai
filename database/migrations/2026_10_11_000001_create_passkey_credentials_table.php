@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\PasskeyCredential;
 use App\Support\Database\BusinessObjectColumns;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -15,6 +16,23 @@ return new class extends Migration
      * duration of one ceremony. Like otp_codes this is a credential record,
      * not a business object: no organization, provenance or soft delete; a
      * removed passkey is deleted and the removal is an audit event.
+     *
+     * **Amended by #117.** As shipped, this file put a unique index straight on
+     * `credential_id` at `string(..., 1024)`: 4096 bytes of `utf8mb4` against
+     * InnoDB's 3072-byte key limit, so `migrate` aborted here on the ADR-002 D1
+     * `server` profile and every table after it was never created. The identity of
+     * a credential is now indexed through `credential_id_hash`, and `credential_id`
+     * holds the 1364 characters the WebAuthn spec's maximum actually needs.
+     *
+     * Editing an applied migration is normally forbidden here, and this is the
+     * narrow case where it is both safe and necessary. **Safe:** `migrate` only runs
+     * files absent from the `migrations` table (`Migrator::pendingMigrations()`
+     * rejects the rest), so a database that already ran this file never sees the
+     * change — it is brought forward instead by
+     * `2026_10_13_000001_index_passkey_credential_id_by_hash`, which is conditional
+     * and a no-op on a database created from this amended file. **Necessary:** a
+     * follow-up migration cannot repair a *clean* MySQL database, because this file
+     * runs first and used to fail before anything else could.
      */
     public function up(): void
     {
@@ -22,7 +40,11 @@ return new class extends Migration
             BusinessObjectColumns::ulid($table);
             $table->char('user_id', 26);
             $table->string('name', 100);
-            $table->string('credential_id', 1024);
+            $table->string('credential_id', PasskeyCredential::MAX_CREDENTIAL_ID_LENGTH);
+            // Carries the unique index in place of `credential_id` (#117). The
+            // empty-string default is kept so a fresh database and one brought
+            // forward by the 2026_10_13 migration declare the same column.
+            $table->char('credential_id_hash', 64)->default('');
             $table->text('public_key');
             $table->string('user_handle', 64);
             $table->unsignedBigInteger('sign_count')->default(0);
@@ -39,7 +61,7 @@ return new class extends Migration
             BusinessObjectColumns::timestamps($table, softDeletes: false);
 
             $table->foreign('user_id', 'passkey_credentials_user_fk')->references('id')->on('users');
-            $table->unique('credential_id', 'passkey_credentials_credential_id_unique');
+            $table->unique('credential_id_hash', 'passkey_credentials_credential_id_hash_unique');
             $table->index(['user_id', 'rp_id'], 'passkey_credentials_user_rp_index');
         });
     }

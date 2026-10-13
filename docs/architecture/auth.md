@@ -312,12 +312,22 @@ and `failed_jobs` for the registration challenge, the authentication challenge, 
 the client data, the authenticator data and the signature. Structural guards behind it: the
 library's validators keep their null logger and null event dispatcher, so the "checking the
 response" `info` line with the full payload is never emitted; audit context carries our row id, the
-`rp_id` and a reason code only; `PasskeyCredential` hides `credential_id`, `public_key`,
-`user_handle` and `trust_path` from serialisation; and the `Redactor`'s key list gained the ceremony
+`rp_id` and a reason code only; `PasskeyCredential` hides `credential_id`, `credential_id_hash`,
+`public_key`, `user_handle` and `trust_path` from serialisation; and the `Redactor`'s key list gained the ceremony
 keys (`challenge`, `signature`, `client_data_json`, `authenticator_data`, `attestation_object`,
 `credential_id`, `public_key`, `raw_id`, `user_handle`) as the second layer. What *is* stored on
 purpose is the credential's **public** key, id and counter — a relying party cannot verify later
 assertions without them.
+
+**How a credential is found (#117).** The unique constraint is on `credential_id_hash`, not on
+`credential_id`: a credential id is up to 1364 base64url characters and no InnoDB key can hold one,
+which made the `server` profile unmigratable until this moved. So both ceremonies look a credential
+up with `PasskeyCredential::forCredentialId()`, which queries the hash;
+`PasskeyCredential::hashFor()` is the single definition and a `saving` hook keeps the column in step
+with `credential_id`, so an index key can never disagree with the credential it belongs to. The
+registration duplicate check goes through the same path, and the unique index is what actually
+decides if it races with itself. See [data-model.md](data-model.md) `passkey_credentials` for the
+schema and the two migrations.
 
 ## 9. Browser-hardening headers (open question A16)
 
