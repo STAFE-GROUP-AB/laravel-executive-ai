@@ -43,7 +43,19 @@ the `local` environment and under tests, and the guarantee must not depend on `A
 core runs as `production`, runtime-layout.md §3; development runs as `local`). The exact tailnet DNS
 name joins the list through
 `config('remote.trusted_hosts')` with remote access (E4-1). Consequence for development: use
-`php artisan serve` (127.0.0.1); a Herd `.test` domain is refused by design.
+`php artisan serve --host=localhost`; a Herd `.test` domain is refused by design.
+
+**The browser origin on loopback is `http://localhost:<port>`, and only that** (ADR-006 D3, issue
+#109). Trusting a host is not the same as serving the PWA on it: the IP literals stay trusted
+because `/ipc/*` and `/health/*` require them (ipc-contract §1.1), but a browser route that arrives
+on `127.0.0.1` or `[::1]` is answered with a redirect to the same path, query intact, on `localhost`
+(`App\Http\Middleware\RedirectToCanonicalHost`, prepended to the `web` group after
+`ResolveRequestOrigin` and before `StartSession`; `tests/Feature/Pwa/CanonicalHostTest.php`). The
+reason is passkeys: a WebAuthn relying party cannot be an IP literal, so a passkey can only exist on
+the named host, and session cookies are host-only — two hosts would mean two browser identities for
+one person (auth.md §7.1). `/ipc/*` and `/health/*` are excluded from the redirect in two ways: they
+are registered in the `api` group, and the middleware refuses those paths itself. A 302 there would
+read to the Swift client as a hijacked port and show "core unreachable" (ipc-contract §5.2).
 
 ## 2. Routes
 
@@ -146,8 +158,10 @@ and `apple-mobile-web-app-title` ("Executive AI"); the status bar follows `theme
 layout respects the safe areas. Remote access needs the ADR-006 tunnel (HTTPS); the installed app is
 then bound to that origin.
 
-**Local development.** Loopback is a secure context, so `http://127.0.0.1:<port>` registers the worker
-and installs. After `npm run build` the worker caches the hashed assets listed in
+**Local development.** Loopback is a secure context, so `http://localhost:<port>` registers the worker
+and installs — use that host, not the IP literal, and the app will send you there anyway (§1). It is
+also the host a passkey can be registered on, so `/settings/security` only works there. After
+`npm run build` the worker caches the hashed assets listed in
 `public/build/manifest.json`; during `npm run dev` the worker serves the last built shell, which is
 fine for the Blade pages because they are network-only anyway. Regenerate the PNG icons from the SVG
 sources with ImageMagick:

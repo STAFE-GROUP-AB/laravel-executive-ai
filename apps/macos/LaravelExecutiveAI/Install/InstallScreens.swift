@@ -469,8 +469,10 @@ struct DoneScreen: View {
                 }
             }
         } footer: {
+            // `http://localhost:<port>`, not the IPC address: it is the same loopback socket, and
+            // it is the only loopback host a browser will register a passkey for (ADR-006 D3).
             PrimaryInstallButton(title: "Open Laravel Executive AI") {
-                if let port = machine.checkpoint.preflight?.port, let url = URL(string: "http://127.0.0.1:\(port)/") {
+                if let port = machine.checkpoint.preflight?.port, let url = PwaOrigin.origin(port: port) {
                     openURL(url)
                 }
 

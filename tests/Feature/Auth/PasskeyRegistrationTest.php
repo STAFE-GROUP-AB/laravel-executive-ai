@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\RedirectToCanonicalHost;
 use App\Livewire\Auth\Passkeys;
 use App\Models\AuditEvent;
 use App\Models\PasskeyCredential;
@@ -135,10 +136,38 @@ it('reports passkeys as unavailable on an IP-literal origin rather than failing 
     expect($passkeys->isAvailable())->toBeFalse()
         ->and($status->available)->toBeFalse()
         ->and($status->message)->toContain('127.0.0.1')
+        ->and($status->message)->toContain('localhost')
         ->and(fn () => $passkeys->registrationOptions(registrationOwner()))->toThrow(PasskeysUnavailableException::class);
 
     expect(PasskeyFixtures::authenticatorOn(PasskeyFixtures::LOOPBACK_ORIGIN)->isAvailable())->toBeTrue()
         ->and(PasskeyFixtures::authenticatorOn(PasskeyFixtures::REMOTE_ORIGIN)->isAvailable())->toBeTrue();
+});
+
+/*
+ * ADR-006 D3 / issue #109. The IP-literal case above is a real limitation of
+ * WebAuthn, and the product's answer to it is the host it opens: the menu bar
+ * and the installer open `localhost`, and `RedirectToCanonicalHost` sends a
+ * browser that still arrives on `127.0.0.1` there. So the canonical host must
+ * be one where a full ceremony runs — asserted here against the middleware's
+ * own constant, not a repeated literal, because a drift between the two would
+ * put the owner back on an origin with no passkeys and no error.
+ */
+it('runs a full ceremony on the canonical browser host the product opens', function (): void {
+    $host = RedirectToCanonicalHost::CANONICAL_HOST;
+    $passkeys = PasskeyFixtures::authenticatorOn("http://{$host}:8787");
+    $relyingParty = $passkeys->relyingParty();
+
+    expect($relyingParty->id)->toBe($host)
+        ->and($relyingParty->isIpLiteral())->toBeFalse()
+        ->and($relyingParty->isSecureContext())->toBeTrue('plain HTTP is a secure context on this host, which is the whole reason it is canonical')
+        ->and($passkeys->status()->available)->toBeTrue()
+        ->and($passkeys->status()->rpId)->toBe($host);
+
+    $device = new VirtualAuthenticator;
+    $credential = $device->register($passkeys->registrationOptions(registrationOwner()), "http://{$host}:8787");
+    $passkeys->completeRegistration(registrationOwner(), $credential);
+
+    expect(PasskeyCredential::query()->where('rp_id', $host)->count())->toBe(1);
 });
 
 it('lets the owner add and remove a passkey from the security page', function (): void {

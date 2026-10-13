@@ -17,9 +17,9 @@
 | System status | status band: state title + detail, AI row, connectivity note, privacy mode | derived per §2 |
 | Tasks awaiting approval | "Awaiting your approval (n)" — title, kind, sanitised summary, **Open** (deep link) | `approvals?state=pending`; count from `health.pending_approvals` |
 | Action shortcuts | brief items that carry `action_ids`, marked with a seal; "Review action" inside the item opens `/approvals/<action id>` | the parity payload |
-| Open full brief | `<origin>/briefs/<latest_brief.id>` (the PWA accepts a document id, pwa.md §3) | `CoreClient.origin` + health |
+| Open full brief | `<browser origin>/briefs/<latest_brief.id>` (the PWA accepts a document id, pwa.md §3) | `CoreClient.browserOrigin` + health |
 | Pause AI actions | toggles to "Resume AI actions"; `POST /ipc/v1/ai/pause` / `resume` | ipc §6.4 |
-| Open PWA | `<origin>/home` | ipc §1.1 origin |
+| Open PWA | `<browser origin>/home` — `http://localhost:<port>`, the canonical browser origin (ADR-006 D3, #109), never the ipc §1.1 address | `CoreClient.browserOrigin` |
 | Settings | the `Settings` scene (⌘,): `SettingsView` — the §1.1 sections still to come, and **Uninstall** (S1-13): "Uninstall…" opens `UninstallConfirmationView` with Keep my data / Delete everything / Cancel, wired to `ServiceControlling.uninstall(keepingData:)` ([`docs/operations/uninstall.md`](../operations/uninstall.md)) | — |
 | Quit UI | terminates this process only (section 5) | — |
 
@@ -92,8 +92,12 @@ later health minor adds it; until then the pause toggle keeps the last `ai/pause
 
 ```swift
 protocol CoreClient: Sendable {
-    /// http://127.0.0.1:<port> from the pairing grant (ipc §1.1); the PWA origin for deep links.
+    /// http://127.0.0.1:<port> from the pairing grant (ipc §1.1) — the IPC address only.
     var origin: URL { get }
+    /// http://localhost:<port> — same socket, the one host a browser can hold a passkey for
+    /// (ADR-006 D3, #109). Every deep link the panel opens is built on this; `PwaOrigin`
+    /// derives it, and canonicalises an `open_url` the core produced on the IP literal.
+    var browserOrigin: URL { get }   // protocol extension, not implemented per client
     func health() async throws -> HealthDocument                                    // §6.1
     func latestBrief(ifNoneMatch etag: String?) async throws -> LatestBriefResponse  // §6.2 (.document(Data, etag:) | .notModified(etag:))
     func pendingApprovals() async throws -> PendingApprovals                        // §6.3 (read-only)

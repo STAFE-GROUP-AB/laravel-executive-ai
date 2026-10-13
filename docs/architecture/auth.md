@@ -182,11 +182,33 @@ assertion carrying the wrong `rpIdHash` is refused by `CheckRelyingPartyIdIdHash
 (`PasskeyRegistrationTest`, "gives each ADR-006 D3 origin its own relying party"). The credential row
 stores both the `rp_id` and the full origin, and every query is scoped by `rp_id`.
 
-WebAuthn needs a domain name in a secure context. `http://127.0.0.1:<port>` is therefore **not**
-usable — browsers refuse an IP literal as an RP id — so `status()` says so in plain words and the
-ceremonies throw `PasskeysUnavailableException` instead of failing inside the browser. On that origin
-the emailed code is simply the only way in, which is the S1-02 behaviour unchanged. Opening the app
-on `http://localhost:<port>` or over the tailnet name gives passkeys.
+WebAuthn needs a domain name in a secure context, and browsers refuse an IP literal as an RP id, so
+no ceremony can run on `http://127.0.0.1:<port>` at all. **ADR-006 D3 therefore makes
+`http://localhost:<port>` the loopback origin the product opens** (issue #109, amended after this
+section first landed): the menu bar's "Open PWA", "Open full brief", diagnostics and approval deep
+links are built on `CoreClient.browserOrigin`, the installer's Done screen opens the same host, and
+`APP_URL` — the fallback `url()` uses in a queued job, so the host in a brief mail's CTA — is that
+host too. `localhost` is a secure context for plain HTTP, is a legal RP id, and is already in
+`TrustLoopbackHosts` (S1-04). So the owner who reaches the PWA the normal way gets working passkeys;
+there is no origin the product opens where the §11 requirement is unreachable.
+
+Two consequences are load-bearing:
+
+- **A browser request on `127.0.0.1` is redirected to the same path on `localhost`**
+  (`App\Http\Middleware\RedirectToCanonicalHost`, `web` group only; `CanonicalHostTest`). Session
+  cookies are host-only (§5), so a bookmark on the IP literal would otherwise leave a person with a
+  session on one host and a passkey on the other, and nothing on screen explaining it. One browser
+  host means one place a credential can live.
+- **The IPC origin is deliberately different and unchanged.** `/ipc/*` is the literal `127.0.0.1`
+  by contract (ipc-contract §1.1, so no resolver can redirect the Mac app) and `/health/*` is what
+  the Supervisor probes; the redirect excludes both, because the Swift client treats a 3xx as a
+  hijacked port and would report "core unreachable" (§5.2). Trusting a host and opening a browser on
+  it are two different questions: `TrustedHostsTest` records that the IP literals stay trusted.
+
+An origin that *is* an IP literal is still possible — a hand-typed address, a bare IP — and there
+`status()` says so in plain words, the ceremonies throw `PasskeysUnavailableException` rather than
+failing inside the browser, and the emailed code is the only way in, which is the S1-02 behaviour
+unchanged. The tailnet name gives passkeys the same way `localhost` does.
 
 ### 7.2 The ceremonies
 
@@ -329,9 +351,11 @@ belongs to the Tailscale Serve origin and is decided in E4-1.
   `/install/owner` in the PWA instead of calling the command, or whether the Supervisor hands the
   browser a first session some other way. Recorded for the Sprint 1 review.
 - Re-authentication for critical actions, device management and passkeys **landed in S2-05 (#69)**:
-  §5.1, §7. What is still open there: a passkey is registered per origin, so the owner adds one on
-  the loopback origin and another over the tailnet name; whether the installer should offer the
-  first passkey during `CREATE_OWNER` is an S2/S4 question, not decided here.
+  §5.1, §7. The origin question S2-05 left open was decided in **#109**: `localhost` is the loopback
+  browser origin, recorded in ADR-006 D3 and described in §7.1 — that is no longer an open point.
+  What is still open there: a passkey is registered per origin, so the owner adds one on the
+  loopback origin and another over the tailnet name; whether the installer should offer the first
+  passkey during `CREATE_OWNER` is an S2/S4 question, not decided here.
 - `TrustProxies`/`TrustHosts` for the tailnet origin, HSTS: **E4-1**. Until then the tailnet
   relying-party id is exercised in tests through `remote.trusted_hosts`, the same config E4-1 writes.
 - The three §7.4 consumers do not exist yet: **S2-08** approvals, **S2-19** admin, **S2-14** privacy

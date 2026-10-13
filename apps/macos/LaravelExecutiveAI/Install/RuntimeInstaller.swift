@@ -605,7 +605,14 @@ enum RuntimeEnvironment {
             "PHPRC": runtime.directory.path,
             "APP_ENV": "production",
             "APP_DEBUG": "false",
-            "APP_URL": "http://127.0.0.1:\(port)",
+            // The canonical *browser* origin (ADR-006 D3): `APP_URL` is what `url()` falls back to
+            // outside an HTTP request, so it is the host in a queued brief mail's CTA. That link
+            // must land where the session and the passkey live, not on the IP literal the core
+            // would only redirect away from. Written as a literal because this file is also
+            // compiled into the Supervisor target, which has no PWA types; `RuntimeInstallerTests`
+            // asserts it equals `PwaOrigin.host`. The listener still binds `127.0.0.1`
+            // (LEA_HTTP_PORT, ADR-001 D3) and `/ipc/*` is still addressed there (ipc-contract §1.1).
+            "APP_URL": "http://localhost:\(port)",
             "LEA_BACKEND_PROFILE": "local",
         ]
     }

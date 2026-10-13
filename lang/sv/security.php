@@ -37,7 +37,7 @@ return [
         'status' => [
             'available' => 'Passkeys fungerar på den här adressen (:rp).',
             'insecure' => 'Passkeys kräver en HTTPS-adress eller localhost; den här sidan ligger på :origin.',
-            'ip_literal' => 'Passkeys kräver ett värdnamn i stället för en IP-adress; den här sidan ligger på :origin. Öppna appen på localhost eller via din privata fjärradress.',
+            'ip_literal' => 'Passkeys kräver ett värdnamn i stället för en IP-adress; den här sidan ligger på :origin. Appen öppnas på localhost, där passkeys fungerar — öppna den från menyraden, eller använd din privata fjärradress.',
         ],
         'errors' => [
             'unavailable' => 'Passkeys är inte tillgängliga på den här adressen. Använd engångskoden via e-post.',

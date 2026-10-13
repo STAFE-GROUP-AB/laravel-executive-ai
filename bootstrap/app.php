@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RedirectToCanonicalHost;
 use App\Http\Middleware\ResolveRequestOrigin;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\TrustLoopbackHosts;
@@ -24,9 +25,17 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // subclass, because the stock TrustHosts is inert in `local` and under tests.
         $middleware->prepend(TrustLoopbackHosts::class);
 
-        // ADR-006 D3 (per-request origin, session.secure) first; A16 browser-hardening
-        // headers around every web response. S1-04's app shell ships inside both.
-        $middleware->web(prepend: [ResolveRequestOrigin::class], append: [SecurityHeaders::class]);
+        // ADR-006 D3 (per-request origin, session.secure) first, then the one browser host on
+        // loopback: a browser request on `127.0.0.1` is sent to the same path on `localhost`,
+        // where a passkey can exist at all. Both run before StartSession, so nothing is signed
+        // in on the non-canonical host. Only the `web` group — `/ipc/*` and `/health/*` are in
+        // the `api` group and keep the literal `127.0.0.1` (ipc-contract §1.1). A16
+        // browser-hardening headers wrap every web response. S1-04's app shell ships inside all
+        // of them.
+        $middleware->web(
+            prepend: [ResolveRequestOrigin::class, RedirectToCanonicalHost::class],
+            append: [SecurityHeaders::class],
+        );
 
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/home');

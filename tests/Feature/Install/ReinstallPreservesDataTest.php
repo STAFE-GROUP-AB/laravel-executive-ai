@@ -21,6 +21,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\File;
+use Tests\Support\FreshInstance;
 
 /*
  * S1-13, blueprint §12.2 "data-preserving reinstall", threat model T-72: a data-preserving
@@ -174,7 +175,7 @@ it('boots a reinstall over preserved data to the previous owner and the previous
             ->and($app->make(InstallStateStore::class)->current())->toBe(InstallState::CoreReady, 'the install marker survives too');
 
         // T-72: the in-app CREATE_OWNER screen is gone because an owner exists …
-        $response = $app->make(HttpKernel::class)->handle(Request::create('http://127.0.0.1:8787/install/owner'));
+        $response = $app->make(HttpKernel::class)->handle(Request::create(FreshInstance::ORIGIN.'/install/owner'));
         expect($response->getStatusCode())->toBe(404);
 
         // … and the installer's command exits with the distinct owner-exists code.
@@ -197,7 +198,7 @@ it('starts with no owner on a fresh data directory, so delete-everything really 
             ->and(Brief::query()->count())->toBe(0)
             ->and($app->make(InstallStateStore::class)->current())->toBe(InstallState::NotInstalled);
 
-        $response = $app->make(HttpKernel::class)->handle(Request::create('http://127.0.0.1:8787/install/owner'));
+        $response = $app->make(HttpKernel::class)->handle(Request::create(FreshInstance::ORIGIN.'/install/owner'));
         expect($response->getStatusCode())->toBe(200);
     });
 });
