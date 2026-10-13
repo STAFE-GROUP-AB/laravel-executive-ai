@@ -57,7 +57,10 @@ enum SupervisorBootError: Error, Equatable, Sendable {
         case .noRecordedPort: return "The installer did not record a loopback port; run the installer again."
         case .secretsUnavailable(let reason): return "The Keychain is not available to the Supervisor (\(reason))."
         case .verificationFailed(let reason): return "The installed runtime failed verification (\(reason))."
-        case .migrationsFailed(let reason): return "The database migrations did not finish (\(reason)); no service was started."
+        // #124: says what was being waited for *and* that the data is untouched. The bound is
+        // 120 s, so this sentence can arrive after a two-minute wait; someone reading it then
+        // needs to know their database was not half-changed.
+        case .migrationsFailed(let reason): return "The database migrations did not finish (\(reason)); no service was started and nothing was installed or changed."
         case .brokerFailed(let reason): return "The secrets broker could not start (\(reason))."
         }
     }

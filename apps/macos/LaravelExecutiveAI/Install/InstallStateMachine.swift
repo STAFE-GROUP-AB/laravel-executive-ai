@@ -137,6 +137,12 @@ final class InstallStateMachine {
     private(set) var coreCheckpoint: InstallCoreCheckpoint?
     private(set) var lastHealth: HealthReadiness?
     private(set) var healthAttempts = 0
+
+    /// What the HEALTH_CHECK poll is allowed, so the screen can say "check 7 of 90" rather than
+    /// counting up into an unknown (#124).
+    var healthBudgetAttempts: Int {
+        dependencies.healthPolicy.maxAttempts
+    }
     private(set) var detectedRuntimes: [LocalAiRuntime] = []
     private(set) var started = false
     /// True when READY was reached in this process (the Done screen is shown once, §12.3 screen 6).
@@ -659,6 +665,16 @@ final class InstallStateMachine {
         persistCheckpoint()
     }
 
+    /// Advances the "Starting services" label's elapsed count, and only while that step is the
+    /// one showing — a late tick must never overwrite a later substep.
+    private func tickStartingServices(since started: Date) {
+        guard coreCheckpoint?.isStartingServices == true else {
+            return
+        }
+
+        coreCheckpoint = .startingServices(elapsedSeconds: Int(dependencies.clock.now().timeIntervalSince(started).rounded()))
+    }
+
     /// The activated runtime, from this process's memory or from the checkpoint.
     private func resolvedRuntime() throws -> InstalledRuntime {
         if let installedRuntime {
@@ -683,7 +699,26 @@ final class InstallStateMachine {
             throw InstallFailed(failure: .bootServices("Preflight did not record a free port; run the checks again."))
         }
 
-        coreCheckpoint = .startingServices
+        coreCheckpoint = .startingServices(elapsedSeconds: 0)
+
+        // The Supervisor answers nothing until it is up, and on a first install that wait is the
+        // longest part of this state: Gatekeeper has never assessed this binary, and the
+        // Supervisor verifies the runtime and migrates the database before it listens. A ticking
+        // label is the difference between a wait and a frozen screen (#124).
+        let started = dependencies.clock.now()
+        let ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+
+                guard let self, !Task.isCancelled else {
+                    return
+                }
+
+                await self.tickStartingServices(since: started)
+            }
+        }
+
+        defer { ticker.cancel() }
 
         let outcome: BootServicesOutcome
 

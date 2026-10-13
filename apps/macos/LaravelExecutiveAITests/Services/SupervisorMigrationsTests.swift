@@ -146,7 +146,7 @@ final class SupervisorMigrationsTests: XCTestCase {
         for status in statuses {
             XCTAssertEqual(status.state, .failed)
             XCTAssertNil(status.pid)
-            XCTAssertEqual(status.detail, "The database migrations did not finish (exited with status 1); no service was started.")
+            XCTAssertEqual(status.detail, "The database migrations did not finish (exited with status 1); no service was started and nothing was installed or changed.")
         }
 
         // Nothing but the migration was ever spawned, and it was spawned once.
@@ -180,7 +180,7 @@ final class SupervisorMigrationsTests: XCTestCase {
         XCTAssertEqual(Set(overXpc.map(\.state)), [.failed])
         XCTAssertEqual(
             Set(overXpc.compactMap(\.detail)),
-            ["The database migrations did not finish (exited with status 1); no service was started."],
+            ["The database migrations did not finish (exited with status 1); no service was started and nothing was installed or changed."],
             "the GUI reads the reason from services()"
         )
 
@@ -191,7 +191,7 @@ final class SupervisorMigrationsTests: XCTestCase {
             try await control.startAll()
             XCTFail("a failing migration must gate start")
         } catch let error as SupervisorControlError {
-            XCTAssertEqual(error, .refused("The database migrations did not finish (exited with status 1); no service was started."))
+            XCTAssertEqual(error, .refused("The database migrations did not finish (exited with status 1); no service was started and nothing was installed or changed."))
         }
 
         XCTAssertEqual(spawnLines(), [Self.migrateCommand, Self.migrateCommand], "the retry re-ran the migration and still spawned no child")
@@ -218,7 +218,7 @@ final class SupervisorMigrationsTests: XCTestCase {
 
         for status in await runtime.statuses() {
             XCTAssertEqual(status.state, .failed)
-            XCTAssertEqual(status.detail, "The database migrations did not finish (no result after 1 seconds); no service was started.")
+            XCTAssertEqual(status.detail, "The database migrations did not finish (no result after 1 seconds); no service was started and nothing was installed or changed.")
         }
 
         XCTAssertEqual(spawnLines(), [Self.migrateCommand], "no child was spawned")
@@ -296,7 +296,7 @@ final class SupervisorMigrationsTests: XCTestCase {
         try await second.boot()
 
         for status in await second.statuses() {
-            XCTAssertNotEqual(status.detail, "The database migrations did not finish (exited with status 1); no service was started.")
+            XCTAssertNotEqual(status.detail, "The database migrations did not finish (exited with status 1); no service was started and nothing was installed or changed.")
         }
 
         // The second boot got past the migration: the core was spawned after it. The children
