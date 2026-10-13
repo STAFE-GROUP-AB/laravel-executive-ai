@@ -69,6 +69,7 @@ From a clean checkout of the commit being released:
 composer install --no-dev --optimize-autoloader --no-interaction
 npm ci && npm run build        # public/build/** is git-ignored; without it the PWA ships with no CSS or JS
 php artisan package:discover
+rm -f database/*.sqlite*       # booting artisan touches an empty one; the runtime's database is in LEA_DATA_DIR
 ```
 
 Do **not** run `config:cache`, `route:cache` or `event:cache`: the assembler refuses those files
@@ -87,6 +88,12 @@ node packaging/runtime/assemble-runtime.mjs \
 # → packaging/build/runtime/0.1.0/{frankenphp,Caddyfile,php.ini,app/,manifest.json,SHA256SUMS}
 # → packaging/manifest/runtime.json: status "built", built_at, source_commit, package
 ```
+
+Measured 2026-10-13 on the real tree: **7 717 files, 179 995 683 bytes**, assembled in under four
+seconds; packed as a tarball it is 68 710 552 bytes. The default `--out` is
+`packaging/build/runtime/<version>`, which is inside `--app .` on purpose — `packaging/` is one of
+the excluded top-level entries, so the output cannot end up inside itself. Any other location inside
+the tree is refused.
 
 What goes into `app/`: everything except `.git`, `.github`, `.claude`, `node_modules`, `tests`,
 `storage`, `apps`, `packaging`, `docs`, `Mission`, the root `.env.example` and editor directories.

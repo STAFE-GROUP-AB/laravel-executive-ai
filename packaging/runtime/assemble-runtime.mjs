@@ -246,8 +246,20 @@ export function assembleRuntime({ binary, app, version, out, manifest: manifestP
 
     const appDirectory = resolve(app);
 
-    if (directory === appDirectory || directory.startsWith(`${appDirectory}${sep}`) || appDirectory.startsWith(`${directory}${sep}`)) {
+    if (directory === appDirectory || appDirectory.startsWith(`${directory}${sep}`)) {
         fail('--out must not be inside --app (or the other way round)');
+    }
+
+    // `--app .` with the default output is the documented release build (README §3), and the
+    // output then lives under `packaging/build/`. That is safe precisely because the walk never
+    // descends into an excluded top-level entry, so the output cannot copy itself. Any other
+    // location inside the tree would.
+    if (directory.startsWith(`${appDirectory}${sep}`)) {
+        const [top] = relative(appDirectory, directory).split(sep);
+
+        if (! EXCLUDED_APP_ENTRIES.has(top)) {
+            fail(`--out must not be inside --app unless it is under an excluded top-level entry (${top}/ is copied into the runtime)`);
+        }
     }
 
     const appFiles = listAppFiles(app);

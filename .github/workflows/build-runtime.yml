@@ -199,7 +199,12 @@ jobs:
           npm run build
           php artisan package:discover
           rm -rf node_modules
+          # Booting artisan creates an empty database/database.sqlite. The runtime's database lives
+          # in LEA_DATA_DIR (ADR-001 D4) and the assembler refuses any database file, so the
+          # tooling's own artefact is removed here rather than weakening that rule.
+          rm -f database/*.sqlite database/*.sqlite-wal database/*.sqlite-shm
           test -f public/build/manifest.json
+          test ! -f database/database.sqlite
 
       - name: Assemble the signed runtime directory
         id: assemble

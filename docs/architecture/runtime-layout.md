@@ -182,8 +182,18 @@ documents correctly. One behavioural difference from GNU libiconv is recorded in
 macOS reports `ICONV_IMPL=libiconv, ICONV_VERSION=1.11` and its `//TRANSLIT` output is weaker, so
 nothing may depend on `//TRANSLIT`.
 
-This binary was built on a developer Mac and is **proof, not product**: no Developer ID identity
-exists outside CI, so it is never signed, never assembled with `--status signed` and never shipped.
+Assembled into the ADR-001 D4 directory with the real Laravel tree (`composer install --no-dev`,
+`npm run build`, `package:discover`), the same measurement gives the package the installer copies:
+
+| | |
+|---|---|
+| `runtime/0.1.0/` | **7 717 files, 179 995 683 bytes** (201 MB on disk), assembled in 3.7 s |
+| Published tarball | **68 710 552 bytes** gzip; unpacking it and re-running the verifier's rules passes |
+| Contents | `frankenphp`, `Caddyfile`, `php.ini`, `app/` (the Laravel tree with `vendor/` and the built `public/build/` assets), `manifest.json`, `SHA256SUMS` |
+
+Both were produced on a developer Mac and are **proof, not product**: no Developer ID identity
+exists outside CI, so this binary is never signed, never assembled with `--status signed` and never
+published. The signed package differs from these numbers only by the binary's signature.
 
 ### How the directory reaches a user's Mac (S1-12)
 

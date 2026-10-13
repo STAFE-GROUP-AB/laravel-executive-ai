@@ -228,6 +228,29 @@ test('excludes tests, storage and node_modules from the app tree but keeps boots
     rmSync(root, { recursive: true, force: true });
 });
 
+test('`--app .` with the default output works: an out directory under an excluded entry is allowed', () => {
+    // What the release build does (README §3): the tree is the repository root and the output
+    // lands in packaging/build/, which the walk never descends into.
+    const root = tempDir();
+    const app = writeStubApp(root);
+    const binary = writeStubBinary(root);
+    const manifest = writeRuntimeJsonCopy(root);
+
+    const { directory, manifest: written } = assembleRuntime({
+        binary,
+        app,
+        version: '0.1.0',
+        out: join(app, 'packaging', 'build', 'runtime', '0.1.0'),
+        manifest,
+        sourceCommit: COMMIT,
+    });
+
+    assert.ok(directory.includes(join('packaging', 'build', 'runtime')));
+    assert.ok(! written.files.some((entry) => entry.path.includes('packaging/')), 'the output is not copied into itself');
+    assert.doesNotThrow(() => verifyRuntimeDirectory(directory));
+    rmSync(root, { recursive: true, force: true });
+});
+
 test('drops the committed .env.example from the top level but keeps refusing every other .env', () => {
     const root = tempDir();
     const app = writeStubApp(root);
@@ -291,6 +314,7 @@ test('refuses an incomplete app tree, an empty binary, a bad version and a versi
     expectRefusal(() => assembleRuntime({ ...base, binary, version: '1.0' }), /MAJOR\.MINOR\.PATCH/);
     expectRefusal(() => assembleRuntime({ ...base, binary, sourceCommit: 'abc' }), /40-character/);
     expectRefusal(() => assembleRuntime({ ...base, binary, out: join(stub, 'nested') }), /inside --app/);
+    expectRefusal(() => assembleRuntime({ ...base, binary, out: join(stub, 'public', 'runtime') }), /inside --app/);
     expectRefusal(() => assembleRuntime({ ...base, binary, sourceCommit: undefined }), /needs a source_commit/);
 
     const mismatched = writeRuntimeJsonCopy(join(root, 'm'), { runtime_version: '0.2.0' });
