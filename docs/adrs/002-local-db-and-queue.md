@@ -241,7 +241,14 @@ the user-corrected domain match included). Nothing in the text changed when it b
   `position` column; pure id sets (`customer_ids`, `contact_ids`, `assignee_user_ids`) are relations
   and come back ordered by id. `communications.account_id` and `source_records.external_account_id`
   are plain ULID columns until S2-03 lands `email_connections`, which is when they get their
-  foreign key.
+  foreign key. *(Amended 2026-10-13 by S2-03, #86: S2-03 landed `email_connections` and
+  `external_accounts` and deliberately did **not** add those two foreign keys. The first is
+  forbidden by S2-01's own frozen contract test — `communications` must reference no email table, so
+  the CRM projection survives a disconnected account — and the second would make the S0-18 fixture
+  pack unimportable, because the pack carries provider account ids with no connection row (accounts
+  are created by E3-1's connect flow, never by an import). Both stay plain ULID columns; the
+  cross-account boundary is enforced by the connection-scoped policies criterion 4 asks for, not by
+  referential integrity.)*
 - **Additions to the §3.1 minimum that E2-2 must pick up from other ADRs:** `push_subscriptions`
   (ADR-006, opt-in PWA Web Push: `endpoint`, `p256dh`, `auth`, `user_id`, `created_at`,
   `last_seen`, `revoked_at`; unique on `endpoint`). It follows the portable schema rules in D10 and
