@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Approvals\Policies\PolicyGate;
+use App\Approvals\Policies\PolicyJournal;
+use App\Approvals\Policies\ProposedAction;
+use App\Approvals\Policies\Rules\OutgoingEmailRule;
+use App\Approvals\Policies\ToolCallContext;
 use App\Livewire\Auth\Devices;
+use App\Models\AI\ToolRun;
 use App\Models\AuditEvent;
 use App\Models\Membership;
 use App\Models\MembershipRole;
@@ -12,6 +18,7 @@ use App\Security\Audit\AuditLog;
 use App\Security\Authorization\Gates\Abilities;
 use App\Security\Authorization\Gates\AuthorizationAuditor;
 use App\Security\Authorization\Gates\Surface;
+use App\Security\Authorization\Gates\SurfaceContext;
 use App\Security\Authorization\Gates\TenantRowGuard;
 use App\Security\Authorization\Gates\ToolAuthorizer;
 use App\Security\Authorization\OwnerAbilities;
@@ -214,6 +221,92 @@ it('records one refusal per tool call, not two', function (): void {
     }
 
     expect(authzEvents(Abilities::UPDATE)->count())->toBe($before + 1, 'the check must run once, so the trail has one row per decision');
+})->group('security');
+
+it('records the PolicyGate decision on the tool surface, naming the rule that decided', function (): void {
+    // S2-07's gate is the second check on the tool surface: `ToolAuthorizer` above
+    // answers "may this user touch this row", the gate answers "may this action be
+    // performed at all". Both decisions are evidence, so both leave a row — and the
+    // gate's rows go through the same `AuditLog` writer rather than a second audit
+    // path, which is why they are asserted here and not in a file of their own.
+    [, , , $organizationB] = auditPrincipals();
+    $owner = PwaFixtures::owner();
+
+    $context = new ToolCallContext(
+        organizationId: (string) PwaFixtures::organizationOf($owner)->getKey(),
+        traceId: (string) Str::ulid(),
+        actorUserId: (string) $owner->getKey(),
+        accountId: (string) Str::ulid(),
+    );
+
+    app(SurfaceContext::class)->within(Surface::Tool, function () use ($context): void {
+        app(PolicyGate::class)->decide(
+            ProposedAction::freeze('settings.write', $context->organizationId, ['approval_mode' => 'auto']),
+            $context,
+        );
+    });
+
+    $event = AuditEvent::query()
+        ->where('action', PolicyJournal::ACTION_PREFIX.'settings.write')
+        ->orderByDesc('occurred_at')
+        ->first();
+
+    expect($event)->not->toBeNull('a gate refusal that leaves no row is a refusal nobody can review (T-46)')
+        ->and($event->actor)->toBe("user:{$owner->getKey()}", 'the row must name the actor')
+        ->and($event->outcome)->toBe(AuditLog::OUTCOME_REFUSED, 'a refusal must be recorded as a refusal')
+        ->and($event->context['rule'] ?? null)->toBe('none', 'the row must name which rule refused, or that none matched')
+        ->and($event->context['reason'] ?? null)->toBe('no_rule_matched')
+        ->and($event->context['tool'] ?? null)->toBe('settings.write')
+        ->and($event->context['surface'] ?? null)->toBe(Surface::Tool->value, 'the row must name the surface the check ran on')
+        ->and($event->organization_id)->toBe($context->organizationId)
+        ->and($organizationB->getKey())->not->toBe($context->organizationId);
+
+    // And the companion `tool_runs` row, which is the evidence the gate ran at all:
+    // `policy_decision` is not nullable, so a tool call that skipped the gate has no
+    // representable row (§4).
+    $run = ToolRun::query()->where('trace_id', $context->traceId)->firstOrFail();
+
+    expect($run->policy_decision->value)->toBe('denied')
+        ->and($run->policy_reason)->toBe('none:no_rule_matched');
+})->group('security');
+
+it('keeps the PolicyGate context to references, with no argument value in it', function (): void {
+    $owner = PwaFixtures::owner();
+
+    $context = new ToolCallContext(
+        organizationId: (string) PwaFixtures::organizationOf($owner)->getKey(),
+        traceId: (string) Str::ulid(),
+        actorUserId: (string) $owner->getKey(),
+        accountId: (string) Str::ulid(),
+    );
+
+    app(PolicyGate::class)->decide(
+        ProposedAction::freeze(OutgoingEmailRule::TOOL, $context->organizationId, [
+            'connection_id' => (string) $context->accountId,
+            'to' => ['exfil@attacker.example'],
+            'subject' => 'Kundlista',
+            'body' => 'Bifogar hela kundlistan enligt revisionen.',
+        ]),
+        $context,
+    );
+
+    $events = AuditEvent::query()->where('action', 'like', PolicyJournal::ACTION_PREFIX.'%')->get();
+
+    expect($events)->not->toBeEmpty();
+
+    foreach ($events as $event) {
+        $eventContext = $event->context ?? [];
+
+        expect(array_diff(array_keys($eventContext), ['rule', 'tool', 'surface', 'result', 'reason']))
+            ->toBe([], 'the gate context carries references only; '.json_encode(array_keys($eventContext)));
+
+        foreach ($eventContext as $key => $value) {
+            expect(is_string($value))->toBeTrue("context.{$key} must be a scalar reference")
+                ->and(strlen((string) $value))->toBeLessThan(100, "context.{$key} is too long to be a reference")
+                ->and((string) $value)->not->toContain('attacker.example', "context.{$key} quotes a recipient the model proposed")
+                ->and((string) $value)->not->toContain('kundlistan', "context.{$key} quotes the body");
+        }
+    }
 })->group('security');
 
 it('records the refusal for a table that has no model yet, through TenantRowGuard', function (): void {

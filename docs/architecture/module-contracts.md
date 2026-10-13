@@ -27,6 +27,11 @@ Shared primitives:
 - **Policy** — `App\Approvals\Policies\PolicyDeniedException` is the base of every server-side refusal
   (`WorkspaceAccessDeniedException`, `AutomationDeniedException`, `SendRefusedException`). One catch at
   the agent loop turns any denial into a tool result the model can read without anything having executed.
+  S2-07 adds the `PolicyGate`'s own eight, one per §4 check, through the intermediate `PolicyRefusal`:
+  `NoRuleMatched`, `PayloadNotFrozen`, `InvalidToolInput`, `ScopeViolation`, `DataClassViolation`,
+  `DestinationNotAllowed`, `BudgetViolation`, `ApprovalRequired`. A caller that cares about one failure
+  catches the subclass; the agent loop's single catch still sees the base
+  ([policy-gate.md §5](policy-gate.md)).
 - **Authorized action types** — `AuthorizedUiAction` and `ApprovedOutgoingEmail` are the only inputs
   that make something happen outside the machine. Both carry `proposalId`, `approvalId`,
   `approverUserId`, a content hash, `nonce`, `approvedAt`, `expiresAt`; both may be constructed only
