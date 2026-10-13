@@ -35,6 +35,7 @@ struct ServiceSpec: ProcessLaunch, Equatable, Sendable {
     static func coreServices(runtime: InstalledRuntime, paths: InstallPaths, port: Int, secretsSocket: URL) -> [ServiceSpec] {
         let environment = childEnvironment(runtime: runtime, paths: paths, port: port, secretsSocket: secretsSocket)
         let frankenphp = frankenphp(in: runtime)
+        let artisan = Self.artisan
 
         return [
             ServiceSpec(
@@ -47,21 +48,65 @@ struct ServiceSpec: ProcessLaunch, Equatable, Sendable {
             ServiceSpec(
                 name: .worker,
                 executable: frankenphp,
-                arguments: [
-                    "php-cli", "app/artisan", "queue:work", "database",
+                arguments: artisan([
+                    "queue:work", "database",
                     "--queue=briefs,email-sync,default,ai", "--sleep=3", "--tries=3",
-                ],
+                ]),
                 workingDirectory: runtime.directory,
                 environment: environment
             ),
             ServiceSpec(
                 name: .scheduler,
                 executable: frankenphp,
-                arguments: ["php-cli", "app/artisan", "schedule:work"],
+                arguments: artisan(["schedule:work"]),
                 workingDirectory: runtime.directory,
                 environment: environment
             ),
         ]
+    }
+
+    /// The argument vector that runs an artisan command under FrankenPHP's `php-cli`.
+    ///
+    /// **`php-cli` does not lay out `$argv` the way a normal PHP CLI does.** Measured on the
+    /// shipped binary (FrankenPHP 1.13.0, PHP 8.5.11) with a script that printed its own `$argv`:
+    ///
+    ///     frankenphp php-cli script.php migrate --force
+    ///     0 => …/frankenphp      ← the binary keeps index 0
+    ///     1 => script.php        ← the script, where a normal CLI puts the first argument
+    ///     2 => migrate
+    ///     3 => --force
+    ///
+    /// `$_SERVER['argv']` is identical, and Symfony's `ArgvInput` drops exactly one element to
+    /// skip the script name. So artisan read `app/artisan` as the command name and answered
+    /// `Command "app/artisan" is not defined` — which is what the owner's `migrate.log` said on
+    /// 2026-10-13, and what the queue worker and the scheduler would have said too, because all
+    /// three were spawned the same way. The core is unaffected: `run --config Caddyfile` is a
+    /// Caddy command, not a PHP script.
+    ///
+    /// Rather than compensate for the shift — which would be wrong again the day `php-cli` behaves
+    /// like a normal CLI, and FrankenPHP already gates some `php-cli` behaviour on the PHP version
+    /// — this **states** the argument vector artisan should see and then loads it. `$argv` and
+    /// `$argc` are both set because `ArgvInput` reads `$_SERVER['argv']` while other code reads
+    /// `$argv`, and `require` resolves against the working directory, which every spec sets to the
+    /// runtime directory.
+    ///
+    /// The bootstrap is a fixed string with the command words in it verbatim, so the argv guard in
+    /// `SupervisorMigrationsTests` still greps the whole vector for `migrate:fresh`, `db:wipe` and
+    /// the rest and would still fail on one.
+    ///
+    /// Known cosmetic effect: artisan's `#!/usr/bin/env php` shebang is echoed, because PHP only
+    /// strips one for the primary script and not for a required file. One line per start, in the
+    /// child's own log. Not worth a second mechanism to suppress.
+    static func artisan(_ command: [String]) -> [String] {
+        let literals = (["artisan"] + command)
+            .map { "'" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'") + "'" }
+            .joined(separator: ", ")
+
+        let bootstrap = "$_SERVER['argv'] = $argv = [\(literals)]; "
+            + "$_SERVER['argc'] = $argc = \(command.count + 1); "
+            + "require 'app/artisan';"
+
+        return ["php-cli", "-r", bootstrap]
     }
 
     /// One dictionary for every child, built once per boot: the three services and the migration
@@ -105,7 +150,7 @@ struct OneShotSpec: ProcessLaunch, Equatable, Sendable {
         OneShotSpec(
             logName: "migrate",
             executable: ServiceSpec.frankenphp(in: runtime),
-            arguments: ["php-cli", "app/artisan", "migrate", "--force"],
+            arguments: ServiceSpec.artisan(["migrate", "--force"]),
             workingDirectory: runtime.directory,
             environment: ServiceSpec.childEnvironment(runtime: runtime, paths: paths, port: port, secretsSocket: secretsSocket)
         )
