@@ -47,9 +47,29 @@ export function writeStubBinary(root) {
     return write(root, 'frankenphp-stub', '#!/bin/sh\necho "FrankenPHP stub (not a runtime)"\n');
 }
 
-/** A copy of the committed runtime.json to mutate in tests. */
+/**
+ * A copy of the committed runtime.json to mutate in tests, reset to the `unbuilt` state.
+ *
+ * What a test wants from the committed file is its *pins* — the component versions, the signing
+ * identifier, the HTTP shape — not the build state of whatever package `main` happens to publish
+ * at the time. Carrying that state over made two tests pass only while `runtime.json` was
+ * `unbuilt`: one expected `recordArtifact` to refuse a manifest that is not yet signed, the other
+ * expected the assembler to demand a `source_commit` that the copy already supplied. Both broke
+ * the moment the first real package was pinned. Resetting here keeps every test's starting point
+ * independent of the release state; a test that wants a built or signed copy passes it in
+ * `overrides`, and the one test that asserts things about the *real* document reads
+ * `COMMITTED_RUNTIME_JSON` directly instead of going through this helper.
+ */
 export function writeRuntimeJsonCopy(root, overrides = {}) {
-    const document = { ...JSON.parse(readFileSync(COMMITTED_RUNTIME_JSON, 'utf8')), ...overrides };
+    const document = {
+        ...JSON.parse(readFileSync(COMMITTED_RUNTIME_JSON, 'utf8')),
+        status: 'unbuilt',
+        built_at: null,
+        source_commit: null,
+        package: null,
+        artifact: null,
+        ...overrides,
+    };
     const path = join(root, 'runtime.json');
     mkdirSync(root, { recursive: true });
     writeFileSync(path, `${JSON.stringify(document, null, 4)}\n`);

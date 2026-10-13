@@ -180,7 +180,9 @@ jobs:
             echo
             echo '```'
             cat "$OUT_DIR/frankenphp-version.txt"
-            grep -E '^[[:space:]]*(go|build[[:space:]]+-tags=)' "$OUT_DIR/go-modules.txt" || true
+            # `go version -m` prints the toolchain on its header line as `<path>: go1.27.2`, not
+            # as an indented key, so the toolchain and the build tags need two different anchors.
+            grep -E '(: go1\.|^[[:space:]]*build[[:space:]]+-tags=)' "$OUT_DIR/go-modules.txt" || true
             echo "licence notice files: $notices"
             echo "GPL/LGPL/AGPL notices: $copyleft (gate requires 0)"
             echo "GNU libiconv in the notice set: $gnu_iconv (requires 0)"

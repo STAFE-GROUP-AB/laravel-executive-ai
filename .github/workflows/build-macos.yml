@@ -37,6 +37,12 @@ on:
     paths:
       - 'apps/macos/**'
       - 'packaging/signing/**'
+      # The pinned runtime manifest and the assembler decide what ends up inside
+      # Contents/Resources/runtime, so a change to either changes the image. Without these two
+      # lines the first pin of a real package (PR #118) reached `main` without any pull-request
+      # run having downloaded the asset, checked its digest or unpacked it.
+      - 'packaging/manifest/**'
+      - 'packaging/runtime/**'
       - '.github/workflows/build-macos.yml'
 
 permissions:
