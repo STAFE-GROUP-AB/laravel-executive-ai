@@ -13,6 +13,9 @@ import SystemConfiguration
 struct SystemPreflightProbes: PreflightProbes {
     /// Executables whose signatures the self-check validates (§6.10, ADR-003 D5).
     struct SignedExecutable: Sendable {
+        /// Where the app build embeds the Supervisor helper bundle (A24, ADR-001 D3 as amended).
+        static let supervisorBundlePath = "Contents/Helpers/LaravelExecutiveAISupervisor.app"
+
         let name: String
         let url: URL
     }
@@ -34,7 +37,9 @@ struct SystemPreflightProbes: PreflightProbes {
     ) {
         var executables = [SignedExecutable(name: "app", url: bundle.bundleURL)]
 
-        let supervisor = bundle.bundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor")
+        // The Supervisor is a helper application bundle, so the whole bundle is checked (A24):
+        // its signature seals the inner executable, its Info.plist and its provisioning profile.
+        let supervisor = bundle.bundleURL.appending(path: SignedExecutable.supervisorBundlePath)
 
         if FileManager.default.fileExists(atPath: supervisor.path) {
             executables.append(SignedExecutable(name: "supervisor", url: supervisor))

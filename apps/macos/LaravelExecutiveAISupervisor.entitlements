@@ -3,12 +3,24 @@
 <plist version="1.0">
 <dict>
 	<!-- ADR-003 D2/D5: the Supervisor is the only process in the shared secrets access group.
-	     `$(AppIdentifierPrefix)` becomes `<TEAMID>.` once A12 provides a signing identity; in an
-	     unsigned build (CI, local dev) the entitlement is never applied and the data-protection
-	     keychain is unreachable, so SecItemKeychainStore fails closed there. No App Sandbox:
-	     the Supervisor spawns non-sandboxed FrankenPHP children (ADR-003 D5). -->
+	     `$(AppIdentifierPrefix)` becomes `<TEAMID>.` at signing time (Xcode expands it in a signed
+	     Xcode build; `packaging/signing/sign.sh` expands it itself because codesign does not). In an
+	     unsigned build (CI, local dev) the entitlements are never applied and the data-protection
+	     keychain is unreachable, so SecItemKeychainStore fails closed there. No App Sandbox: the
+	     Supervisor spawns non-sandboxed FrankenPHP children (ADR-003 D5).
+
+	     Both keys below are *restricted* entitlements: macOS validates them at launch against the
+	     Developer ID provisioning profile embedded in the helper bundle
+	     (`Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/embedded.provisionprofile`),
+	     which is why the Supervisor is a bundle and not a bare tool (A24, decided 2026-10-11).
+	     They mirror the profile, which carries `com.apple.application-identifier` =
+	     `<TEAMID>.se.stafe.executive-ai.supervisor` and `keychain-access-groups` = `<TEAMID>.*`.
+	     `com.apple.developer.team-identifier` is in the profile too but is not requested here:
+	     nothing in the product shares a keychain group or app group across applications. -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
+	<key>com.apple.application-identifier</key>
+	<string>$(AppIdentifierPrefix)se.stafe.executive-ai.supervisor</string>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)se.stafe.executive-ai.secrets</string>

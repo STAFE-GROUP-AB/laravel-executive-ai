@@ -4,6 +4,7 @@
 |---|---|
 | **Status** | Proposed — awaiting DRI (Andreas) sign-off and the Sprint 1 clean-Mac prototype (S1-06) |
 | **Date** | 2026-10-10 |
+| **Amended** | 2026-10-11 (A24, delegated to ENG): **D3**'s container only — the Supervisor is a helper application bundle at `Contents/Helpers/LaravelExecutiveAISupervisor.app` with an embedded Developer ID provisioning profile, because a bare Mach-O carrying `keychain-access-groups` is SIGKILLed. Process model unchanged. |
 | **Deciders** | A (macOS/Swift) DRI, B (Laravel platform) DRI; reviewer H (Security/privacy); Owner Andreas for every licensing conclusion (OPEN-QUESTIONS §15.2 is `ENG+ANDREAS`) |
 | **Closes** | Blueprint §15 item 2 in full; §15 item 1 inputs (macOS floor, Intel yes/no) for S0-22; OPEN-QUESTIONS §15.1, §15.2, A5 (reading), A12 (dependency recorded, not resolved) |
 
@@ -92,14 +93,34 @@ App-Sandboxed (it must bind loopback, spawn children and read `~/Library`), and 
 
 ### D3. Processes and lifecycle: one SMAppService launch agent, the Supervisor
 
+> **Amended 2026-10-11 (A24, delegated to ENG).** The Supervisor's *container* changed: it is a
+> headless helper **application bundle** at
+> `Contents/Helpers/LaravelExecutiveAISupervisor.app`, not a bare Mach-O at `Contents/MacOS/`.
+> Evidence: the first Developer-ID-signed build (7a74ef5, CI run 38120770614) was launched directly
+> on the owner's Mac on 2026-10-11 and died with **exit 137 (SIGKILL)** — macOS validates the
+> restricted `keychain-access-groups` entitlement at launch against an embedded provisioning
+> profile, and a bare Mach-O cannot carry `Contents/embedded.provisionprofile`. **ADR-003 D5 was
+> right about this** and said so from the start. Nothing else in D3 changes: one LaunchAgent, one
+> `SMAppService` job, the same process model, the same restart policy, the same code. The bullets
+> below are written as amended; `packaging/signing/README.md` §5 records the lab run and the
+> re-test.
+
 Exactly one launchd job is registered, and it is a **LaunchAgent**, not a daemon:
 
-- Executable: `Contents/MacOS/LaravelExecutiveAISupervisor` (headless Swift, signed with the app's
-  Team ID, inside the app bundle so `SMAppService` can own it).
+- Executable:
+  `Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor`
+  (headless Swift — `LSUIElement` + `LSBackgroundOnly`, no window, no Dock icon — signed with the
+  app's Team ID and carrying its own Developer ID provisioning profile, inside the app bundle so
+  `SMAppService` can own it).
 - Plist: `Contents/Library/LaunchAgents/com.stafe.laravelexecutiveai.supervisor.plist`
   (`com.stafe.laravelexecutiveai` is a **placeholder bundle-id prefix until A12 is decided**), with
   `BundleProgram` → the executable above, `KeepAlive` → `true`, `ThrottleInterval` → `10`,
-  `ProcessType` → `Background`, `ExitTimeOut` → `30`, `AssociatedBundleIdentifiers` → the app.
+  `ProcessType` → `Background`, `ExitTimeOut` → `30`, `AssociatedBundleIdentifiers` → the app **and
+  the helper bundle** (Login Items attributes the job to either, `man 5 launchd.plist`).
+- Entitlements: hardened runtime, no App Sandbox, and the two restricted entitlements ADR-003 D5
+  requires (`keychain-access-groups`, `com.apple.application-identifier`), authorised by the
+  Developer ID profile embedded at
+  `Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/embedded.provisionprofile`.
 - Registered with `SMAppService.agent(plistName:)` → `register()` from the installer's
   `BOOT_SERVICES` state; status read via `SMAppService.status`; `openSystemSettingsLoginItems()`
   offered if status is `.requiresApproval`.

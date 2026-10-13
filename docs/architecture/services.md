@@ -12,7 +12,7 @@
 ```
 launchd (the user's Aqua session)
 └── <prefix>.supervisor                      LaunchAgent, KeepAlive, ThrottleInterval 10 s
-    └── LaravelExecutiveAISupervisor         Contents/MacOS/, headless Swift, the only Keychain writer
+    └── LaravelExecutiveAISupervisor         Contents/Helpers/…app, headless Swift, the only Keychain writer
         ├── frankenphp run --config Caddyfile                               core      (loopback HTTP)
         ├── frankenphp php-cli app/artisan queue:work database …            worker
         └── frankenphp php-cli app/artisan schedule:work                    scheduler (+ schedule:run grandchildren)
@@ -27,21 +27,35 @@ Supervisor, each with a different peer and trust model (ipc-contract §0):
 | Control (XPC) | Mach service `<prefix>.supervisor.control` (declared in the plist's `MachServices`) | the GUI app | `setCodeSigningRequirement` on both ends (ipc-contract §7) |
 | Health probes | `http://127.0.0.1:<port>/health/live` and `/health/ready` | the core | `/health/ready` with the Supervisor's own `supervisor`-scoped token, request and response signed (ipc-contract §2, §4) |
 
-ADR-001 D3 places the executable at `Contents/MacOS/LaravelExecutiveAISupervisor`; that is what
-is built (a `com.apple.product-type.tool` target embedded by the app target, plist copied to
-`Contents/Library/LaunchAgents/`). ADR-003 D5 expects the Supervisor to be a *bundle*
-(`Contents/Helpers/LaravelExecutiveAISupervisor.app`) because `keychain-access-groups` is a
-restricted entitlement that needs an embedded provisioning profile. The two ADRs disagree on the
-container, not on the process model. S1-12 (signing) decides: if the data-protection keychain
-refuses a bare tool, the target's product type changes to an application bundle and
-`BundleProgram` gains `…app/Contents/MacOS/…` — a one-line plist change and a pbxproj
-product-type change, nothing in the code. Flagged for the ADR owners in the PR.
+**The container (A24, decided 2026-10-11).** The Supervisor is a headless helper **application
+bundle** at `Contents/Helpers/LaravelExecutiveAISupervisor.app` (a
+`com.apple.product-type.application` target embedded by the app target through a Wrapper copy phase
+into `Contents/Helpers`, with the agent plist copied to `Contents/Library/LaunchAgents/`), and the
+plist's `BundleProgram` is
+`Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor`.
+
+ADR-001 D3 originally placed a bare Mach-O at `Contents/MacOS/LaravelExecutiveAISupervisor` while
+ADR-003 D5 required a bundle, because `keychain-access-groups` is a restricted entitlement that
+macOS validates at launch against an embedded provisioning profile — which only a bundle can carry.
+The first Developer-ID-signed build settled it on hardware: launched directly on the owner's Mac on
+2026-10-11, the bare tool (build 7a74ef5, CI run 38120770614) was **SIGKILLed, exit 137**. ADR-003
+D5 was right and **ADR-001 D3 is amended**. The process model never changed, and neither did the
+Supervisor's code — only the product type, the embed destination, that one plist path, and
+`SupervisorIdentity`, which now has to resolve the *outer* app's identifier because the innermost
+enclosing `.app` is the helper itself (§2 step 1). The signing pipeline writes the Developer ID
+profile into `…app/Contents/embedded.provisionprofile` before signing and refuses to sign without
+it (`packaging/signing/README.md` §1, §5).
 
 ## 2. Boot sequence (`SupervisorRuntime.boot()`)
 
-1. Resolve identity (`SupervisorIdentity`): bundle prefix from the enclosing `.app`'s
-   `CFBundleIdentifier`, Team ID from the running process's own signature. No Team ID → no Keychain
-   access group, no code-signing requirement → everything that depends on a signature fails closed.
+1. Resolve identity (`SupervisorIdentity`): bundle prefix from the **app's** `CFBundleIdentifier`,
+   Team ID from the running process's own signature. Since A24 the Supervisor runs from a helper
+   bundle nested in the app, so the app is found through the helper's `LXAIAppBundleIdentifier`
+   Info.plist key, falling back to the *outermost* enclosing `.app` — walking up to the first one
+   would answer `<prefix>.supervisor` and every derived name (Mach service, plist name, Application
+   Support directory) would be wrong. `LXAI_BUNDLE_PREFIX` overrides both in tests and in the lab.
+   No Team ID → no Keychain access group, no code-signing requirement → everything that depends on
+   a signature fails closed.
 2. Resolve the installed runtime (`runtime/current` → `runtime/<version>/`) and the loopback port
    from `install/checkpoint.json` (`preflight.port`). Missing either → exit 78; launchd retries
    every 10 s, which is the right cadence for "the installer has not finished yet".

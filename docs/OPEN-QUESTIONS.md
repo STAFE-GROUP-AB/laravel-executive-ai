@@ -521,7 +521,7 @@ that build. Both findings remain open; the steps that follow the decision (sign 
 `allow-jit` only, re-assemble `--status signed`, copy into the bundle) are listed in
 `packaging/signing/README.md` §4 and `docs/operations/release-build.md` §5.
 
-### A24 — The Supervisor's container: bare tool (ADR-001 D3) or helper bundle (ADR-003 D5)
+### A24 — The Supervisor's container: bare tool (ADR-001 D3) or helper bundle (ADR-003 D5) — DECIDED 2026-10-11
 ADR-001 D3 places the Supervisor at `Contents/MacOS/LaravelExecutiveAISupervisor` (a bare Mach-O,
 `BundleProgram` points straight at it); ADR-003 D5 says it "must be packaged as a bundle
 (`Contents/Helpers/LaravelExecutiveAISupervisor.app`) … with a Developer ID provisioning profile
@@ -551,6 +551,41 @@ ADR is wrong gets amended in the same PR.
    expansion then moves back to Xcode. The exact commands and the pass/fail criteria for the lab run
    are the checklist in `packaging/signing/README.md` §5; the verdict is recorded here and in
    services.md §1 in the same PR as the ADR amendment (S1-14 lab Mac).
+
+**DECIDED 2026-10-11 (lab verdict; delegated to ENG): the helper bundle. ADR-003 D5 was right;
+ADR-001 D3 is amended.** The first Developer-ID-signed image (build 7a74ef5, CI run 38120770614)
+was mounted on the owner's Mac and `Contents/MacOS/LaravelExecutiveAISupervisor` was launched
+directly: it terminated immediately with **exit 137 (SIGKILL)** — prediction 2 above, confirmed.
+macOS validates a restricted entitlement (`keychain-access-groups`) at launch against a
+provisioning profile embedded in the signed bundle, and a bare Mach-O cannot carry one. Note that
+`codesign --verify` had passed in CI on the same binary, which is exactly why finding 1 says a green
+signing report decides nothing here.
+
+What now ships (this PR):
+- the Supervisor target is `com.apple.product-type.application` with its own `Info.plist`
+  (`LSUIElement`, `LSBackgroundOnly`, `CFBundlePackageType APPL`, and `LXAIAppBundleIdentifier`
+  naming the app), embedded by the app at `Contents/Helpers/LaravelExecutiveAISupervisor.app`;
+- `BundleProgram` =
+  `Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor`,
+  and `AssociatedBundleIdentifiers` lists the app **and** the helper so Login Items attributes the
+  job either way;
+- the entitlements file adds `com.apple.application-identifier`, mirroring the profile;
+- `SupervisorIdentity` resolves the **outer** app's identifier (the innermost enclosing `.app` is
+  now the helper itself, which would have poisoned the Mach service name, the plist name and the
+  Application Support path);
+- `packaging/signing/sign.sh` decodes the new repository secret `APPLE_SUPERVISOR_PROFILE` into
+  `…app/Contents/embedded.provisionprofile` before signing the helper, and **fails closed** without
+  it — no override, since the only build such an override could produce is one whose Supervisor
+  macOS kills. The profile (Developer ID, `MAC_APP_DIRECT`, bundle id
+  `se.stafe.executive-ai.supervisor`) was created through the App Store Connect API and carries
+  `keychain-access-groups` = `[<TEAM ID>.*]` plus
+  `com.apple.application-identifier` = `<TEAM ID>.se.stafe.executive-ai.supervisor`. Nothing about
+  it is committed.
+
+Nothing in the Supervisor's code or process model changed. **Re-test on the next signed image**
+(`packaging/signing/README.md` §5): the helper's inner executable, launched directly, must now run
+and exit **78** (`EX_CONFIG` — no runtime installed yet, A23) instead of 137. A24 stays `DECIDED`
+unless that re-test fails, in which case the profile/bundle-id pairing is the first suspect.
 
 ### A25 — A keep-data uninstall deletes `core.app-key` while keeping the database (ADR-003 D8)
 S1-13 (#41) ships the ADR-003 D8 promise literally: uninstall deletes **every**

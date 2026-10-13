@@ -198,20 +198,31 @@ as a reopen condition, not pursued in v1. Mac App Store distribution is out of s
 | Executable | Hardened runtime | Sandbox | Keychain | Other |
 |---|---|---|---|---|
 | `LaravelExecutiveAI.app` (GUI) | yes | no | default private group only (its S0-15 token, if stored) | none |
-| `LaravelExecutiveAISupervisor` | yes | no | `keychain-access-groups: [<TEAMID>.se.stafe.executive-ai.secrets]` | none |
+| `LaravelExecutiveAISupervisor` (the helper bundle, `Contents/Helpers/…app`) | yes | no | `keychain-access-groups: [<TEAMID>.se.stafe.executive-ai.secrets]` | `com.apple.application-identifier: <TEAMID>.se.stafe.executive-ai.supervisor`; both are restricted, so a Developer ID provisioning profile is embedded in the bundle (A24) |
 | FrankenPHP (`frankenphp`) | yes | no | **none** | `com.apple.security.cs.allow-jit` (ADR-001) |
 | Peekaboo automation helper (ADR-005) | yes | no | **none** | TCC grants (Screen Recording, Accessibility) attach to this process, not to the GUI app (E12) |
 
-**Packaging implication for A (verify in the S1 prototype):** `keychain-access-groups` and
-`com.apple.application-identifier` are restricted entitlements that Apple enforces "through code
+**Packaging implication for A — CONFIRMED on hardware 2026-10-11 (A24):** `keychain-access-groups`
+and `com.apple.application-identifier` are restricted entitlements that Apple enforces "through code
 signing, provisioning profiles, and the Apple Developer Program" (E17). A bare Mach-O cannot embed a
 provisioning profile, so the Supervisor must be packaged as a bundle
 (`Contents/Helpers/LaravelExecutiveAISupervisor.app`, referenced by the agent plist's
-`BundleProgram`, as ADR-001 D3 now specifies) with a Developer ID provisioning profile embedded. If the prototype shows the data
-protection keychain is unusable for a Developer-ID helper, the fallback is the file-based login
-keychain with a code-signing ACL (`SecAccess` trusted application by designated requirement) in the
-Supervisor's own keychain — same broker, same contract, weaker isolation (ACL prompts, no access
-groups). The fallback is **not** the plan.
+`BundleProgram`) with a Developer ID provisioning profile embedded.
+
+This was the one point on which ADR-001 D3 and this ADR disagreed (A24), and the first
+Developer-ID-signed build settled it: launched directly on the owner's Mac on 2026-10-11, the bare
+tool from build 7a74ef5 (CI run 38120770614) was killed on the spot — **exit 137 (SIGKILL)** —
+exactly the AMFI behaviour predicted here. `codesign --verify` had passed in CI, which is why only
+the launch could decide it. **ADR-001 D3 is amended accordingly**; the sentence above stands as
+written. The helper's profile carries `keychain-access-groups` = `[<TEAM ID>.*]` and
+`com.apple.application-identifier` = `<TEAM ID>.se.stafe.executive-ai.supervisor`, and the
+entitlements file requests exactly those two (plus `app-sandbox: false`). Procedure, secret and
+re-test: `packaging/signing/README.md` §1, §2 (`APPLE_SUPERVISOR_PROFILE`) and §5.
+
+If a later run shows the data protection keychain is still unusable for a Developer-ID helper, the
+fallback is the file-based login keychain with a code-signing ACL (`SecAccess` trusted application
+by designated requirement) in the Supervisor's own keychain — same broker, same contract, weaker
+isolation (ACL prompts, no access groups). The fallback is **not** the plan.
 
 ### D6. SQLCipher: **no for v1**, designed so it can be turned on later
 

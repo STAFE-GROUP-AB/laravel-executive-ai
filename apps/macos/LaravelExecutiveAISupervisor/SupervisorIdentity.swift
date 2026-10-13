@@ -1,14 +1,20 @@
 // Who the Supervisor is: the bundle prefix (A12 placeholder), the app it belongs to, the Mach
-// service it serves and the Team ID it verifies peers against. A bare tool has no
-// `bundleIdentifier`, so the prefix comes from the enclosing `.app`'s Info.plist, with the
-// `LXAI_BUNDLE_PREFIX` environment variable as the test/lab override and the xcconfig default
-// as the last resort.
+// service it serves and the Team ID it verifies peers against. The prefix comes from the *app's*
+// bundle identifier, not the Supervisor's own: since A24 the Supervisor is a helper application
+// bundle inside the app (`Contents/Helpers/LaravelExecutiveAISupervisor.app`), so its own
+// identifier is `<prefix>.supervisor` and the innermost enclosing `.app` is itself. The app is
+// found through the helper's `LXAIAppBundleIdentifier` Info.plist key, falling back to the
+// outermost enclosing `.app`, with the `LXAI_BUNDLE_PREFIX` environment variable as the test/lab
+// override and the xcconfig default as the last resort.
 
 import Foundation
 import Security
 
 struct SupervisorIdentity: Equatable, Sendable {
     static let defaultBundlePrefix = "se.stafe.executive-ai"
+
+    /// Info.plist key in the helper bundle naming the app it is embedded in (A24).
+    static let appBundleIdentifierInfoKey = "LXAIAppBundleIdentifier"
 
     let bundlePrefix: String
     /// Team ID of the running process's signature; nil in an unsigned build.
@@ -41,19 +47,36 @@ struct SupervisorIdentity: Equatable, Sendable {
         identifier.hasSuffix(".app") ? String(identifier.dropLast(4)) : identifier
     }
 
-    /// Walks up from `Contents/MacOS/<tool>` to the `.app` and reads its `CFBundleIdentifier`.
+    /// The bundle identifier of the **app** the executable belongs to, resolved from
+    /// `…/LaravelExecutiveAI.app/Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/…`.
+    ///
+    /// Walking up to the *first* `.app` would find the helper itself and answer
+    /// `<prefix>.supervisor`, which would then make every derived name wrong (the Mach service,
+    /// the plist name, the Application Support directory). So the helper's own
+    /// `LXAIAppBundleIdentifier` key wins when it is present, and the fallback is the *outermost*
+    /// enclosing `.app` — the app that contains the helper, never the helper.
     static func enclosingAppBundleIdentifier(of executable: URL) -> String? {
         var url = executable.deletingLastPathComponent()
+        var declared: String?
+        var outermost: String?
 
         while url.pathComponents.count > 1 {
-            if url.pathExtension == "app", let bundle = Bundle(url: url), let identifier = bundle.bundleIdentifier {
-                return identifier
+            if url.pathExtension == "app", let bundle = Bundle(url: url) {
+                if declared == nil,
+                   let value = bundle.object(forInfoDictionaryKey: appBundleIdentifierInfoKey) as? String,
+                   !value.isEmpty {
+                    declared = value
+                }
+
+                if let identifier = bundle.bundleIdentifier {
+                    outermost = identifier
+                }
             }
 
             url = url.deletingLastPathComponent()
         }
 
-        return nil
+        return declared ?? outermost
     }
 
     static func runningTeamIdentifier() -> String? {

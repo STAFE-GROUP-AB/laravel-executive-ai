@@ -1,6 +1,7 @@
-// The build wires the Supervisor into the app bundle exactly as ADR-001 D3 says: the executable
-// at Contents/MacOS/, the agent plist at Contents/Library/LaunchAgents/, and the plist's keys.
-// The test host is the built app, so this is the real bundle.
+// The build wires the Supervisor into the app bundle exactly as ADR-001 D3 (amended by A24) says:
+// a helper application bundle at Contents/Helpers/LaravelExecutiveAISupervisor.app, the agent
+// plist at Contents/Library/LaunchAgents/, and the plist's keys. The test host is the built app,
+// so this is the real bundle.
 
 import Foundation
 import XCTest
@@ -11,10 +12,35 @@ final class SupervisorBundleTests: XCTestCase {
         SupervisorIdentity.bundlePrefix(fromAppIdentifier: Bundle.main.bundleIdentifier ?? "")
     }
 
-    func testSupervisorExecutableIsEmbedded() {
-        let executable = Bundle.main.bundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor")
+    private var helperBundleURL: URL {
+        Bundle.main.bundleURL.appending(path: SystemPreflightProbes.SignedExecutable.supervisorBundlePath)
+    }
+
+    func testSupervisorExecutableIsEmbeddedInTheHelperBundle() {
+        let executable = helperBundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor")
 
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: executable.path), executable.path)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: Bundle.main.bundleURL.appending(path: "Contents/MacOS/LaravelExecutiveAISupervisor").path),
+            "the bare tool is gone: a restricted entitlement needs the bundle's embedded profile (A24)"
+        )
+    }
+
+    /// A24: the helper is an application bundle so it can carry `embedded.provisionprofile`, it is
+    /// headless (no Dock icon, no app switcher entry), and it names the app it belongs to so
+    /// `SupervisorIdentity` does not mistake the helper's own identifier for the app's.
+    func testHelperBundleIsAHeadlessApplicationThatNamesItsApp() throws {
+        let helper = try XCTUnwrap(Bundle(url: helperBundleURL))
+
+        XCTAssertEqual(helper.bundleIdentifier, "\(prefix).supervisor")
+        XCTAssertEqual(helper.object(forInfoDictionaryKey: "CFBundlePackageType") as? String, "APPL")
+        XCTAssertEqual(helper.object(forInfoDictionaryKey: "LSUIElement") as? Bool, true)
+        XCTAssertEqual(helper.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool, true)
+        XCTAssertEqual(
+            helper.object(forInfoDictionaryKey: SupervisorIdentity.appBundleIdentifierInfoKey) as? String,
+            Bundle.main.bundleIdentifier
+        )
+        XCTAssertEqual(helper.object(forInfoDictionaryKey: "CFBundleExecutable") as? String, "LaravelExecutiveAISupervisor")
     }
 
     func testLaunchAgentPlistIsEmbeddedAndWellFormed() throws {
@@ -26,8 +52,16 @@ final class SupervisorBundleTests: XCTestCase {
 
         XCTAssertEqual(format, .xml)
         XCTAssertEqual(plist["Label"] as? String, "\(prefix).supervisor")
-        XCTAssertEqual(plist["BundleProgram"] as? String, "Contents/MacOS/LaravelExecutiveAISupervisor")
-        XCTAssertEqual(plist["AssociatedBundleIdentifiers"] as? [String], [Bundle.main.bundleIdentifier ?? ""])
+        XCTAssertEqual(plist["BundleProgram"] as? String, "Contents/Helpers/LaravelExecutiveAISupervisor.app/Contents/MacOS/LaravelExecutiveAISupervisor")
+        XCTAssertEqual(
+            plist["AssociatedBundleIdentifiers"] as? [String],
+            [Bundle.main.bundleIdentifier ?? "", "\(prefix).supervisor"],
+            "Login Items attributes the job to the app and to the helper that is launched"
+        )
+
+        // The path in the plist is the executable the build actually produced.
+        let program = Bundle.main.bundleURL.appending(path: try XCTUnwrap(plist["BundleProgram"] as? String))
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: program.path), program.path)
         XCTAssertEqual(plist["RunAtLoad"] as? Bool, true)
         XCTAssertEqual(plist["KeepAlive"] as? Bool, true)
         XCTAssertEqual(plist["ThrottleInterval"] as? Int, 10)
