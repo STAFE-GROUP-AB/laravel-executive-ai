@@ -7,3 +7,4 @@ Route::redirect('/', '/home')->name('root');
 require __DIR__.'/briefs.php';
 require __DIR__.'/auth.php';
 require __DIR__.'/pwa.php';
+require __DIR__.'/crm.php';

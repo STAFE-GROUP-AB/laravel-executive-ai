@@ -190,6 +190,15 @@ Plus three rules that need no derivation: every executable class under `app/AI/T
 must authorize; and every route must appear in `PWA_ROUTE_TABLE`, so a **new route is a deliberate
 decision** rather than a silent addition.
 
+**"Every Livewire action" includes one written in a shared base.** The detector used to read only
+the methods a component declared itself, which would have made an abstract base of ours — S2-09's
+`App\Livewire\Crm\CrmScreen`, with ten actions on it for four screens — the one place an unguarded
+action is invisible to this test. `PolicySurface::livewireActions()` now filters by the **file** a
+method was written in: anything under `app/` is ours and must name an ability; anything in vendor is
+the framework's plumbing. The file rather than the namespace, because PHP attributes a trait's
+methods to the class that uses the trait, so `Livewire\WithPagination::nextPage()` reports a CRM
+screen as its declaring class and no namespace test could tell it apart from one of ours.
+
 The detectors are in `Tests\Security\Support\PolicySurface` and are themselves tested, against the
 deliberately unguarded fixtures in `tests/Security/Support/Surfaces/` — a detector that has never
 seen an unguarded surface is not known to recognise one.
@@ -245,6 +254,12 @@ right on SQLite and wrong on MySQL is a policy that is wrong in production.
   provider is **E3-1**; there is no live connector in Sprint 2.
 - **Admin surfaces** (changing a membership, renaming an organization) are **S2-19**. The policies
   refuse those writes today because nothing grants them.
+- **Query-shaped tenancy in a module.** The policies answer "may this user touch *this* row";
+  `App\CRM\Eloquent\WorkspaceQueries` answers "which rows" for the CRM by applying the
+  `organization_id` predicate in the same call that puts the scope to the `accessOrganization` gate,
+  so a CRM query cannot be obtained unscoped. It is the same rule in query form — the pattern
+  `BriefCatalog::visibleTo()` set for the briefs — and it delegates the decision here rather than
+  restating it ([crm.md §3](crm.md)).
 - **Operations with no user principal at all** are the one exception to §1, and they are bounded
   rather than uncovered: §10.
 

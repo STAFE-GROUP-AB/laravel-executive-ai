@@ -42,7 +42,7 @@ Shared primitives:
 | Contract | Produces implementations | Consumes the interface |
 |---|---|---|
 | `AiProviderAdapter` | D — `LaravelAiAdapter` + `ProviderRegistry` (S2, ADR-004 D2); fakes for the contract-test matrix | D agents and `ModelRouter`; `Briefs/Generation`; the S0-21 negative test; C for the "AI unavailable" UI states |
-| `WorkspaceRepository` | E — SQLite implementation on the frozen schema (E2-2); MySQL profile later (ADR-002 D10) | D agent tools and `crm.*` MCP tools (G); `Briefs/Generation`; S0-18 fixture replay |
+| `WorkspaceRepository` | E — `App\CRM\Eloquent\EloquentWorkspaceRepository` over the S2-01 schema, on **both** ADR-002 D10 profiles (S2-09; `tests/Integration/BackendContract/WorkspaceRepositoryContractTest.php` is the `repository` group) | D agent tools and `crm.*` MCP tools (G); `Briefs/Generation`; S0-18 fixture replay |
 | `ComputerUseProvider` | G — helper-backed implementation over the authenticated IPC (S3, ADR-005 D3) | D `RunAuthorizedTool`; `App\Approvals` (the only producer of `AuthorizedUiAction`); A for the menu-bar session state and panic stop |
 | `TunnelProvider` | A/C — `Tunnel\TailscaleServeTunnelProvider` (S4, ADR-006 D2) | the installer's Remote Access step (A); Settings → Remote access (C); `docs/operations` uninstall |
 | `EmailConnector` | F — one adapter per `MailProviderKind` under `App\Integrations\{Google, Microsoft, ICloud, Hey, Mail\Imap, Mail\ProtonBridge}` (S3; Microsoft 365 mandatory for v1); fakes replaying `packaging/fixtures/crm/communications.json` for the contract-test matrix | B's sync/normalisation layer (`email-sync` jobs, ADR-002 D3), the Add Email Account wizard (A Swift + C PWA), `App\Approvals` for `send()`, the brief sender (`Briefs/Delivery`), the S0-21 negative test, the §5.6 criterion-4 cross-account tests |
@@ -84,6 +84,11 @@ Not in the contract on purpose:
 - **Session start** for automation — the session grant is a UI action with its own policy; S3 (G) defines `AutomationSessionManager`. `ComputerUseProvider` only consumes a live session.
 - **`serve reset`** for the tunnel — ADR-006 D6.2 says the only mutating commands are the two D2 lines, while D2 also offers "Remove all Serve configuration" from `Drifted`/`FunnelDetected`. The contract expresses the replace path via `TunnelConfig::$replaceDriftedConfiguration` and leaves `reset` to the ADR owners (A) to reconcile before S4.
 - **CRM writes** — mutations go through action proposals and approvals (§11); the repository is read-only.
+  S2-09's screens write through a separate `App\CRM\Eloquent\CrmRepository`, and a deletion goes
+  through a frozen `action_proposals` row and a recorded `action_approvals` row
+  (`App\CRM\Deletions\CrmDeletions`). Both obtain every query from the same scoping call as the read
+  contract, so the tenant boundary is one implementation rather than two
+  ([crm.md](crm.md)).
 - **Mail mutations other than `send()`** — §5.6 lists `reply`, `forward`, `delete`, `move`, `archive`
   as approval-driven *if introduced*. None is introduced; a reply is a `send()` with
   `inReplyToExternalId`. Adding one means a new authorized DTO under the same provenance test.
@@ -191,6 +196,10 @@ contracts; the docblocks say so at each entry point.
   `subject`, `excerpt` ← `excerpt()`, `from_address` ← `from->address`, `to_addresses` ← `toAddresses()`.
 - **S1 SecretStore (H)** — `AuthorizationFlow` and `EmailConnection` carry `secretService` +
   `secretAccount` strings; replace both with `SecretRef` in one change and update the DTO tests.
+- **S2-09 (merged)** — the `WorkspaceRepository` implementation narrows each `iterable` return to
+  `array`, which is covariant and lets a caller count a page without draining a generator. The read
+  models, the scope refusal and the ordering are exactly as specified above; `timeline()` is
+  implemented over `communications` (ADR-002 D9) ahead of S2-10's screen.
 - **S2 implementers** — the exceptions are the contract for failure; do not add new ones to a method
   without updating its `@throws` and this page. Add fields to DTOs freely (readonly, named arguments);
   never remove or retype one without a review.

@@ -10,6 +10,7 @@
 <head>
     <title>@hasSection('title')@yield('title') · @endif{{ config('app.name') }}</title>
     @include('partials.head')
+    @livewireStyles
 </head>
 <body class="min-h-dvh bg-canvas font-sans text-primary antialiased">
     <a href="#main" class="skip-link">Skip to content</a>
@@ -35,6 +36,19 @@
                             Briefs
                         </x-nav-link>
                     </li>
+                </ul>
+
+                {{-- S2-09: the four §1.2 CRM screens, grouped so the sidebar stays scannable. --}}
+                <p id="nav-crm" class="mt-6 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{{ __('crm.nav') }}</p>
+                <ul class="space-y-1" aria-labelledby="nav-crm">
+                    @foreach(['customers', 'contacts', 'projects', 'tasks'] as $crmScreen)
+                        <li>
+                            <x-nav-link :href="route('crm.'.$crmScreen)" :active="request()->routeIs('crm.'.$crmScreen)">
+                                <x-slot:icon><x-icon :name="$crmScreen" /></x-slot:icon>
+                                {{ __('crm.'.$crmScreen.'.title') }}
+                            </x-nav-link>
+                        </li>
+                    @endforeach
                 </ul>
             </nav>
 
@@ -88,8 +102,14 @@
         </div>
     </div>
 
+    {{--
+        Below 1024 px the four CRM screens share one tab: the tab bar is where a
+        thumb reaches, and four more tabs there would make every tab too narrow
+        to hit (44 px minimum, pwa.md §6). The CRM pages carry their own tab row
+        for moving between the four.
+    --}}
     <nav aria-label="Primary" class="pb-safe fixed inset-x-0 bottom-0 z-sticky border-t border-default bg-surface lg:hidden">
-        <ul class="grid grid-cols-2">
+        <ul class="grid grid-cols-3">
             <li>
                 <x-nav-link variant="tab" :href="route('home')" :active="request()->routeIs('home')">
                     <x-slot:icon><x-icon name="home" /></x-slot:icon>
@@ -102,7 +122,15 @@
                     Briefs
                 </x-nav-link>
             </li>
+            <li>
+                <x-nav-link variant="tab" :href="route('crm.customers')" :active="request()->routeIs('crm.*')">
+                    <x-slot:icon><x-icon name="crm" /></x-slot:icon>
+                    {{ __('crm.nav') }}
+                </x-nav-link>
+            </li>
         </ul>
     </nav>
+
+    @livewireScripts
 </body>
 </html>

@@ -247,8 +247,25 @@ final class PolicySurface
     }
 
     /**
-     * The public methods a Livewire component declares itself, minus the
-     * lifecycle hooks — in other words, the actions a browser can call.
+     * The actions a browser can call on a Livewire component: every public
+     * method the application declares for it, minus the lifecycle hooks.
+     *
+     * "The application declares" rather than "the component declares itself"
+     * is the deliberate part. An action written in an **abstract base of
+     * ours** is as reachable from a browser as one written in the subclass —
+     * S2-09's four CRM screens share `App\Livewire\Crm\CrmScreen` — so reading
+     * only self-declared methods would make a shared base the one place an
+     * unguarded action is invisible to this test, which is the opposite of
+     * what the test is for.
+     *
+     * The filter is therefore the **file**, not the declaring class. PHP
+     * attributes a trait's methods to the class that uses the trait, so
+     * `Livewire\WithPagination::nextPage()` reports `App\Livewire\Crm\Tasks`
+     * as its declaring class and no namespace test can tell it apart from one
+     * of ours. Where the method was physically written can: a method whose
+     * file is under `app/` is ours and must authorize; one defined in vendor
+     * is the framework's own plumbing (`Component`, `WithPagination`) and
+     * carries no ability.
      *
      * @param  class-string  $component
      * @return list<ReflectionMethod>
@@ -258,7 +275,7 @@ final class PolicySurface
         $actions = [];
 
         foreach ((new ReflectionClass($component))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-            if ($method->getDeclaringClass()->getName() !== $component) {
+            if (! str_starts_with((string) $method->getFileName(), app_path())) {
                 continue;
             }
 
